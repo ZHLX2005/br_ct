@@ -8,98 +8,128 @@
   </head>
   <body>
     <div class="app-shell">
-      <div class="header">
-        <h1>AI Assistant</h1>
-      </div>
 
-      <div class="view-switcher" id="view-switcher">
-        <button class="view-tab active" id="tab-compose" data-view="compose" type="button">
-          发送
-        </button>
-        <button class="view-tab" id="tab-reply" data-view="reply" type="button">
-          回复
-        </button>
-      </div>
-
+      <!-- 主内容区 -->
       <div class="main-pages">
-        <section class="page page-compose active" id="page-compose">
-          <div class="platform-selector">
-            <div class="platform-selector-header">
-              <h3>选择平台</h3>
-              <div class="header-buttons">
-                <div class="select-all" id="select-all">全选</div>
-                <div class="close-tabs" id="close-tabs-button">关闭</div>
-              </div>
-            </div>
+        <section class="page active" id="page-main">
+          <!-- 平台切换标签 -->
+          <div class="platform-tabs" id="platform-tabs"></div>
 
-            <div class="platform-options-row" id="platform-options-row">
-              <!-- 平台选项将由 JS 动态生成 -->
-            </div>
+          <!-- 回复内容 -->
+          <div class="response-content" id="response-content">
+            <div class="response-placeholder">暂无回复内容</div>
           </div>
 
-          <select id="history-select" class="history-select">
-            <option value="">选择历史消息</option>
-          </select>
-
-          <div class="prompt-optimizer-selector">
-            <div class="custom-select" id="prompt-optimizer-select">
-              <div class="selected-value">不使用优化</div>
-              <div class="custom-select-options"></div>
-            </div>
-          </div>
-
-          <textarea
-            class="message-input"
-            id="message-input"
-            placeholder="输入要发送的消息，或拖放文件 / 文件夹到此处"
-          ></textarea>
-
-          <div class="button-group">
-            <button class="send-button" id="send-button">发送消息</button>
-          </div>
-
-          <div class="button-group">
-            <button class="extract-text-button" id="extract-text-button">提取页面文本</button>
-          </div>
-
-          <div class="extract-result" id="extract-result" style="display: none;">
-            <div class="extract-result-header">
-              <span class="extract-title" id="extract-title"></span>
-              <button class="close-result" id="close-result" type="button">×</button>
-            </div>
-            <div class="extract-url" id="extract-url"></div>
-            <pre class="extract-content" id="extract-content"></pre>
-          </div>
-        </section>
-
-        <section class="page page-reply" id="page-reply">
-          <div class="response-container" id="response-container">
-            <div class="response-header">
-              <div class="nav-group">
-                <button class="nav-btn" id="nav-prev" type="button">◀</button>
-                <span class="response-title" id="response-title">回复</span>
-                <button class="nav-btn" id="nav-next" type="button">▶</button>
-              </div>
-              <div class="response-controls">
-                <button class="response-toggle" id="response-toggle" type="button" title="折叠/展开">−</button>
-                <button class="response-copy" id="response-copy" type="button" title="复制">复制</button>
-                <button class="response-close" id="response-close" type="button" title="清空">×</button>
-              </div>
-            </div>
-            <div class="response-status" id="response-status">
-              <span class="status-indicator"></span>
-              <span class="status-text">等待回复...</span>
-            </div>
-            <div class="response-capture" id="response-capture" style="display: none;">
-              <span class="response-capture-label">复制捕获预览</span>
-              <span class="response-capture-value" id="response-capture-value">尚未捕获</span>
-            </div>
-            <div class="response-content" id="response-content">
-              <div class="response-placeholder">暂无回复内容</div>
-            </div>
+          <!-- 状态栏 -->
+          <div class="response-status" id="response-status">
+            <span class="status-indicator"></span>
+            <span class="status-text">等待回复...</span>
           </div>
         </section>
       </div>
+
+      <!-- 底部输入区 (输入栏 + 弹出菜单) -->
+      <div class="input-area">
+        <!-- 提取结果展示 -->
+        <div class="extract-result" id="extract-result" style="display: none;">
+          <div class="extract-result-header">
+            <span class="extract-title" id="extract-title"></span>
+            <button class="close-result" id="close-result" type="button">×</button>
+          </div>
+          <div class="extract-url" id="extract-url"></div>
+          <pre class="extract-content" id="extract-content"></pre>
+        </div>
+
+        <!-- 底部输入栏 (Notion AI 风格) -->
+        <div class="chat-input-bar">
+          <div class="chat-input-left">
+            <button class="chat-btn-plus" id="chat-btn-plus">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+          <div class="chat-input-middle">
+            <textarea class="chat-input" id="chat-input" placeholder="使用 AI 处理各种任务..." rows="1"></textarea>
+          </div>
+          <div class="chat-input-right">
+            <button class="chat-btn-send" id="chat-btn-send" disabled>
+              <span class="chat-btn-send-icon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M2 8l12-6-6 12-2-4-4-2z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="chat-btn-send-label" aria-live="polite"></span>
+            </button>
+          </div>
+        </div>
+
+        <!-- + 菜单弹出层 -->
+        <div class="plus-menu-overlay" id="plus-menu-overlay" style="display:none"></div>
+        <div class="plus-menu" id="plus-menu" style="display:none">
+          <!-- 操作 -->
+          <div class="plus-menu-section">
+            <button class="plus-menu-action" id="extract-text-button">
+              <span class="plus-menu-action-icon">&#128206;</span>
+              <span>提取页面文本</span>
+            </button>
+            <button class="plus-menu-action" id="close-tabs-button">
+              <span class="plus-menu-action-icon">&#10005;</span>
+              <span>关闭 AI 标签页</span>
+            </button>
+          </div>
+
+          <div class="plus-menu-divider"></div>
+
+          <!-- 历史消息 -->
+          <div class="plus-menu-section">
+            <div class="plus-menu-header">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.2"/><path d="M7 4v4l2.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+              历史消息
+            </div>
+            <div class="plus-menu-body">
+              <select id="history-select" class="history-select">
+                <option value="">选择历史消息</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="plus-menu-divider"></div>
+
+          <!-- 提示词优化 -->
+          <div class="plus-menu-section">
+            <div class="plus-menu-header">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+              提示词优化
+            </div>
+            <div class="plus-menu-body">
+              <div class="prompt-optimizer-selector">
+                <div class="custom-select" id="prompt-optimizer-select">
+                  <div class="selected-value">不使用优化</div>
+                  <div class="custom-select-options"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="plus-menu-divider"></div>
+
+          <!-- 平台选择 -->
+          <div class="plus-menu-section">
+            <div class="plus-menu-header">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.2"/><path d="M5 4h6M5 7h6M5 10h6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+              发送平台
+              <span class="plus-menu-header-action" id="select-all">全选</span>
+            </div>
+            <div class="plus-menu-body">
+              <div class="platform-options-row" id="platform-options-row">
+                <!-- 由 JS 动态生成 -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
 
     <script src="../../runjs/translation/lib/marked.min.js"></script>
