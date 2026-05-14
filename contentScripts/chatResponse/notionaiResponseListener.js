@@ -75,6 +75,11 @@
     },
 
     isGenerating: function() {
+      var copyButtons = document.querySelectorAll('[aria-label="拷贝回复"], [aria-label="Copy response"]');
+      var count = copyButtons.length;
+      if (window.__notionaiExpectedTurnOrdinal && count < window.__notionaiExpectedTurnOrdinal) {
+        return true;
+      }
       // 刚发送消息后的 3 秒内视为生成中，避免用户消息渲染触发 autoCapture
       if (window.__notionaiLastSendTime && Date.now() - window.__notionaiLastSendTime < 3000) {
         return true;

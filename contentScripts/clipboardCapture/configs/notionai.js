@@ -2,6 +2,9 @@
   if (window.notionaiCaptureConfig) return;
 
   function getNotionTurnOrdinal() {
+    if (window.__notionaiExpectedTurnOrdinal) {
+      return window.__notionaiExpectedTurnOrdinal;
+    }
     var copyButtons = document.querySelectorAll('[aria-label="拷贝回复"], [aria-label="Copy response"]');
     return Math.max(1, copyButtons.length);
   }
@@ -28,6 +31,15 @@
       'div[role="button"][aria-label*="copy" i]',
     ],
     copyBtnFindLast: true,
+
+    getCopyBtnRoot: function(turnRoot) {
+      var copyButtons = turnRoot.querySelectorAll('[aria-label="拷贝回复"], [aria-label="Copy response"]');
+      if (copyButtons.length === 0) return turnRoot;
+      var expected = window.__notionaiExpectedTurnOrdinal || copyButtons.length;
+      var index = Math.min(Math.max(expected - 1, 0), copyButtons.length - 1);
+      var btn = copyButtons[index];
+      return btn && btn.parentElement ? btn.parentElement : turnRoot;
+    },
 
     getContentRoot: function(turnRoot) {
       var blocks = turnRoot.querySelectorAll('[data-content-editable-leaf]');

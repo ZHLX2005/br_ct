@@ -689,6 +689,8 @@ async function sendChatMessage(message) {
     }
 
     // 8. 点击发送前设置时间戳，通知 response listener 不要触发 autoCapture
+    window.__notionaiExpectedTurnOrdinal =
+      document.querySelectorAll('[aria-label="拷贝回复"], [aria-label="Copy response"]').length + 1;
     window.__notionaiLastSendTime = Date.now();
     logInfo("正在点击发送按钮...");
     if (triggerClick(buttonElement)) {
@@ -707,10 +709,12 @@ async function sendChatMessage(message) {
       logInfo("消息发送成功");
       return true;
     } else {
+      delete window.__notionaiExpectedTurnOrdinal;
       logError("点击发送按钮失败");
       return false;
     }
   } catch (e) {
+    delete window.__notionaiExpectedTurnOrdinal;
     logError("发送流程异常", e);
     return false;
   } finally {
