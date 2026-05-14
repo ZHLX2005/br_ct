@@ -19,20 +19,20 @@
 
     // Zai 使用 .chat-assistant 和 .chat-user 作为消息容器
     responseSelectors: [
+      '.chat-assistant.markdown-prose',
       '.chat-assistant',
-      '.chat-user',
-      '.markdown-prose',
     ],
 
     // Turn 容器是 div.group
     turnSelectors: [
       '.group',
-      '.user-message',
     ],
 
     skipTags: new Set(['BUTTON', 'SCRIPT', 'STYLE', 'SVG', 'PATH']),
 
     captureConfig: 'zaiCaptureConfig',
+
+    settleTimeMs: 1800,
 
     getConversationId: function() {
       try {
@@ -44,11 +44,12 @@
 
     getMessageId: function(element) {
       if (!element) return null;
-      var turn = element.closest('.group, .user-message');
+      var turn = element.closest('.group');
       if (turn) {
         if (!turn.dataset.testid) {
-          window.__zaiTurnSeq = (window.__zaiTurnSeq || 0) + 1;
-          turn.dataset.testid = 'zai-turn-' + window.__zaiTurnSeq + '-' + Date.now();
+          var turns = document.querySelectorAll('.group');
+          var index = Array.prototype.indexOf.call(turns, turn);
+          turn.dataset.testid = 'zai-turn-' + (index >= 0 ? index + 1 : 'unknown');
         }
         return turn.dataset.testid;
       }

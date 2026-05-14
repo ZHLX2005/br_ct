@@ -40,6 +40,7 @@
     let initialCheckTimeout = null;
     let pendingUpdateTimeout = null;
     let isMonitoring = false;
+    let startupBaseline = null;
     const conversationStateById = new Map();
     var _lastTrackedConversation = null;
     var _convSwitchTimers = {}; // conversationId → setTimeout, for SPA flip
@@ -135,6 +136,30 @@
       return (conversationId || '__default__') + '::' + (messageId || 'unknown');
     }
 
+    function captureStartupBaseline() {
+      var conversationId = getConversationId();
+      var container = getLatestResponseContainer();
+      if (!container) {
+        startupBaseline = null;
+        return;
+      }
+
+      var msgId = getMessageId ? getMessageId(container) : null;
+      var stableMessageId = msgId || ('unknown-' + conversationId);
+      var content = normalizeText(readResponseContent(container));
+      if (!content) {
+        startupBaseline = null;
+        return;
+      }
+
+      var generating = isGenerating ? isGenerating() : false;
+      startupBaseline = {
+        conversationId: conversationId,
+        messageKey: getMessageKey(conversationId, stableMessageId),
+        snapshot: content + '::' + (generating ? '1' : '0'),
+      };
+    }
+
     // ==================== 获取容器 & 内容 ====================
 
     function getLatestResponseContainer() {
@@ -228,6 +253,18 @@
 
       var generating = isGenerating ? isGenerating() : false;
       var snapshot = content + '::' + (generating ? '1' : '0');
+
+      if (
+        startupBaseline &&
+        startupBaseline.conversationId === conversationId &&
+        startupBaseline.messageKey === messageKey &&
+        startupBaseline.snapshot === snapshot
+      ) {
+        tracker.lastSnapshot = snapshot;
+        tracker.content = content;
+        state.lastUpdateTime = now;
+        return;
+      }
 
       if (tracker.lastSnapshot === snapshot) return;
       tracker.lastSnapshot = snapshot;
@@ -333,6 +370,7 @@
       });
       conversationStateById.clear();
       _lastTrackedConversation = null;
+      startupBaseline = null;
     }
 
     function enterSettling(state, tracker, container) {
@@ -404,6 +442,7 @@
       }
 
       console.log('【回复监听】' + platform + ' 启动监听');
+      captureStartupBaseline();
 
       var capture = tryGetCapture();
       if (capture) {
@@ -458,6 +497,7 @@
         observer = null;
       }
       isMonitoring = false;
+      startupBaseline = null;
       console.log('【回复监听】' + platform + ' 已停止');
     }
 

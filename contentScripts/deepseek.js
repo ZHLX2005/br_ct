@@ -367,10 +367,6 @@ if (window.deepseekInjected) {
   const MANUAL_INPUT_SELECTORS = INPUT_SELECTORS
     .filter((selector) => selector.type === 'css')
     .map((selector) => selector.value);
-  const MANUAL_BUTTON_SELECTORS = BUTTON_SELECTORS
-    .filter((selector) => selector.type === 'css')
-    .map((selector) => selector.value);
-
   function recycleResponseListener(reason) {
     const listener = window.__responseListenerInstances && window.__responseListenerInstances.deepseek;
     if (!listener || typeof listener.reset !== "function") return;
@@ -386,6 +382,28 @@ if (window.deepseekInjected) {
         return false;
       }
     });
+  }
+
+  function isCaptureClickInProgress() {
+    return document.documentElement.dataset.ccCaptureActive === '1';
+  }
+
+  function isManualSendButtonClick(target) {
+    if (!(target instanceof Element)) return false;
+    const button = target.closest('div.ds-icon-button[role="button"]');
+    if (!button) return false;
+    const input = document.querySelector('textarea._27c9245');
+    if (!(input instanceof Element)) return false;
+    let container = input;
+    for (let i = 0; i < 8; i++) {
+      container = container.parentElement;
+      if (!container) break;
+      const actionArea = container.querySelector('div.bf38813a');
+      if (!actionArea) continue;
+      const buttons = actionArea.querySelectorAll('div.ds-icon-button[role="button"][aria-disabled="false"]');
+      if (buttons.length > 0) return buttons[buttons.length - 1] === button;
+    }
+    return false;
   }
 
   async function sendChatMessage(message) {
@@ -483,9 +501,10 @@ if (window.deepseekInjected) {
 
       document.addEventListener("click", (event) => {
         if (isSending) return;
+        if (isCaptureClickInProgress()) return;
         const target = event.target;
         if (!(target instanceof Element)) return;
-        if (matchesAnySelector(target, MANUAL_BUTTON_SELECTORS)) {
+        if (isManualSendButtonClick(target)) {
           recycleResponseListener("button-click");
         }
       }, true);

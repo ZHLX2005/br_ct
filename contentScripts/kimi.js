@@ -1,3 +1,10 @@
+(function() {
+if (window.__kimiScriptInjected) {
+  console.log("[Kimi] 脚本已注入，跳过重复初始化");
+  return;
+}
+window.__kimiScriptInjected = true;
+
 /**
  * @fileoverview
  * Kimi 平台内容脚本 (https://www.kimi.com/)
@@ -467,3 +474,4 @@ if (!window.location.hostname.includes(PLATFORM_CONFIG.hostname)) {
     sendResponse({ status: 'unknown_action' });
   });
 }
+})();

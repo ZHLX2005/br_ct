@@ -12,6 +12,18 @@
   if (window.__notionaiResponseListenerInjected) return;
   window.__notionaiResponseListenerInjected = true;
 
+  function getNotionTurnOrdinal() {
+    var copyButtons = document.querySelectorAll('[aria-label="拷贝回复"], [aria-label="Copy response"]');
+    var count = copyButtons.length;
+    if (window.__notionaiExpectedTurnOrdinal) {
+      return window.__notionaiExpectedTurnOrdinal;
+    }
+    if (window.__notionaiLastSendTime && Date.now() - window.__notionaiLastSendTime < 30000) {
+      return count + 1;
+    }
+    return Math.max(1, count);
+  }
+
   if (!window.ResponseListenerCore) {
     console.warn('[NotionAI Response Listener] ResponseListenerCore not found');
     return;
@@ -57,11 +69,7 @@
       if (!element) return null;
       var turn = element.closest('.layout-content, [class*="layout-content"]');
       if (turn) {
-        if (!turn.dataset.testid) {
-          window.__notionaiTurnSeq = (window.__notionaiTurnSeq || 0) + 1;
-          turn.dataset.testid = 'notionai-turn-' + window.__notionaiTurnSeq + '-' + Date.now();
-        }
-        return turn.dataset.testid;
+        return 'notionai-turn-' + getNotionTurnOrdinal();
       }
       return null;
     },

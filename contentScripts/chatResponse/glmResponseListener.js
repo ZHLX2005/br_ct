@@ -31,6 +31,8 @@
 
     captureConfig: 'glmCaptureConfig',
 
+    settleTimeMs: 1800,
+
     getConversationId: function() {
       try {
         var url = new URL(window.location.href);
@@ -46,8 +48,9 @@
       var turn = element.closest('div.item.conversation-item');
       if (turn) {
         if (!turn.dataset.testid) {
-          window.__glmTurnSeq = (window.__glmTurnSeq || 0) + 1;
-          turn.dataset.testid = 'glm-turn-' + window.__glmTurnSeq + '-' + Date.now();
+          var turns = document.querySelectorAll('div.item.conversation-item');
+          var index = Array.prototype.indexOf.call(turns, turn);
+          turn.dataset.testid = 'glm-turn-' + (index >= 0 ? index + 1 : 'unknown');
         }
         return turn.dataset.testid;
       }

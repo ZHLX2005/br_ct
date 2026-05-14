@@ -1,3 +1,10 @@
+(function() {
+if (window.__grokScriptBootstrapInjected) {
+  console.log("[Grok] 脚本已注入，跳过重复初始化");
+  return;
+}
+window.__grokScriptBootstrapInjected = true;
+
 /**
  * @fileoverview Grok AI 平台内容脚本
  *
@@ -645,3 +652,4 @@ if (window.grokInjected) {
     logInfo("调试工具已暴露到 window.__platformScript");
   }
 }
+})();

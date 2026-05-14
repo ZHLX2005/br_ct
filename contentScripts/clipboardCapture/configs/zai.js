@@ -46,8 +46,9 @@
     getMessageId: function(element) {
       if (!element) return null;
       if (!element.dataset.testid) {
-        window.__zaiTurnSeq = (window.__zaiTurnSeq || 0) + 1;
-        element.dataset.testid = 'zai-turn-' + window.__zaiTurnSeq + '-' + Date.now();
+        var turns = document.querySelectorAll('.group');
+        var index = Array.prototype.indexOf.call(turns, element);
+        element.dataset.testid = 'zai-turn-' + (index >= 0 ? index + 1 : 'unknown');
       }
       return element.dataset.testid;
     },
@@ -55,7 +56,7 @@
     detectTurn: function(target) {
       if (!(target instanceof Element)) return null;
       // Zai 使用 div.group 作为 turn 容器（含 .user-message 和 .message-*）
-      return target.closest('.group, .user-message');
+      return target.closest('.group');
     },
 
     isCopyControl: function(element) {
@@ -70,6 +71,7 @@
     },
 
     skipTags: new Set(['BUTTON', 'SCRIPT', 'STYLE', 'SVG', 'PATH']),
+    skipDomFallback: true,
     contextWindowMs: 2500,
     debug: true,
   };

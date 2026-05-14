@@ -43,11 +43,10 @@
 
     getMessageId: function(element) {
       if (!element) return null;
-      if (!element.dataset.testid) {
-        window.__deepseekTurnSeq = (window.__deepseekTurnSeq || 0) + 1;
-        element.dataset.testid = 'deepseek-turn-' + window.__deepseekTurnSeq + '-' + Date.now();
-      }
-      return element.dataset.testid;
+      return element.getAttribute('data-virtual-list-item-key') ||
+        element.dataset.virtualListItemKey ||
+        element.dataset.testid ||
+        null;
     },
 
     // ============= 事件检测 =============
@@ -73,6 +72,7 @@
 
     // ============= 可选 =============
     skipTags: new Set(['BUTTON', 'SCRIPT', 'STYLE', 'SVG', 'PATH']),
+    skipDomFallback: true,
     contextWindowMs: 2500,
     debug: true,
   };

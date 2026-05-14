@@ -31,6 +31,8 @@
 
     captureConfig: 'grokCaptureConfig',
 
+    settleTimeMs: 1800,
+
     getConversationId: function() {
       try {
         var parts = window.location.pathname.split('/').filter(Boolean);
@@ -46,8 +48,9 @@
       var turn = element.closest('[class*="group"][class*="flex-col"][class*="justify-center"]');
       if (turn) {
         if (!turn.dataset.testid) {
-          window.__grokTurnSeq = (window.__grokTurnSeq || 0) + 1;
-          turn.dataset.testid = 'grok-turn-' + window.__grokTurnSeq + '-' + Date.now();
+          var turns = document.querySelectorAll('[class*="group"][class*="flex-col"][class*="justify-center"]');
+          var index = Array.prototype.indexOf.call(turns, turn);
+          turn.dataset.testid = 'grok-turn-' + (index >= 0 ? index + 1 : 'unknown');
         }
         return turn.dataset.testid;
       }

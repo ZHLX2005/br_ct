@@ -49,8 +49,9 @@
     getMessageId: function(element) {
       if (!element) return null;
       if (!element.dataset.testid) {
-        window.__kimiTurnSeq = (window.__kimiTurnSeq || 0) + 1;
-        element.dataset.testid = 'kimi-turn-' + window.__kimiTurnSeq + '-' + Date.now();
+        var turns = document.querySelectorAll('.chat-content-item');
+        var index = Array.prototype.indexOf.call(turns, element);
+        element.dataset.testid = 'kimi-turn-' + (index >= 0 ? index + 1 : 'unknown');
       }
       return element.dataset.testid;
     },
@@ -73,6 +74,7 @@
 
     // ============= 可选 =============
     skipTags: new Set(['BUTTON', 'SCRIPT', 'STYLE', 'SVG', 'PATH']),
+    skipDomFallback: true,
     contextWindowMs: 2500,
     debug: true,
   };

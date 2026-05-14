@@ -1,3 +1,10 @@
+(function() {
+if (window.__glmScriptInjected) {
+  console.log("[GLM] 脚本已注入，跳过重复初始化");
+  return;
+}
+window.__glmScriptInjected = true;
+
 // ==========================================================
 //                     通用查找器
 // ==========================================================
@@ -268,3 +275,5 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true; // 保持消息通道开放以进行异步响应
   }
 });
+
+})();

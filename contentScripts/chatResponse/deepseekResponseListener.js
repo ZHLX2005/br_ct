@@ -32,6 +32,8 @@
 
     captureConfig: 'deepseekCaptureConfig',
 
+    settleTimeMs: 1800,
+
     getConversationId: function() {
       try {
         var parts = window.location.pathname.split('/').filter(Boolean);
@@ -47,11 +49,10 @@
       // 从 markdown 内容元素向上找到 turn 容器
       var turn = element.closest('div._4f9bf79');
       if (turn) {
-        if (!turn.dataset.testid) {
-          window.__deepseekTurnSeq = (window.__deepseekTurnSeq || 0) + 1;
-          turn.dataset.testid = 'deepseek-turn-' + window.__deepseekTurnSeq + '-' + Date.now();
-        }
-        return turn.dataset.testid;
+        return turn.getAttribute('data-virtual-list-item-key') ||
+               turn.dataset.virtualListItemKey ||
+               turn.dataset.testid ||
+               null;
       }
       return null;
     },

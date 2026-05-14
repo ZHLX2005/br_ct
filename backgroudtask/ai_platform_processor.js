@@ -223,13 +223,11 @@ async function processSingleTask(task, opts = {}) {
   await injectScript(tab.id, platform);
   if (opts.shouldListenResponses) {
     await cleanupResponseListener(tab.id, platform);
+    await injectResponseListener(tab.id, platform);
   }
 
   try {
     const result = await trySend(tab.id, platform, message, opts.source, false);
-    if (opts.shouldListenResponses) {
-      await injectResponseListener(tab.id, platform);
-    }
     return result;
   } catch (firstErr) {
     console.warn(`[${platform}] 首次发送失败，尝试重注:`, firstErr.message);
@@ -239,11 +237,9 @@ async function processSingleTask(task, opts = {}) {
       await injectScript(tab.id, platform);
       if (opts.shouldListenResponses) {
         await cleanupResponseListener(tab.id, platform);
-      }
-      const result = await trySend(tab.id, platform, message, opts.source, true);
-      if (opts.shouldListenResponses) {
         await injectResponseListener(tab.id, platform);
       }
+      const result = await trySend(tab.id, platform, message, opts.source, true);
       return result;
     } catch (finalErr) {
       console.error(`[${platform}] 最终发送失败`, finalErr.message);

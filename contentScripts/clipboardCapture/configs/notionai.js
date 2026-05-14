@@ -1,6 +1,11 @@
 (function() {
   if (window.notionaiCaptureConfig) return;
 
+  function getNotionTurnOrdinal() {
+    var copyButtons = document.querySelectorAll('[aria-label="拷贝回复"], [aria-label="Copy response"]');
+    return Math.max(1, copyButtons.length);
+  }
+
   function getTurnRoot(element) {
     if (!(element instanceof Element)) return null;
     return element.closest('.layout-content, [class*="layout-content"]') ||
@@ -9,11 +14,7 @@
 
   function ensureStableTurnId(turn) {
     if (!(turn instanceof Element)) return null;
-    if (!turn.dataset.testid) {
-      window.__notionaiTurnSeq = (window.__notionaiTurnSeq || 0) + 1;
-      turn.dataset.testid = 'notionai-turn-' + window.__notionaiTurnSeq + '-' + Date.now();
-    }
-    return turn.dataset.testid;
+    return 'notionai-turn-' + getNotionTurnOrdinal();
   }
 
   window.notionaiCaptureConfig = {
@@ -75,6 +76,7 @@
     },
 
     skipTags: new Set(['BUTTON', 'SCRIPT', 'STYLE', 'SVG', 'PATH']),
+    skipDomFallback: true,
     contextWindowMs: 6000,
     debug: true,
   };

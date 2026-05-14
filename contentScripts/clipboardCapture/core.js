@@ -20,6 +20,7 @@
     let hooksInstalled = false;
     let onCapture = null;
     var _capturingIds = new Set(); // dedup: skip duplicate autoCapture for same message
+    var _recentCaptureSignatures = new Map();
 
     function log(label, data) {
       if (config.debug !== false) {
@@ -85,6 +86,7 @@
       lastContext = null;
       onCapture = null;
       _capturingIds.clear();
+      _recentCaptureSignatures.clear();
       _guardCount = 0;
       _captureActive = false;
       delete document.documentElement.dataset.ccCaptureActive;
@@ -181,6 +183,18 @@
     function _capture(payload) {
       var n = _normalize(payload);
       if (!n) return;
+      var signature = [
+        n.messageId || '',
+        n.source || '',
+        n.text || '',
+        n.html || ''
+      ].join('::');
+      var lastTs = _recentCaptureSignatures.get(signature);
+      if (lastTs && Date.now() - lastTs < 1500) {
+        log('capture.skip', { reason: 'duplicate payload', messageId: n.messageId, source: n.source });
+        return;
+      }
+      _recentCaptureSignatures.set(signature, Date.now());
       log('capture', n);
       if (typeof onCapture === 'function') {
         try {

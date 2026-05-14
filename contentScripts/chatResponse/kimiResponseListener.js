@@ -51,8 +51,9 @@
       var turn = element.closest('.chat-content-item');
       if (turn) {
         if (!turn.dataset.testid) {
-          window.__kimiTurnSeq = (window.__kimiTurnSeq || 0) + 1;
-          turn.dataset.testid = 'kimi-turn-' + window.__kimiTurnSeq + '-' + Date.now();
+          var turns = document.querySelectorAll('.chat-content-item');
+          var index = Array.prototype.indexOf.call(turns, turn);
+          turn.dataset.testid = 'kimi-turn-' + (index >= 0 ? index + 1 : 'unknown');
         }
         return turn.dataset.testid;
       }

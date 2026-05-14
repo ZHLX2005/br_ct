@@ -1,3 +1,10 @@
+(function() {
+if (window.__notionaiScriptInjected) {
+  console.log("[NotionAI] 脚本已注入，跳过重复初始化");
+  return;
+}
+window.__notionaiScriptInjected = true;
+
 /**
  * @fileoverview Notion AI 平台内容脚本
  * @platform Notion AI
@@ -837,3 +844,4 @@ if (typeof window !== 'undefined') {
   };
   logInfo("调试工具已暴露到 window.__platformScript");
 }
+})();

@@ -1,3 +1,10 @@
+(function() {
+if (window.__zaiScriptBootstrapInjected) {
+  console.log("[Zai] 脚本已注入，跳过重复初始化");
+  return;
+}
+window.__zaiScriptBootstrapInjected = true;
+
 /**
  * @fileoverview
  * Zai AI 平台内容脚本
@@ -829,3 +836,4 @@ if (typeof window !== 'undefined') {
   };
   logInfo("调试工具已暴露到 window.__zaiScript");
 }
+})();
