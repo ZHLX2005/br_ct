@@ -29,11 +29,14 @@ type ProcessStatus struct {
 	Running bool `json:"running"`
 }
 
-// Windows CreateProcess flags - 让 child 脱离 native_host 的生命周期：
-// - DETACHED_PROCESS：不继承父 console（Chrome 关 native_host 时不连坐）
+// Windows CreateProcess flags - 让 child 脱离 native_host 的生命周期、且不弹 console：
+// - CREATE_NO_WINDOW：child 有自己的 console 但不显示窗口（比 DETACHED_PROCESS 对 .cmd/npm 更稳）
 // - CREATE_BREAKAWAY_FROM_JOB：从 Chrome 可能套在 native_host 上的 Job Object 中跳出
+// 配合 SysProcAttr.HideWindow=true（STARTF_USESHOWWINDOW + SW_HIDE）双保险。
+// 注意：这些只影响 native_host 直接拉起的进程；nx-sx 内部用 Start-Process -WindowStyle Normal
+// 打开的 happy 窗口走的是另一条 STARTUPINFO，不受影响。
 const (
-	detachedProcess        = 0x00000008
+	createNoWindow         = 0x08000000
 	createBreakawayFromJob = 0x01000000
 )
 
@@ -115,7 +118,8 @@ func StartProcess(req protocol.Request) protocol.Response {
 	cmd.Stdin = stdinReader
 	cmd.Dir = req.WorkDir
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP | detachedProcess | createBreakawayFromJob,
+		HideWindow:    true,
+		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP | createNoWindow | createBreakawayFromJob,
 	}
 
 	// 打开日志文件捕获 stdout 和 stderr
