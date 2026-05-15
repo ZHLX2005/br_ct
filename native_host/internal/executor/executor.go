@@ -29,6 +29,14 @@ type ProcessStatus struct {
 	Running bool `json:"running"`
 }
 
+// Windows CreateProcess flags - 让 child 脱离 native_host 的生命周期：
+// - DETACHED_PROCESS：不继承父 console（Chrome 关 native_host 时不连坐）
+// - CREATE_BREAKAWAY_FROM_JOB：从 Chrome 可能套在 native_host 上的 Job Object 中跳出
+const (
+	detachedProcess        = 0x00000008
+	createBreakawayFromJob = 0x01000000
+)
+
 var stateDir string
 var processStdinWriters sync.Map
 
@@ -107,7 +115,7 @@ func StartProcess(req protocol.Request) protocol.Response {
 	cmd.Stdin = stdinReader
 	cmd.Dir = req.WorkDir
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
+		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP | detachedProcess | createBreakawayFromJob,
 	}
 
 	// 打开日志文件捕获 stdout 和 stderr
@@ -220,6 +228,26 @@ func RemoveProcess(req protocol.Request) protocol.Response {
 	}
 	saveProcesses(remaining)
 	return protocol.Response{Status: "ok", Message: "已从列表移除"}
+}
+
+// HasActiveChildren 返回本 native_host 是否还有它启动的、仍在运行的 child。
+// main 在 stdin EOF 后用它来判断能否安全退出——只要还有 active child，就必须
+// 继续持有 processStdinWriters 中的 pipe writer，避免 children 误收 EOF 自杀。
+func HasActiveChildren() bool {
+	has := false
+	processStdinWriters.Range(func(key, _ any) bool {
+		pid := key.(int)
+		if isProcessRunning(pid) {
+			has = true
+			return false
+		}
+		// 顺便清理已退出 child 的 writer，避免句柄堆积
+		if w, ok := processStdinWriters.LoadAndDelete(pid); ok {
+			w.(*os.File).Close()
+		}
+		return true
+	})
+	return has
 }
 
 // sanitizeFileName 替换文件名中的非法字符

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"brochat_native_host/internal/executor"
 	"brochat_native_host/internal/fileops"
@@ -51,20 +52,33 @@ func main() {
 	registry.Register("gitBatchPush", gitmon.GitBatchPush)
 	registry.Register("gitAutoCommitAndPush", gitmon.GitAutoCommitAndPush)
 
-	// 消息循环
+	// 消息循环：放在 goroutine 里，让 main 在 stdin EOF 后还能继续做 children
+	// 的 pipe writer 持有者，避免 Chrome SW 断开时连坐杀死长寿命 child（如 nx-sx happy）。
 	stdin := os.Stdin
 	stdout := os.Stdout
 
-	for {
-		req, err := protocol.ReadMessage(stdin)
-		if err != nil {
-			if err != io.EOF {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+	stdinDone := make(chan struct{})
+	go func() {
+		defer close(stdinDone)
+		for {
+			req, err := protocol.ReadMessage(stdin)
+			if err != nil {
+				if err != io.EOF {
+					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				}
+				return
 			}
-			break
+			resp := registry.Handle(req.Command, req)
+			protocol.SendResponse(stdout, resp)
 		}
+	}()
 
-		resp := registry.Handle(req.Command, req)
-		protocol.SendResponse(stdout, resp)
+	<-stdinDone
+
+	// Chrome 已断开 stdin，但只要还有 active child 就不能退出——
+	// 进程退出会导致 OS 关闭 processStdinWriters 里的 pipe writer，children 会读到
+	// 意外 EOF 进而自毁。轮询等待所有 child 自然终止。
+	for executor.HasActiveChildren() {
+		time.Sleep(5 * time.Second)
 	}
 }
