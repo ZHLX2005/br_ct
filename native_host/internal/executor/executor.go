@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -28,6 +30,7 @@ type ProcessStatus struct {
 }
 
 var stateDir string
+var processStdinWriters sync.Map
 
 func init() {
 	homeDir, _ := os.UserHomeDir()
@@ -94,7 +97,14 @@ func StartProcess(req protocol.Request) protocol.Response {
 	logName := fmt.Sprintf("%s_%d_%d.log", sanitizeFileName(req.Name), os.Getpid(), time.Now().Unix())
 	logPath := filepath.Join(logsDirPath(), logName)
 
+	// 创建匿名 pipe 作为子进程的 stdin
+	// 1) 防止子进程读取 native messaging pipe（干扰浏览器通信）
+	// 2) pipe 无数据时子进程 read 阻塞 → 保持事件循环存活
+	// 3) 关闭 pipe writer = 发送 EOF 信号 → 子进程可感知并优雅退出
+	stdinReader, stdinWriter, _ := os.Pipe()
+
 	cmd := exec.Command(req.Cmd, args...)
+	cmd.Stdin = stdinReader
 	cmd.Dir = req.WorkDir
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
@@ -109,12 +119,19 @@ func StartProcess(req protocol.Request) protocol.Response {
 	cmd.Stderr = logFile
 
 	if err := cmd.Start(); err != nil {
+		stdinReader.Close()
+		stdinWriter.Close()
 		logFile.Close()
 		os.Remove(logPath)
 		return protocol.Response{Status: "error", Message: fmt.Sprintf("启动失败: %v", err)}
 	}
 
 	pid := cmd.Process.Pid
+
+	// 父进程关闭读端（子进程持有自己的副本），保存写端引用
+	stdinReader.Close()
+	processStdinWriters.Store(pid, stdinWriter)
+
 	cmd.Process.Release()
 	logFile.Close()
 
@@ -141,13 +158,21 @@ func StopProcess(req protocol.Request) protocol.Response {
 		return protocol.Response{Status: "error", Message: "缺少 pid 参数"}
 	}
 
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		return protocol.Response{Status: "error", Message: "进程不存在"}
+	// 关闭 stdin pipe writer → 子进程收到 EOF，可感知并自行退出
+	if w, ok := processStdinWriters.LoadAndDelete(pid); ok {
+		w.(*os.File).Close()
 	}
 
-	if err := proc.Kill(); err != nil {
-		return protocol.Response{Status: "error", Message: fmt.Sprintf("停止失败: %v", err)}
+	// 先尝试优雅关闭（taskkill 不带 /F 发送 WM_CLOSE/Console Ctrl 事件）
+	exec.Command("taskkill", "/PID", strconv.Itoa(pid)).Run()
+	time.Sleep(2 * time.Second)
+
+	// 如果进程仍然存活，强制终止
+	if isProcessRunning(pid) {
+		proc, err := os.FindProcess(pid)
+		if err == nil {
+			proc.Kill()
+		}
 	}
 
 	// 从状态文件移除
@@ -181,6 +206,11 @@ func ListProcesses(req protocol.Request) protocol.Response {
 }
 
 func RemoveProcess(req protocol.Request) protocol.Response {
+	// 清理 stdin pipe writer
+	if w, ok := processStdinWriters.LoadAndDelete(req.Pid); ok {
+		w.(*os.File).Close()
+	}
+
 	processes, _ := loadProcesses()
 	var remaining []ProcessInfo
 	for _, p := range processes {
