@@ -32,23 +32,49 @@ function triggerInputEvents(element) {
   element.dispatchEvent(inputEvent);
 }
 
-// 更可靠的点击方法
+// 更可靠的点击方法（支持 Angular Material 等现代框架）
 function triggerClick(element) {
   if (!element) {
     console.warn('尝试点击空元素。');
     return false;
   }
-  // 检查元素是否可见或可用
-  if (element.offsetParent === null || element.disabled) {
-    console.warn('元素不可点击或已被禁用。', element);
+  // 对于 aria-disabled 的按钮，disabled property 可能为 false，但应允许点击尝试
+  // 仅当原生 disabled 为 true 时才阻止
+  if (element.disabled === true) {
+    console.warn('元素已被禁用。', element);
     return false;
   }
   try {
-    element.click();
+    const rect = element.getBoundingClientRect();
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
+    const eventInit = {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: x,
+      clientY: y,
+      screenX: x + window.screenX,
+      screenY: y + window.screenY,
+    };
+
+    // 完整事件序列以触发 Angular/React 等框架的绑定
+    element.dispatchEvent(new PointerEvent('pointerdown', { ...eventInit, pointerType: 'mouse' }));
+    element.dispatchEvent(new MouseEvent('mousedown', eventInit));
+    element.dispatchEvent(new PointerEvent('pointerup', { ...eventInit, pointerType: 'mouse' }));
+    element.dispatchEvent(new MouseEvent('mouseup', eventInit));
+    element.dispatchEvent(new MouseEvent('click', eventInit));
     return true;
   } catch (e) {
     console.error('点击事件失败:', e);
-    return false;
+    // 兜底：直接调用 click()
+    try {
+      element.click();
+      return true;
+    } catch (e2) {
+      console.error('兜底 click() 也失败:', e2);
+      return false;
+    }
   }
 }
 
@@ -87,13 +113,18 @@ function findInputElement() {
  */
 function findSendButton() {
   const xpaths = [
-    // 最可靠的方案：根据按钮的 aria-label 属性进行定位
-    // 这个属性通常用于可访问性，很少会变动，且可以区分“发送”和“停止”按钮
+    // 最新 UI：中文 aria-label
+    "//button[@aria-label='发送']",
+    // 旧版英文 aria-label
     "//button[@aria-label='Send message']",
+    // 通过 send-button class 定位 gem-icon-button 内部的 button
+    "//gem-icon-button[contains(@class,'send-button')]//button",
+    "//button[contains(@class, 'send-button')]",
+    // 通过 data-test-id 定位容器内的 button
+    "//*[@data-test-id='send-button-container']//button",
     // 通用备选方案：通过按钮内的文本内容定位
     "//button[.//span[contains(text(),'Send')]]",
-    // 最后的备用方案：依赖于特定的 class 或完整的 DOM 路径
-    "//button[contains(@class, 'send-button')]",
+    // 最后的备用方案：依赖于完整的 DOM 路径
     '//*[@id="app-root"]/main/side-navigation-v2/mat-sidenav-container/mat-sidenav-content/div/div[2]/chat-window/div/input-container/div/input-area-v2/div/div/div[3]/div/div[2]/button'
   ];
 
@@ -130,8 +161,10 @@ const MANUAL_INPUT_SELECTORS = [
 ];
 
 const MANUAL_BUTTON_SELECTORS = [
+  "button[aria-label=\"发送\"]",
   "button[aria-label=\"Send message\"]",
   "button[type=\"submit\"]",
+  "gem-icon-button.send-button button",
 ];
 
 function recycleResponseListener(reason) {
