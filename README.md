@@ -442,7 +442,17 @@ bro_chat/
 
 ## 快速开始
 
-### 安装步骤
+### 一键安装（AI 自动执行）
+
+> 如果你正在使用 AI 助手，可以直接下达指令：
+>
+> **"Set up https://github.com/ZHLX2005/br_ct for me."**
+>
+> **"Read `res/install.md` and follow the steps to install the extension and compile the native host for me."**
+>
+> AI 会自动完成：Go 环境检查 → native host 编译 → 注册表写入，并提示你手动加载扩展。
+
+### 手动安装步骤
 
 1. **克隆项目**
    ```bash
@@ -450,16 +460,19 @@ bro_chat/
    cd br_ct
    ```
 
-2. **安装 Native Host（推荐）**
+2. **安装 Native Host（首次需要手动运行，后续浏览器自动拉起）**
    ```bash
-   ./native_host/brochat_native_host.exe
+   cd ext/native_host
+   go build -o brochat_native_host.exe .
+   ./brochat_native_host.exe
    ```
+   执行后会自动写入注册表和 manifest，看到 `Native host registered at: ...` 即可关闭。
 
 3. **加载扩展**
    - 打开 Chrome/Edge，访问 `chrome://extensions/`
    - 开启"开发者模式"
    - 点击"加载已解压的扩展程序"
-   - 选择项目根目录
+   - 选择项目 `ext` 目录
 
 ### 基本使用
 
