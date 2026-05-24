@@ -14,6 +14,7 @@ const scriptFiles = [
   { name: "颜色色卡", file: "元素dom/color_show.js" },
   { name: "剪切板抓取文字", file: "元素dom/copy2file.js" },
   { name: "视频播放面板", file: "元素dom/videoControllerPlane/videoPlane.js" },
+  { name: "B站收藏夹导出所有视频链接", file: "平台专属/bili/收藏夹导出所有视频链接/extract_bilibili_favlist.js" },
 ];
 
 document.addEventListener("DOMContentLoaded", () => {
