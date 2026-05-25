@@ -375,14 +375,14 @@ function setupEnvvarCheckboxDelegation() {
       if (e.target.checked) envvarSelectedPaths.add(path);
       else envvarSelectedPaths.delete(path);
       renderPathList('userPath', envvarCache.userPath, true);
-      renderPathList('systemPath', envvarCache.systemPath, false);
+      renderPathList('systemPath', envvarCache.systemPath, true);
     }
     if (e.target.classList.contains('envvar-var-checkbox')) {
       const name = e.target.dataset.name;
       if (e.target.checked) envvarSelectedVars.add(name);
       else envvarSelectedVars.delete(name);
       renderEnvVarList('userVars', envvarCache.userVars, true);
-      renderEnvVarList('systemVars', envvarCache.systemVars, false);
+      renderEnvVarList('systemVars', envvarCache.systemVars, true);
     }
   });
 }
