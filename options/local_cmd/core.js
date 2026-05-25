@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   skillCentralPath: 'skillCentralPath',
   skillMonitoredProjects: 'skillMonitoredProjects',
   skillSelectedProject: 'skillSelectedProject',
+  lastActiveTab: 'lastActiveTab',
 };
 
 // ========== Native Host 通信（通过 background 中继）==========

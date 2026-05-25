@@ -5,12 +5,32 @@
 
 document.addEventListener('DOMContentLoaded', init);
 
-function init() {
+async function init() {
   setupDelegation();
   checkNativeHost();
   loadCommandList();
   loadGitDirList();
   startGitAutoRefresh();
+
+  const savedTab = await loadStorage(STORAGE_KEYS.lastActiveTab);
+  if (savedTab) {
+    activateTab(savedTab);
+  }
+}
+
+function activateTab(tabName) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  const btn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+  const panel = document.getElementById('panel-' + tabName);
+  if (btn && panel) {
+    btn.classList.add('active');
+    panel.classList.add('active');
+    if (tabName === 'processes') loadProcesses();
+    if (tabName === 'git') loadGitStatus();
+    if (tabName === 'skills') { refreshProjectSelect(); loadSkills(); }
+    if (tabName === 'envvars') { initEnvvarPanel(); ensureFirstEnvSnapshot(); }
+  }
 }
 
 /**
@@ -37,6 +57,7 @@ function setupDelegation() {
       tabBtn.classList.add('active');
       const panel = document.getElementById('panel-' + tabBtn.dataset.tab);
       if (panel) panel.classList.add('active');
+      saveStorage(STORAGE_KEYS.lastActiveTab, tabBtn.dataset.tab);
       if (tabBtn.dataset.tab === 'processes') loadProcesses();
       if (tabBtn.dataset.tab === 'git') loadGitStatus();
       if (tabBtn.dataset.tab === 'skills') { refreshProjectSelect(); loadSkills(); }
