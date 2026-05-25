@@ -40,6 +40,7 @@ function setupDelegation() {
       if (tabBtn.dataset.tab === 'processes') loadProcesses();
       if (tabBtn.dataset.tab === 'git') loadGitStatus();
       if (tabBtn.dataset.tab === 'skills') { refreshProjectSelect(); loadSkills(); }
+      if (tabBtn.dataset.tab === 'envvars') { initEnvvarPanel(); ensureFirstEnvSnapshot(); }
       return;
     }
 
@@ -98,6 +99,23 @@ function setupDelegation() {
       case 'skill-manage-confirm': batchMoveSkillsFromModal(); break;
       case 'skill-create-group-in-manage': closeSkillGroupManageModal(); openSkillGroupModal(); break;
       case 'skill-select-group': selectManageTargetGroup(btn.dataset.groupId); break;
+
+      // 环境变量 (envvar.js)
+      case 'envvar-save-snapshot': saveEnvSnapshot(); break;
+      case 'envvar-refresh': initEnvvarPanel(); break;
+      case 'envvar-add-user-path': addUserPath(); break;
+      case 'envvar-remove-user-path': if (needConfirm(btn)) return; removeUserPath(btn.dataset.path); break;
+      case 'envvar-batch-remove-user-path': if (needConfirm(btn)) return; batchRemoveUserPath(); break;
+      case 'envvar-add-system-path': addSystemPath(); break;
+      case 'envvar-remove-system-path': if (needConfirm(btn)) return; removeSystemPath(btn.dataset.path); break;
+      case 'envvar-batch-remove-system-path': if (needConfirm(btn)) return; batchRemoveSystemPath(); break;
+      case 'envvar-set-user-var': setUserEnvVar(); break;
+      case 'envvar-remove-user-var': if (needConfirm(btn)) return; deleteUserEnvVar(btn.dataset.name); break;
+      case 'envvar-batch-remove-user-var': if (needConfirm(btn)) return; batchRemoveUserEnvVar(); break;
+      case 'envvar-set-system-var': setSystemEnvVar(); break;
+      case 'envvar-remove-system-var': if (needConfirm(btn)) return; deleteSystemEnvVar(btn.dataset.name); break;
+      case 'envvar-batch-remove-system-var': if (needConfirm(btn)) return; batchRemoveSystemEnvVar(); break;
+      case 'envvar-restore-snapshot': if (needConfirm(btn)) return; restoreEnvSnapshot(btn.dataset.file); break;
 
       // 弹窗
       case 'cmd-cancel': closeCmdModal(); break;

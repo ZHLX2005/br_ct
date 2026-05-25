@@ -91,6 +91,34 @@
       display: block;
     }
 
+    /* 环境变量子面板 */
+    .envvar-sub-panel {
+      display: none;
+    }
+    .envvar-sub-panel.active {
+      display: block;
+    }
+    .envvar-sub-btn {
+      padding: 10px 20px;
+      border: 1px solid transparent;
+      border-bottom: none;
+      border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+      background: transparent;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 120ms ease;
+    }
+    .envvar-sub-btn:hover {
+      color: var(--ink);
+      background: rgba(255, 252, 247, 0.5);
+    }
+    .envvar-sub-btn.active {
+      color: var(--ink);
+      background: rgba(255, 252, 247, 0.9);
+      border-color: var(--line);
+    }
 
     /* 命令模板卡片 */
     .cmd-card {
@@ -867,6 +895,7 @@
       <button class="tab-btn" data-tab="skills">Skill 管理</button>
       <button class="tab-btn" data-tab="commands">命令管理</button>
       <button class="tab-btn" data-tab="processes">运行中进程</button>
+      <button class="tab-btn" data-tab="envvars">环境变量</button>
     </nav>
 
     <!-- Git 监控 Tab -->
@@ -950,6 +979,107 @@
         <button class="btn btn-secondary" data-action="refresh-processes">刷新</button>
       </div>
       <div id="processList"></div>
+    </div>
+
+    <!-- 环境变量管理 Tab -->
+    <div class="tab-panel" id="panel-envvars">
+      <div class="toolbar">
+        <h2 class="section-title">环境变量管理</h2>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn btn-primary" data-action="envvar-save-snapshot">保存快照</button>
+          <button class="btn btn-secondary" data-action="envvar-refresh">刷新</button>
+        </div>
+      </div>
+
+      <!-- 快照列表 -->
+      <div style="border:1px solid var(--line);border-radius:var(--radius-md);background:rgba(255,252,247,0.72);padding:12px 16px;margin-bottom:16px;">
+        <div style="font-weight:600;font-size:14px;margin-bottom:8px;">环境变量快照</div>
+        <div id="envvarSnapshotList" style="max-height:120px;overflow-y:auto;">
+          <div class="empty-state" style="padding:10px;"><p style="font-size:13px;">暂无快照</p></div>
+        </div>
+      </div>
+
+      <!-- 子 Tab 导航 -->
+      <nav class="tab-nav" style="margin-bottom:16px;">
+        <button class="envvar-sub-btn active" data-envtab="user-path">用户 PATH</button>
+        <button class="envvar-sub-btn" data-envtab="system-path">系统 PATH</button>
+        <button class="envvar-sub-btn" data-envtab="user-vars">用户变量</button>
+        <button class="envvar-sub-btn" data-envtab="system-vars">系统变量</button>
+      </nav>
+
+      <!-- 用户 PATH -->
+      <div class="envvar-sub-panel active" id="envvar-panel-user-path">
+        <div class="batch-bar">
+          <input type="text" id="envvarNewPath" placeholder="输入要添加的路径..." style="flex:1;padding:6px 10px;border:1px solid var(--line-strong);border-radius:8px;font-size:14px;">
+          <button class="btn btn-primary" data-action="envvar-add-user-path">添加</button>
+        </div>
+        <div class="batch-action-bar" id="envvar-userPathBatchBar">
+          <span class="batch-info">已选择 0 项</span>
+          <button class="btn btn-danger" data-action="envvar-batch-remove-user-path">批量删除</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <input type="text" id="envvar-userPathSearch" placeholder="搜索 PATH..." style="flex:1;padding:6px 10px;border:1px solid var(--line-strong);border-radius:8px;font-size:13px;" data-envsearch="userPath">
+        </div>
+        <div id="envvar-userPathList" style="border:1px solid var(--line);border-radius:var(--radius-md);background:rgba(255,252,247,0.72);max-height:400px;overflow-y:auto;">
+          <div class="empty-state"><p>加载中...</p></div>
+        </div>
+      </div>
+
+      <!-- 系统 PATH -->
+      <div class="envvar-sub-panel" id="envvar-panel-system-path">
+        <div class="batch-bar">
+          <input type="text" id="envvarNewSystemPath" placeholder="输入要添加的系统路径..." style="flex:1;padding:6px 10px;border:1px solid var(--line-strong);border-radius:8px;font-size:14px;">
+          <button class="btn btn-primary" data-action="envvar-add-system-path">添加</button>
+        </div>
+        <div class="batch-action-bar" id="envvar-systemPathBatchBar">
+          <span class="batch-info">已选择 0 项</span>
+          <button class="btn btn-danger" data-action="envvar-batch-remove-system-path">批量删除</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <input type="text" id="envvar-systemPathSearch" placeholder="搜索系统 PATH..." style="flex:1;padding:6px 10px;border:1px solid var(--line-strong);border-radius:8px;font-size:13px;" data-envsearch="systemPath">
+        </div>
+        <div id="envvar-systemPathList" style="border:1px solid var(--line);border-radius:var(--radius-md);background:rgba(255,252,247,0.72);max-height:400px;overflow-y:auto;">
+          <div class="empty-state"><p>加载中...</p></div>
+        </div>
+      </div>
+
+      <!-- 用户变量 -->
+      <div class="envvar-sub-panel" id="envvar-panel-user-vars">
+        <div class="batch-bar">
+          <input type="text" id="envvarNewVarName" placeholder="变量名" style="width:180px;padding:6px 10px;border:1px solid var(--line-strong);border-radius:8px;font-size:14px;">
+          <input type="text" id="envvarNewVarValue" placeholder="变量值" style="flex:1;padding:6px 10px;border:1px solid var(--line-strong);border-radius:8px;font-size:14px;">
+          <button class="btn btn-primary" data-action="envvar-set-user-var">保存</button>
+        </div>
+        <div class="batch-action-bar" id="envvar-userVarsBatchBar">
+          <span class="batch-info">已选择 0 项</span>
+          <button class="btn btn-danger" data-action="envvar-batch-remove-user-var">批量删除</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <input type="text" id="envvar-userVarsSearch" placeholder="搜索变量..." style="flex:1;padding:6px 10px;border:1px solid var(--line-strong);border-radius:8px;font-size:13px;" data-envsearch="userVars">
+        </div>
+        <div id="envvar-userVarsList" style="border:1px solid var(--line);border-radius:var(--radius-md);background:rgba(255,252,247,0.72);max-height:400px;overflow-y:auto;">
+          <div class="empty-state"><p>加载中...</p></div>
+        </div>
+      </div>
+
+      <!-- 系统变量 -->
+      <div class="envvar-sub-panel" id="envvar-panel-system-vars">
+        <div class="batch-bar">
+          <input type="text" id="envvarNewSystemVarName" placeholder="变量名" style="width:180px;padding:6px 10px;border:1px solid var(--line-strong);border-radius:8px;font-size:14px;">
+          <input type="text" id="envvarNewSystemVarValue" placeholder="变量值" style="flex:1;padding:6px 10px;border:1px solid var(--line-strong);border-radius:8px;font-size:14px;">
+          <button class="btn btn-primary" data-action="envvar-set-system-var">保存</button>
+        </div>
+        <div class="batch-action-bar" id="envvar-systemVarsBatchBar">
+          <span class="batch-info">已选择 0 项</span>
+          <button class="btn btn-danger" data-action="envvar-batch-remove-system-var">批量删除</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <input type="text" id="envvar-systemVarsSearch" placeholder="搜索系统变量..." style="flex:1;padding:6px 10px;border:1px solid var(--line-strong);border-radius:8px;font-size:13px;" data-envsearch="systemVars">
+        </div>
+        <div id="envvar-systemVarsList" style="border:1px solid var(--line);border-radius:var(--radius-md);background:rgba(255,252,247,0.72);max-height:400px;overflow-y:auto;">
+          <div class="empty-state"><p>加载中...</p></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1074,6 +1204,7 @@
   <script src="command.js"></script>
   <script src="git.js"></script>
   <script src="skill.js"></script>
+  <script src="envvar.js"></script>
   <script src="local_cmd.js"></script>
   <script type="module" src="../focusScroll/init.js"></script>
 </body>

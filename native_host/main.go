@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"brochat_native_host/internal/envvars"
 	"brochat_native_host/internal/executor"
 	"brochat_native_host/internal/fileops"
 	"brochat_native_host/internal/gitmon"
@@ -51,6 +52,25 @@ func main() {
 	registry.Register("gitBatchPull", gitmon.GitBatchPull)
 	registry.Register("gitBatchPush", gitmon.GitBatchPush)
 	registry.Register("gitAutoCommitAndPush", gitmon.GitAutoCommitAndPush)
+
+	// 环境变量管理
+	registry.Register("saveEnvSnapshot", envvars.SaveSnapshot)
+	registry.Register("listEnvSnapshots", envvars.ListSnapshots)
+	registry.Register("restoreEnvSnapshot", envvars.RestoreSnapshot)
+	registry.Register("getUserPath", envvars.GetUserPath)
+	registry.Register("addUserPath", envvars.AddUserPath)
+	registry.Register("removeUserPath", envvars.RemoveUserPath)
+	registry.Register("batchRemoveUserPath", envvars.BatchRemoveUserPath)
+	registry.Register("getSystemPath", envvars.GetSystemPath)
+	registry.Register("addSystemPath", envvars.AddSystemPath)
+	registry.Register("removeSystemPath", envvars.RemoveSystemPath)
+	registry.Register("batchRemoveSystemPath", envvars.BatchRemoveSystemPath)
+	registry.Register("getUserEnvVars", envvars.GetUserEnvVars)
+	registry.Register("setUserEnvVar", envvars.SetUserEnvVar)
+	registry.Register("removeUserEnvVar", envvars.RemoveUserEnvVar)
+	registry.Register("getSystemEnvVars", envvars.GetSystemEnvVars)
+	registry.Register("setSystemEnvVar", envvars.SetSystemEnvVar)
+	registry.Register("removeSystemEnvVar", envvars.RemoveSystemEnvVar)
 
 	// 消息循环：放在 goroutine 里，让 main 在 stdin EOF 后还能继续做 children
 	// 的 pipe writer 持有者，避免 Chrome SW 断开时连坐杀死长寿命 child（如 nx-sx happy）。
