@@ -197,7 +197,7 @@ async function loadSystemEnvVars() {
   try {
     const resp = await sendNativeMessage({ command: 'getSystemEnvVars' });
     envvarCache.systemVars = resp.data || [];
-    renderEnvVarList('systemVars', envvarCache.systemVars, false);
+    renderEnvVarList('systemVars', envvarCache.systemVars, true);
   } catch (err) {
     container.innerHTML = `<div class="empty-state"><p style="color:var(--danger)">加载失败: ${escapeHtml(err.message)}</p><p style="font-size:13px">系统环境变量需要管理员权限</p></div>`;
   }
