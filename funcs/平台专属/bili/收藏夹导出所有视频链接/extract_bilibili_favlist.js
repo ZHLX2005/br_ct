@@ -1,26 +1,34 @@
 /**
- * Bilibili 收藏夹视频链接提取脚本
- * 使用方法：在收藏夹页面打开浏览器控制台(F12)，粘贴此脚本并回车执行
- * 支持自动翻页，自动去重，最终输出全部视频链接
+ * Bilibili 视频链接提取脚本（通用版）
+ * 支持：收藏夹 / UP主空间投稿页 / 合集页
+ * 使用方法：在目标页面打开浏览器控制台(F12)，粘贴此脚本并回车执行
  */
 
-
 function main(){
-(async function extractBilibiliFavlist() {
+(async function extractBilibiliVideos() {
     const sleep = ms => new Promise(r => setTimeout(r, ms));
-    const results = new Map(); // 使用 Map 保持顺序并去重
+    const results = new Map();
+
+    /**
+     * 滚动加载当前页全部内容（B站投稿页懒加载）
+     */
+    async function scrollLoad() {
+        for (let i = 0; i < 5; i++) {
+            window.scrollTo(0, document.body.scrollHeight);
+            await sleep(800);
+        }
+        window.scrollTo(0, 0);
+        await sleep(300);
+    }
 
     /**
      * 从当前页面提取视频链接
-     * 选择器说明：
-     *   - a[href*="/video/BV"] : 所有包含 /video/BV 的链接
-     *   - 通过正则 /BV[a-zA-Z0-9]+/ 提取 BV 号并拼接完整 URL
      */
     function extractPage() {
         const links = document.querySelectorAll('a[href*="/video/BV"]');
         let pageNew = 0;
         links.forEach(a => {
-            const href = a.getAttribute('href');
+            const href = a.getAttribute('href') || '';
             const match = href.match(/BV[a-zA-Z0-9]+/);
             if (match) {
                 const bv = match[0];
@@ -35,51 +43,72 @@ function main(){
     }
 
     /**
-     * 检查是否存在下一页按钮
-     * 选择器：.vui_pagenation--btn-side:not([disabled])
-     * 文本判断：包含 "下一页"
+     * 获取"下一页"按钮
+     * 关键修复：不能用 querySelector 取第一个非 disabled 的 btn-side，
+     * 因为第2页开始"上一页"也不是 disabled，会误匹配。
      */
-    function hasNextPage() {
-        const nextBtn = document.querySelector('.vui_pagenation--btn-side:not([disabled])');
-        return nextBtn && nextBtn.textContent.includes('下一页');
+    function getNextPageBtn() {
+        const btns = document.querySelectorAll('.vui_pagenation--btn-side:not([disabled])');
+        for (const btn of btns) {
+            if (btn.textContent.includes('下一页')) {
+                return btn;
+            }
+        }
+        // 兜底：部分页面用不同类名
+        const allBtns = document.querySelectorAll('button');
+        for (const btn of allBtns) {
+            if (btn.textContent.includes('下一页') && !btn.disabled) {
+                return btn;
+            }
+        }
+        return null;
     }
 
-    /**
-     * 点击下一页
-     */
+    function hasNextPage() {
+        return !!getNextPageBtn();
+    }
+
     function clickNextPage() {
-        const nextBtn = document.querySelector('.vui_pagenation--btn-side:not([disabled])');
-        if (nextBtn && nextBtn.textContent.includes('下一页')) {
-            nextBtn.click();
+        const btn = getNextPageBtn();
+        if (btn) {
+            btn.scrollIntoView({ behavior: 'instant', block: 'center' });
+            btn.click();
             return true;
         }
         return false;
     }
 
     /**
-     * 获取当前页码信息（调试用）
+     * 获取当前页码信息
      */
     function getCurrentPageInfo() {
         const activeBtn = document.querySelector('.vui_pagenation--btn-num.vui_button--active');
         const totalSpan = document.querySelector('.vui_pagenation-go__count');
+        const totalText = totalSpan ? totalSpan.textContent.trim() : '';
+        // 部分页面 total 格式为 "共 XX 页"
+        const totalMatch = totalText.match(/(\d+)/);
         return {
             current: activeBtn ? activeBtn.textContent.trim() : '?',
-            totalText: totalSpan ? totalSpan.textContent.trim() : ''
+            total: totalMatch ? totalMatch[1] : totalText
         };
     }
 
     // ===== 主流程 =====
-    console.log('%c[开始提取] ', 'color: #00a1d6; font-weight: bold;', 'Bilibili 收藏夹视频链接');
+    console.log('%c[开始提取] ', 'color: #00a1d6; font-weight: bold;', 'Bilibili 视频链接提取');
 
     let pageNum = 1;
+    const MAX_PAGES = 50;
 
     while (true) {
         const info = getCurrentPageInfo();
         const beforeCount = results.size;
 
+        // 先滚动加载确保懒加载内容出来
+        await scrollLoad();
+
         // 提取当前页
         const newCount = extractPage();
-        console.log(`第 ${pageNum} 页提取完成 | 本页新增: ${newCount} | 累计: ${results.size} | 页码信息: ${info.current} / ${info.totalText}`);
+        console.log(`第 ${pageNum} 页提取完成 | 本页新增: ${newCount} | 累计: ${results.size} | 页码: ${info.current} / ${info.total}`);
 
         // 检查是否有下一页
         if (!hasNextPage()) {
@@ -94,13 +123,13 @@ function main(){
             break;
         }
 
-        // 等待 SPA 页面更新（B站收藏夹是异步加载）
-        await sleep(2500);
+        // 等待 SPA 页面更新
+        await sleep(3000);
         pageNum++;
 
-        // 安全限制：最多翻 20 页
-        if (pageNum > 20) {
-            console.log('%c[安全限制] ', 'color: orange; font-weight: bold;', '超过最大页数，终止');
+        // 安全限制
+        if (pageNum > MAX_PAGES) {
+            console.log('%c[安全限制] ', 'color: orange; font-weight: bold;', `超过最大页数 ${MAX_PAGES}，终止`);
             break;
         }
     }
@@ -109,22 +138,16 @@ function main(){
     const urls = Array.from(results.values());
     console.log('%c[提取完成] ', 'color: #00a1d6; font-size: 14px; font-weight: bold;', `共 ${urls.length} 个唯一视频`);
 
-    // 以可复制的格式输出
     console.log('%c===== 链接列表（每行一个）=====','color: #00a1d6;');
     urls.forEach((url, idx) => console.log(`${idx + 1}. ${url}`));
 
-    // 同时输出为数组格式，方便复制
     console.log('%c===== JSON 数组格式 =====','color: #00a1d6;');
     console.log(JSON.stringify(urls, null, 2));
 
-    // 输出为纯文本（可直接复制粘贴到 txt）
     console.log('%c===== 纯文本格式（直接复制）=====','color: #00a1d6;');
     console.log(urls.join('\n'));
 
-    // 返回结果（方便在控制台进一步操作）
     window.__bilibiliFavUrls = urls;
     return urls;
 })();
-
 }
-
