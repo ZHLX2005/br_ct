@@ -15,6 +15,7 @@ const scriptFiles = [
   { name: "剪切板抓取文字", file: "元素dom/copy2file.js" },
   { name: "视频播放面板", file: "元素dom/videoControllerPlane/videoPlane.js" },
   { name: "B站收藏夹导出所有视频链接", file: "平台专属/bili/收藏夹导出所有视频链接/extract_bilibili_favlist.js" },
+  { name: "B站合集/课程分P链接提取", file: "平台专属/bili/extract_bilibili_pod.js" },
 ];
 
 document.addEventListener("DOMContentLoaded", () => {
