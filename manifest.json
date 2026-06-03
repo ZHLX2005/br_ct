@@ -69,7 +69,6 @@
       "matches": ["<all_urls>"],
       "js": [
         "runjs/tripleSpace/tripleSpace.js",
-        "runjs/goto/goto.js",
         "runjs/word/word.js",
         "runjs/translation/lib/marked.min.js",
         "runjs/translation/lib/katex.min.js",

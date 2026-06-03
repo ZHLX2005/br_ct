@@ -39,7 +39,6 @@ const NAV_ITEMS = [
   { icon: 'PL', name: '平台显示', page: 'platform/index.html' },
   { icon: 'API', name: 'API 配置', page: 'api/index.html' },
   { icon: 'DB', name: '存储管理', page: 'storage/index.html' },
-  { icon: 'MN', name: '菜单配置', page: 'menu/index.html' },
   { icon: 'NT', name: '随手笔记', page: 'notes/index.html' },
   { icon: 'OC', name: 'OCR 批量识别', page: 'ocr/index.html' },
   { icon: 'TM', name: '倒计时面板', page: 'countdown/index.html' },
