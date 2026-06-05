@@ -27,6 +27,28 @@ async function loadAskPrompts() {
   SELECTION_ASK_PROMPTS = DEFAULT_ASK_PROMPTS;
 }
 
+// ========== 上次用户提问（持久化到 chrome.storage） ==========
+const STORAGE_KEY_LAST_USER_INPUT = 'selectionAsk.lastUserInput';
+
+async function loadLastUserInput() {
+  try {
+    const result = await chrome.storage.local.get([STORAGE_KEY_LAST_USER_INPUT]);
+    if (result && typeof result[STORAGE_KEY_LAST_USER_INPUT] === 'string') {
+      selectionAskLastUserInput = result[STORAGE_KEY_LAST_USER_INPUT];
+    }
+  } catch (e) {
+    console.warn('[SelectionAsk] 从 storage 读取上次提问失败:', e);
+  }
+}
+
+function saveLastUserInput(value) {
+  try {
+    chrome.storage.local.set({ [STORAGE_KEY_LAST_USER_INPUT]: value || '' });
+  } catch (e) {
+    console.warn('[SelectionAsk] 保存上次提问到 storage 失败:', e);
+  }
+}
+
 // ========== 全局状态 ==========
 let selectionAskPanel = null;
 let selectionAskLastSelection = '';
@@ -142,6 +164,7 @@ function createPanel() {
     }
     // 记录本次提问，方便下次连续提问
     selectionAskLastUserInput = userQuestion;
+    saveLastUserInput(userQuestion);
     handleCustomInputSend(selectedText, userQuestion);
     input.value = '';
     refreshHistoryDisplay();
@@ -417,6 +440,14 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       hidePanel();
     }
   }
+  // 跨标签页同步：其他标签更新了上次提问时，本面板也要刷新
+  if (areaName === 'local' && changes[STORAGE_KEY_LAST_USER_INPUT]) {
+    const newVal = changes[STORAGE_KEY_LAST_USER_INPUT].newValue || '';
+    if (newVal !== selectionAskLastUserInput) {
+      selectionAskLastUserInput = newVal;
+      refreshHistoryDisplay();
+    }
+  }
 });
 
 // 初始化并加载配置
@@ -424,6 +455,7 @@ initializeSelectionAsk(); // 会内部 await loadAskPrompts()
 
 async function initializeSelectionAsk() {
   await loadAskPrompts();
+  await loadLastUserInput();
 
   try {
     // 获取平台域名映射
