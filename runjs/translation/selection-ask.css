@@ -4,7 +4,7 @@
 
 .selection-ask-panel {
   position: fixed;
-  width: 160px;
+  width: 220px;
   background: white;
   border-radius: 8px;
   box-shadow: 0 4px 20px rgba(0,0,0,0.25);
@@ -43,4 +43,54 @@
 .selection-ask-item:hover {
   background: #f0f7ff;
   color: #3b82f6;
+}
+
+.selection-ask-history {
+  padding: 6px 12px;
+  font-size: 11px;
+  color: #94a3b8;
+  background: #f8fafc;
+  border-top: 1px solid #f0f0f0;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.selection-ask-history:hover {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.selection-ask-history-text {
+  color: inherit;
+}
+
+.selection-ask-custom {
+  display: flex;
+  padding: 6px;
+  border-top: 1px solid #f0f0f0;
+  background: #fafafa;
+  align-items: center;
+}
+
+.selection-ask-input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+  background: white;
+  box-sizing: border-box;
+}
+
+.selection-ask-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
 }
