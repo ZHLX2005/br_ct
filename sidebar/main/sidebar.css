@@ -61,8 +61,19 @@ body {
 }
 
 .app-header-icon {
-  font-size: 16px;
-  line-height: 1;
+  display: none;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--primary-color);
+}
+
+.app-shell[data-mode="aichat"] .app-header-icon-chat {
+  display: block;
+}
+.app-shell[data-mode="claude-code"] .app-header-icon-cc {
+  display: block;
+  color: #f97316;
 }
 
 .app-header-title {
@@ -72,7 +83,7 @@ body {
   letter-spacing: -0.01em;
 }
 
-/* ===== Claude Code 切换按钮（橙色线条主义） ===== */
+/* ===== Claude Code / AI Chat 切换按钮 ===== */
 
 .cc-toggle {
   display: inline-flex;
@@ -92,40 +103,59 @@ body {
 }
 
 .cc-toggle-icon {
+  display: none;
   flex-shrink: 0;
-  color: #f97316;
   transition: transform 0.2s ease;
 }
 
 .cc-toggle-label {
+  display: none;
   white-space: nowrap;
 }
 
-.cc-toggle:hover {
+/* ---- AI Chat 模式（默认）：显示 CC 图标 + "Claude Code" 文字，橙色 outline ---- */
+.app-shell[data-mode="aichat"] .cc-toggle-icon-cc,
+.app-shell[data-mode="aichat"] .cc-toggle-label-cc {
+  display: inline-flex;
+}
+
+.app-shell[data-mode="aichat"] .cc-toggle:hover {
   background: rgba(249, 115, 22, 0.07);
   border-color: #ea580c;
   color: #ea580c;
   box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
 }
+.app-shell[data-mode="aichat"] .cc-toggle:hover .cc-toggle-icon-cc {
+  transform: rotate(-8deg);
+}
 
-.cc-toggle:hover .cc-toggle-icon {
+/* ---- Claude Code 模式：显示 Chat 图标 + "AI Chat" 文字，蓝色线条风格 ---- */
+.app-shell[data-mode="claude-code"] .cc-toggle-icon-chat,
+.app-shell[data-mode="claude-code"] .cc-toggle-label-chat {
+  display: inline-flex;
+}
+
+.app-shell[data-mode="claude-code"] .cc-toggle {
+  background: transparent;
+  color: var(--primary-color);
+  border-color: var(--primary-color);
+}
+.app-shell[data-mode="claude-code"] .cc-toggle-icon-chat {
+  color: var(--primary-color);
+}
+.app-shell[data-mode="claude-code"] .cc-toggle:hover {
+  background: rgba(67, 97, 238, 0.07);
+  border-color: var(--primary-hover);
+  color: var(--primary-hover);
+  box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.1);
+}
+.app-shell[data-mode="claude-code"] .cc-toggle:hover .cc-toggle-icon-chat {
+  color: var(--primary-hover);
   transform: rotate(-8deg);
 }
 
 .cc-toggle:active {
   transform: scale(0.96);
-}
-
-/* 激活状态（开启 Claude Code 模式时） */
-.cc-toggle.active {
-  background: #f97316;
-  color: #fff;
-  border-color: #f97316;
-  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.25);
-}
-
-.cc-toggle.active .cc-toggle-icon {
-  color: #fff;
 }
 
 /* ===== 模式状态机：data-mode 切换 ===== */
@@ -249,14 +279,44 @@ body {
 }
 
 .response-placeholder {
+  display: none;
   color: #9ca3af;
   font-size: 14px;
   text-align: center;
   padding: 72px 20px;
   user-select: none;
-  border: 1px dashed rgba(148, 163, 184, 0.24);
   border-radius: 18px;
+}
+
+.app-shell[data-mode="aichat"] .response-placeholder--ai {
+  display: block;
+  border: 1px dashed rgba(148, 163, 184, 0.24);
   background: linear-gradient(180deg, rgba(249, 250, 251, 0.9), rgba(255, 255, 255, 0.98));
+}
+
+.app-shell[data-mode="claude-code"] .response-placeholder--cc {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  border: 1px dashed rgba(249, 115, 22, 0.2);
+  background: linear-gradient(180deg, rgba(255, 247, 237, 0.6), rgba(255, 255, 255, 0.98));
+}
+
+.rp-cc-icon {
+  color: #f97316;
+  margin-bottom: 4px;
+}
+
+.rp-cc-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ea580c;
+}
+
+.rp-cc-sub {
+  font-size: 13px;
+  color: #9ca3af;
 }
 
 /* 流式动画 */

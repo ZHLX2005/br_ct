@@ -27,11 +27,9 @@ function setMode(mode) {
   if (!toggleBtn) return;
 
   if (mode === MODES.CLAUDE_CODE) {
-    toggleBtn.classList.add("active");
-    toggleBtn.title = "切换 AI Chat 对话模式";
+    toggleBtn.title = "切换到 AI Chat 模式";
   } else {
-    toggleBtn.classList.remove("active");
-    toggleBtn.title = "切换 Claude Code 对话模式";
+    toggleBtn.title = "切换到 Claude Code 模式";
   }
 }
 
