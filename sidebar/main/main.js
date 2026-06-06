@@ -266,10 +266,116 @@ document.addEventListener("DOMContentLoaded", async function () {
         if (tab) tab._path = pathInput.value;
       });
     }
+
+    // CC /skill 自动补全
+    setupCcSkillAutocomplete();
   } catch (error) {
     console.error("初始化popup失败:", error);
   }
 });
+
+// ==================== CC /skill 自动补全 ====================
+
+let ccSkillCache = [];
+
+function ensureCcSkillLoaded() {
+  if (ccSkillCache.length > 0) return;
+  chrome.storage.local.get('skillCentralPath', ({ skillCentralPath }) => {
+    if (!skillCentralPath) return;
+    chrome.runtime.sendMessage({
+      action: 'nativeMessage',
+      payload: { command: 'scanSkills', path: skillCentralPath, isCentral: true },
+    }, (resp) => {
+      if (resp?.data) {
+        ccSkillCache = resp.data
+          .map(s => ({ name: s.name, desc: s.description || '' }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+      }
+    });
+  });
+}
+
+function setupCcSkillAutocomplete() {
+  const input = document.getElementById('chat-input');
+  const popup = document.getElementById('cc-skill-popup');
+  if (!input || !popup) return;
+
+  let sel = -1;
+
+  function close() { popup.style.display = 'none'; sel = -1; }
+
+  function show(items) {
+    if (items.length === 0) {
+      popup.innerHTML = '<div class="cc-skill-empty">无匹配 Skill</div>';
+    } else {
+      popup.innerHTML = items.map((s, i) =>
+        `<div class="cc-skill-item${i === sel ? ' selected' : ''}" data-i="${i}">
+          <span class="cc-skill-item-icon">S</span>
+          <span class="cc-skill-item-name">${escHtml(s.name)}</span>
+          <span class="cc-skill-item-desc">${escHtml(s.desc || '')}</span>
+        </div>`).join('');
+    }
+    popup.style.display = 'block';
+  }
+
+  function pickSkill(name) {
+    const cur = input.selectionStart || 0;
+    const v = input.value;
+    const sp = v.lastIndexOf('/', cur);
+    if (sp < 0) return;
+    input.value = v.slice(0, sp) + '/' + name + ' ' + v.slice(cur);
+    const np = sp + name.length + 2;
+    input.setSelectionRange(np, np);
+    input.dispatchEvent(new Event('input'));
+    close();
+    input.focus();
+  }
+
+  input.addEventListener('focus', ensureCcSkillLoaded);
+
+  input.addEventListener('input', () => {
+    if (currentMode !== MODES.CLAUDE_CODE) return close();
+    const cur = input.selectionStart || 0;
+    const v = input.value;
+    const sp = v.lastIndexOf('/', cur);
+    if (sp < 0 || sp >= cur) return close();
+    const word = v.slice(sp + 1, cur);
+    if (word.includes(' ')) return close();
+    const matched = ccSkillCache.filter(s => s.name.toLowerCase().includes(word.toLowerCase())).slice(0, 20);
+    sel = matched.length > 0 ? 0 : -1;
+    show(matched);
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (popup.style.display !== 'block') return;
+    const items = popup.querySelectorAll('.cc-skill-item');
+    if (!items.length && e.key !== 'Escape') return;
+
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const name = items[sel]?.querySelector('.cc-skill-item-name')?.textContent;
+      if (name) pickSkill(name);
+      return;
+    }
+
+    if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(sel + 1, items.length - 1); items.forEach((el, i) => el.classList.toggle('selected', i === sel)); items[sel]?.scrollIntoView({ block: 'nearest' }); return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(sel - 1, 0); items.forEach((el, i) => el.classList.toggle('selected', i === sel)); items[sel]?.scrollIntoView({ block: 'nearest' }); return; }
+    if (e.key === 'Escape') { close(); return; }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.chat-input-middle')) close();
+  });
+
+  // 点击选中
+  popup.addEventListener('mousedown', (e) => {
+    const item = e.target.closest('.cc-skill-item');
+    if (!item) return;
+    const name = item.querySelector('.cc-skill-item-name')?.textContent;
+    if (name) pickSkill(name);
+  });
+}
 
 /** CC 模式发送处理 */
 async function handleCcSend() {
@@ -277,8 +383,21 @@ async function handleCcSend() {
   const pathInput = document.getElementById("cc-path-input");
   if (!input) return;
 
-  const prompt = input.value.trim();
-  if (!prompt) return;
+  const raw = input.value.trim();
+  if (!raw) return;
+
+  // 从 prompt 中提取 /skill xxx 指令
+  const skillRegex = /\/([\w-]+)/g;
+  let match;
+  const skills = [];
+  let prompt = raw;
+  while ((match = skillRegex.exec(raw)) !== null) {
+    const skillName = match[1];
+    if (ccSkillCache.some(s => s.name === skillName)) {
+      skills.push(skillName);
+      prompt = prompt.replace(match[0], '').trim();
+    }
+  }
 
   const workDir = pathInput ? pathInput.value.trim() : "";
   const activeTab = getActiveCcTab();
@@ -333,8 +452,8 @@ async function handleCcSend() {
 
   // 发送并等待回复
   try {
-    console.log("[CC Send] 正在通过 native messaging 发送...");
-    const resp = await sendCcQuery(prompt, workDir, "");
+    console.log("[CC Send] 正在通过 native messaging 发送...", { skills, prompt: prompt.slice(0, 80) });
+    const resp = await sendCcQuery(prompt, workDir, skills.join(","));
     console.log("[CC Send] 收到回复:", {
       status: resp?.status,
       textLength: resp?.data?.text?.length || 0,
