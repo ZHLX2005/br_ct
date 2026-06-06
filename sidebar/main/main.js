@@ -72,8 +72,10 @@ function createCcTab() {
   tab.className = "cc-tab";
   tab.dataset.ccSession = id;
   tab._sessionId = null;
-  tab._messages = "";        // 新 tab = 空白消息
-  tab._path = CC_DEFAULT_PATH;  // 新 tab = 默认路径
+  tab._messages = "";
+  tab._path = CC_DEFAULT_PATH;
+  tab._skills = [];       // 每个 tab 独立的 skill 缓存
+  tab._skillsLoading = false;
   tab.innerHTML = `
     <span class="cc-tab-icon">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -263,7 +265,12 @@ document.addEventListener("DOMContentLoaded", async function () {
     if (pathInput) {
       pathInput.addEventListener("input", () => {
         const tab = getActiveCcTab();
-        if (tab) tab._path = pathInput.value;
+        if (tab) {
+          tab._path = pathInput.value;
+          // 路径变了 → 清空 skill 缓存，下次 / 时重新加载
+          tab._skills = [];
+          tab._skillsLoading = false;
+        }
       });
     }
 
@@ -276,22 +283,21 @@ document.addEventListener("DOMContentLoaded", async function () {
 
 // ==================== CC /skill 自动补全 ====================
 
-let ccSkillCache = [];
-
-function ensureCcSkillLoaded() {
-  if (ccSkillCache.length > 0) return;
-  chrome.storage.local.get('skillCentralPath', ({ skillCentralPath }) => {
-    if (!skillCentralPath) return;
-    chrome.runtime.sendMessage({
-      action: 'nativeMessage',
-      payload: { command: 'scanSkills', path: skillCentralPath, isCentral: true },
-    }, (resp) => {
-      if (resp?.data) {
-        ccSkillCache = resp.data
-          .map(s => ({ name: s.name, desc: s.description || '' }))
-          .sort((a, b) => a.name.localeCompare(b.name));
-      }
-    });
+function ensureCcTabSkills(tab) {
+  if (!tab || tab._skillsLoading) return;
+  if (tab._skills.length > 0) return;
+  tab._skillsLoading = true;
+  chrome.runtime.sendMessage({
+    action: 'nativeMessage',
+    payload: { command: 'getClaudeSkills', workDir: tab._path || "" },
+  }, (resp) => {
+    tab._skillsLoading = false;
+    if (resp?.data?.skills) {
+      tab._skills = resp.data.skills
+        .map(name => ({ name, desc: '' }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      console.log(`[CC Skill] tab ${tab.dataset.ccSession} 获取到 ${tab._skills.length} 个 skill`);
+    }
   });
 }
 
@@ -331,8 +337,6 @@ function setupCcSkillAutocomplete() {
     input.focus();
   }
 
-  input.addEventListener('focus', ensureCcSkillLoaded);
-
   input.addEventListener('input', () => {
     if (currentMode !== MODES.CLAUDE_CODE) return close();
     const cur = input.selectionStart || 0;
@@ -341,7 +345,13 @@ function setupCcSkillAutocomplete() {
     if (sp < 0 || sp >= cur) return close();
     const word = v.slice(sp + 1, cur);
     if (word.includes(' ')) return close();
-    const matched = ccSkillCache.filter(s => s.name.toLowerCase().includes(word.toLowerCase())).slice(0, 20);
+
+    // 从当前 tab 加载 skill
+    const tab = getActiveCcTab();
+    if (tab) ensureCcTabSkills(tab);
+    const skills = tab?._skills || [];
+
+    const matched = skills.filter(s => s.name.toLowerCase().includes(word.toLowerCase())).slice(0, 20);
     sel = matched.length > 0 ? 0 : -1;
     show(matched);
   });
@@ -386,21 +396,23 @@ async function handleCcSend() {
   const raw = input.value.trim();
   if (!raw) return;
 
+  const activeTab = getActiveCcTab();
+
   // 从 prompt 中提取 /skill xxx 指令
   const skillRegex = /\/([\w-]+)/g;
   let match;
   const skills = [];
   let prompt = raw;
+  const tabSkills = activeTab?._skills || [];
   while ((match = skillRegex.exec(raw)) !== null) {
     const skillName = match[1];
-    if (ccSkillCache.some(s => s.name === skillName)) {
+    if (tabSkills.some(s => s.name === skillName)) {
       skills.push(skillName);
       prompt = prompt.replace(match[0], '').trim();
     }
   }
 
   const workDir = pathInput ? pathInput.value.trim() : "";
-  const activeTab = getActiveCcTab();
   const tabLabel = activeTab?.querySelector(".cc-tab-label");
   const sessionId = activeTab?._sessionId || null;
 

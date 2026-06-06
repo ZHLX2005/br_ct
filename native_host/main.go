@@ -77,6 +77,7 @@ func main() {
 
 	// Claude Query
 	registry.Register("claudeQuery", handleClaudeQuery)
+	registry.Register("getClaudeSkills", handleGetClaudeSkills)
 
 	// 消息循环：放在 goroutine 里，让 main 在 stdin EOF 后还能继续做 children
 	// 的 pipe writer 持有者，避免 Chrome SW 断开时连坐杀死长寿命 child（如 nx-sx happy）。
@@ -156,5 +157,28 @@ func handleClaudeQuery(req protocol.Request) protocol.Response {
 			"text":      result.Text,
 			"sessionId": result.SessionId,
 		},
+	}
+}
+
+// handleGetClaudeSkills 通过 nx-ce 获取 SDK 可用的 skill 列表。
+// 调用 npx nx-ce query "" --include-metadata 获取 metadata.skills。
+func handleGetClaudeSkills(req protocol.Request) protocol.Response {
+	cmd := exec.Command("npx", "nx-ce", "skills")
+	output, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return protocol.Response{Status: "error", Message: string(exitErr.Stderr)}
+		}
+		return protocol.Response{Status: "error", Message: err.Error()}
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(output, &result); err != nil {
+		return protocol.Response{Status: "error", Message: "parse nx-ce output: " + err.Error()}
+	}
+
+	return protocol.Response{
+		Status: "ok",
+		Data:   result,
 	}
 }
