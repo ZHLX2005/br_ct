@@ -284,8 +284,11 @@ document.addEventListener("DOMContentLoaded", async function () {
 // ==================== CC /skill 自动补全 ====================
 
 function ensureCcTabSkills(tab) {
-  if (!tab || tab._skillsLoading) return;
-  if (tab._skills.length > 0) return;
+  if (!tab) return;
+  // 兼容 HTML 初始 tab（非 createCcTab 创建），首次用时补齐属性
+  if (!tab._skills) tab._skills = [];
+  if (!tab._skillsLoading) tab._skillsLoading = false;
+  if (tab._skillsLoading || tab._skills.length > 0) return;
   tab._skillsLoading = true;
   chrome.runtime.sendMessage({
     action: 'nativeMessage',
