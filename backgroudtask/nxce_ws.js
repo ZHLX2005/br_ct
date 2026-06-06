@@ -352,12 +352,13 @@ const handlers = {
       sessionTabMap.set(msg.session, tabId);
       recentTab.tabId = tabId;
     }
-    console.log('[NxceWS] query forward: session=' + msg.session + ', cwd=' + msg.cwd + ', promptLen=' + (msg.prompt?.length || 0));
+    console.log('[NxceWS] query forward: session=' + msg.session + ', cwd=' + msg.cwd + ', promptLen=' + (msg.prompt?.length || 0) + ', skills=' + JSON.stringify(msg.skills));
     await send({
       type: 'query',
       session: msg.session,
       cwd: msg.cwd,
       prompt: msg.prompt,
+      skills: msg.skills,
       id: msg.queryId,
     });
     return { ok: true };

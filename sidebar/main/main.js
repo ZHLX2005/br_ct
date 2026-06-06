@@ -122,6 +122,7 @@ function sendCcQuery(prompt, workDir, skills) {
     sessionId: tab._sessionId,
     promptLen: prompt.length,
     workDir,
+    skills,
   });
 
   // 缓存 skills 到 query 上下文中（event handler 用）
@@ -145,6 +146,7 @@ function sendCcQuery(prompt, workDir, skills) {
       session,
       cwd: workDir || "",
       prompt,
+      skills: (skills || "").split(",").filter(Boolean),
       queryId: `q-${Date.now()}`,
     }, (resp) => {
       if (chrome.runtime.lastError) {
@@ -774,9 +776,12 @@ async function handleCcSend() {
   input.value = "";
   input.dispatchEvent(new Event("input"));
 
-  // 显示用户消息
+  // 显示用户消息（带 skill 标签）
   const responseContent = document.getElementById("response-content");
   if (responseContent) {
+    const skillsBadge = skills.length > 0
+      ? `<div class="cc-bubble-skills">${skills.map(s => `<span class="cc-skill-tag">${escHtml(s)}</span>`).join('')}</div>`
+      : '';
     const userMsg = document.createElement("div");
     userMsg.className = "notion-chat-message notion-chat-message--user";
     userMsg.innerHTML = `
@@ -785,6 +790,7 @@ async function handleCcSend() {
           <span class="notion-chat-bubble-name">You</span>
         </div>
         <div class="notion-chat-bubble-content">${escHtml(prompt)}</div>
+        ${skillsBadge}
       </div>`;
     responseContent.appendChild(userMsg);
     responseContent.scrollTop = responseContent.scrollHeight;
@@ -808,9 +814,15 @@ async function handleCcSend() {
     responseContent.scrollTop = responseContent.scrollHeight;
   }
 
+  // 发送前：在 prompt 前注入已选 skill 标记（让模型明确知道用户指哪个 skill）
+  const skillPrefix = skills.length > 0
+    ? `[已选择 skill: ${skills.join(', ')}] `
+    : '';
+  const finalPrompt = skillPrefix + prompt;
+
   // 发送（流式：resolve 在 done 事件时触发，appendCcStream 已逐块填充）
   try {
-    await sendCcQuery(prompt, workDir, skills.join(","));
+    await sendCcQuery(finalPrompt, workDir, skills.join(","));
   } catch (err) {
     console.error("[CC Send] 失败:", err);
     if (loadingEl.parentNode) loadingEl.remove();
