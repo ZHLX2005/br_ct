@@ -19,6 +19,7 @@ type Request struct {
 	Command   string   `json:"command"`
 	Path      string   `json:"path,omitempty"`
 	Content   string   `json:"content,omitempty"`
+	Prompt    string   `json:"prompt,omitempty"`
 	FileName  string   `json:"fileName,omitempty"`
 	WorkDir   string   `json:"workDir,omitempty"`
 	Cmd       string   `json:"cmd,omitempty"`
@@ -31,6 +32,11 @@ type Request struct {
 	Message   string   `json:"message,omitempty"`
 	Groups    []SkillGroup `json:"groups,omitempty"`
 	IsCentral bool     `json:"isCentral,omitempty"`
+
+	// Claude Query 字段
+	SessionId string `json:"sessionId,omitempty"`
+	Action    string `json:"action,omitempty"`
+	Skills    string `json:"skills,omitempty"`
 }
 
 type Response struct {

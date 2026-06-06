@@ -33,6 +33,7 @@ function setMode(mode) {
   }
 }
 
+
 function toggleMode() {
   const next = currentMode === MODES.AICHAT ? MODES.CLAUDE_CODE : MODES.AICHAT;
   setMode(next);
@@ -51,6 +52,7 @@ function createCcTab() {
   const tab = document.createElement("div");
   tab.className = "cc-tab";
   tab.dataset.ccSession = id;
+  tab._sessionId = null; // 每个 tab 存储自己的 sessionId
   tab.innerHTML = `
     <span class="cc-tab-icon">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -73,6 +75,57 @@ function createCcTab() {
   switchCcTab(tab);
 
   return tab;
+}
+
+/** 获取当前激活的 CC tab */
+function getActiveCcTab() {
+  return document.querySelector(".cc-tab.active");
+}
+
+/**
+ * 通过 native messaging 发送 Claude Code 查询。
+ * 从当前激活 tab 获取 sessionId，收到响应后更新。
+ */
+function sendCcQuery(prompt, workDir, skills) {
+  const tab = getActiveCcTab();
+  if (!tab) return Promise.reject(new Error("无激活的 CC 会话"));
+
+  console.log("[CC sendCcQuery] 发出 nativeMessage:", {
+    command: "claudeQuery",
+    sessionId: tab._sessionId,
+    promptLen: prompt.length,
+    workDir,
+  });
+
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage({
+      action: "nativeMessage",
+      payload: {
+        command: "claudeQuery",
+        prompt: prompt,
+        sessionId: tab._sessionId || "",
+        workDir: workDir || "",
+        skills: skills || "",
+      },
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error("[CC sendCcQuery] 错误:", chrome.runtime.lastError.message);
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      console.log("[CC sendCcQuery] 收到 native 响应:", {
+        status: response?.status,
+        sessionId: response?.data?.sessionId,
+        textLen: response?.data?.text?.length,
+      });
+      // 更新 tab 的 sessionId（SDK 可能返回新的或原有的）
+      if (response?.data?.sessionId) {
+        tab._sessionId = response.data.sessionId;
+        console.log("[CC sendCcQuery] 更新 tab sessionId:", tab._sessionId);
+      }
+      resolve(response);
+    });
+  });
 }
 
 function switchCcTab(tab) {
@@ -144,11 +197,145 @@ document.addEventListener("DOMContentLoaded", async function () {
     // CC 多窗口管理
     setupCcTabListeners();
 
+    // CC 模式发送拦截（在 capture 阶段截获，避免走 AI Chat 的平台发送）
+    const sendBtn = document.getElementById("chat-btn-send");
+    const chatInput = document.getElementById("chat-input");
+
+    if (sendBtn) {
+      sendBtn.addEventListener("click", (e) => {
+        if (currentMode !== MODES.CLAUDE_CODE) return; // 仅拦截 CC 模式
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        handleCcSend();
+      }, true);
+    }
+
+    if (chatInput) {
+      chatInput.addEventListener("keydown", (e) => {
+        if (currentMode !== MODES.CLAUDE_CODE) return;
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          handleCcSend();
+        }
+      }, true);
+    }
+
     setupDragDrop();
   } catch (error) {
     console.error("初始化popup失败:", error);
   }
 });
+
+/** CC 模式发送处理 */
+async function handleCcSend() {
+  const input = document.getElementById("chat-input");
+  const pathInput = document.getElementById("cc-path-input");
+  if (!input) return;
+
+  const prompt = input.value.trim();
+  if (!prompt) return;
+
+  const workDir = pathInput ? pathInput.value.trim() : "";
+  const activeTab = getActiveCcTab();
+  const tabLabel = activeTab?.querySelector(".cc-tab-label");
+  const sessionId = activeTab?._sessionId || null;
+
+  console.log("[CC Send] 发送请求:", {
+    sessionId,
+    prompt: prompt.slice(0, 100) + (prompt.length > 100 ? "..." : ""),
+    workDir,
+    tab: activeTab?.dataset.ccSession,
+  });
+
+  // 清空输入
+  input.value = "";
+  input.dispatchEvent(new Event("input"));
+
+  // 显示用户消息到回复区
+  const responseContent = document.getElementById("response-content");
+  if (responseContent) {
+    const userMsg = document.createElement("div");
+    userMsg.className = "notion-chat-message notion-chat-message--user";
+    userMsg.innerHTML = `
+      <div class="notion-chat-bubble notion-chat-bubble--user" style="flex:0 1 auto;max-width:88%;">
+        <div class="notion-chat-bubble-header">
+          <span class="notion-chat-bubble-name">You</span>
+        </div>
+        <div class="notion-chat-bubble-content">${escHtml(prompt)}</div>
+      </div>`;
+    responseContent.appendChild(userMsg);
+    responseContent.scrollTop = responseContent.scrollHeight;
+  }
+
+  // 显示加载动画
+  const loadingEl = document.createElement("div");
+  loadingEl.className = "cc-loading";
+  loadingEl.innerHTML = `
+    <div class="notion-chat-avatar">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+    </div>
+    <div class="cc-loading-dots">
+      <span class="cc-loading-dot"></span>
+      <span class="cc-loading-dot"></span>
+      <span class="cc-loading-dot"></span>
+    </div>`;
+  if (responseContent) {
+    responseContent.appendChild(loadingEl);
+    responseContent.scrollTop = responseContent.scrollHeight;
+  }
+
+  // 发送并等待回复
+  try {
+    console.log("[CC Send] 正在通过 native messaging 发送...");
+    const resp = await sendCcQuery(prompt, workDir, "");
+    console.log("[CC Send] 收到回复:", {
+      status: resp?.status,
+      textLength: resp?.data?.text?.length || 0,
+      sessionId: resp?.data?.sessionId,
+      textPreview: (resp?.data?.text || "").slice(0, 150) + ((resp?.data?.text?.length || 0) > 150 ? "..." : ""),
+    });
+
+    // 移除加载动画
+    if (loadingEl.parentNode) loadingEl.remove();
+
+    const text = resp?.data?.text || "（无回复）";
+
+    // 显示 Claude 回复
+    if (responseContent) {
+      const aiMsg = document.createElement("div");
+      aiMsg.className = "notion-chat-message";
+      aiMsg.innerHTML = `
+        <div class="notion-chat-avatar" style="background:#f97316;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;width:26px;height:26px;border-radius:50%;flex-shrink:0;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        </div>
+        <div class="notion-chat-bubble">
+          <div class="notion-chat-bubble-header">
+            <span class="notion-chat-bubble-name" style="color:#ea580c">${tabLabel?.textContent || "Claude Code"}</span>
+          </div>
+          <div class="notion-chat-bubble-content">${escHtml(text)}</div>
+        </div>`;
+      responseContent.appendChild(aiMsg);
+      responseContent.scrollTop = responseContent.scrollHeight;
+    }
+  } catch (err) {
+    console.error("[CC Send] 发送失败:", err);
+    // 移除加载动画
+    if (loadingEl.parentNode) loadingEl.remove();
+    if (responseContent) {
+      const errMsg = document.createElement("div");
+      errMsg.className = "notion-chat-message";
+      errMsg.innerHTML = `<div class="notion-chat-bubble" style="border-color:#e53e3e;"><div class="notion-chat-bubble-content" style="color:#e53e3e;">发送失败: ${escHtml(err.message)}</div></div>`;
+      responseContent.appendChild(errMsg);
+    }
+  }
+}
+
+function escHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
 
 function setupDragDrop() {
   const messageInput = document.getElementById("chat-input");
