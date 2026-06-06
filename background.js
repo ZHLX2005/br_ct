@@ -59,7 +59,7 @@ import { setupNativeRelay } from './backgroudtask/native_relay/index.js';
 setupNativeRelay();
 console.log('[Background] NativeRelay 中继初始化完成');
 
-// 初始化 nx-ce WebSocket 单例（CC 模式直连 nx-ce serve）
+// 初始化 nx-ce WebSocket 单例（CC 模式业务消息中转）
 import { setupNxceWs } from './backgroudtask/nxce_ws.js';
 setupNxceWs();
 console.log('[Background] NxceWS 初始化完成');

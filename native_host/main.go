@@ -1,12 +1,9 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
-	"strings"
 	"time"
 
 	"brochat_native_host/internal/envvars"
@@ -75,9 +72,7 @@ func main() {
 	registry.Register("setSystemEnvVar", envvars.SetSystemEnvVar)
 	registry.Register("removeSystemEnvVar", envvars.RemoveSystemEnvVar)
 
-	// Claude Query
-	registry.Register("claudeQuery", handleClaudeQuery)
-	registry.Register("getClaudeSkills", handleGetClaudeSkills)
+	// nx-ce serve 进程管理（业务消息由 sidebar 直连 WS）
 	registry.Register("claudeStartServe", handler.ClaudeStartServe)
 	registry.Register("claudeServeStatus", handler.ClaudeServeStatus)
 
@@ -109,78 +104,5 @@ func main() {
 	// 意外 EOF 进而自毁。轮询等待所有 child 自然终止。
 	for executor.HasActiveChildren() {
 		time.Sleep(5 * time.Second)
-	}
-}
-
-// handleClaudeQuery 将 Chrome 的 claudeQuery 请求转发给 npx nx-ce query。
-// 输入: { command: "claudeQuery", sessionId, prompt, workDir, skills }
-// 输出: { status: "ok", data: { text, sessionId } }
-func handleClaudeQuery(req protocol.Request) protocol.Response {
-	prompt := req.Prompt
-	if prompt == "" {
-		prompt = req.Content
-	}
-	args := []string{"nx-ce", "query", prompt}
-	if req.SessionId != "" {
-		args = append(args, "--resume", req.SessionId)
-	}
-	if req.Skills != "" {
-		args = append(args, "--skill", strings.ReplaceAll(req.Skills, ",", ","))
-	}
-	if req.WorkDir != "" {
-		args = append(args, "--cwd", req.WorkDir)
-	}
-
-	cmd := exec.Command("npx", args...)
-	output, err := cmd.Output()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return protocol.Response{Status: "error", Message: string(exitErr.Stderr)}
-		}
-		return protocol.Response{Status: "error", Message: err.Error()}
-	}
-
-	var result struct {
-		Text      string `json:"text"`
-		SessionId string `json:"sessionId"`
-	}
-	if err := json.Unmarshal(output, &result); err != nil {
-		return protocol.Response{Status: "error", Message: "parse nx-ce output: " + err.Error()}
-	}
-
-	// 如果没有返回 sessionId（首次对话），使用传入的 sessionId
-	if result.SessionId == "" {
-		result.SessionId = req.SessionId
-	}
-
-	return protocol.Response{
-		Status: "ok",
-		Data: map[string]interface{}{
-			"text":      result.Text,
-			"sessionId": result.SessionId,
-		},
-	}
-}
-
-// handleGetClaudeSkills 通过 nx-ce 获取 SDK 可用的 skill 列表。
-// 调用 npx nx-ce query "" --include-metadata 获取 metadata.skills。
-func handleGetClaudeSkills(req protocol.Request) protocol.Response {
-	cmd := exec.Command("npx", "nx-ce", "skills")
-	output, err := cmd.Output()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return protocol.Response{Status: "error", Message: string(exitErr.Stderr)}
-		}
-		return protocol.Response{Status: "error", Message: err.Error()}
-	}
-
-	var result map[string]interface{}
-	if err := json.Unmarshal(output, &result); err != nil {
-		return protocol.Response{Status: "error", Message: "parse nx-ce output: " + err.Error()}
-	}
-
-	return protocol.Response{
-		Status: "ok",
-		Data:   result,
 	}
 }

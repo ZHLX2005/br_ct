@@ -32,16 +32,6 @@ type Request struct {
 	Message   string   `json:"message,omitempty"`
 	Groups    []SkillGroup `json:"groups,omitempty"`
 	IsCentral bool     `json:"isCentral,omitempty"`
-
-	// Claude Query 字段
-	SessionId string `json:"sessionId,omitempty"`
-	Action    string `json:"action,omitempty"`
-	Skills    string `json:"skills,omitempty"`
-
-	// nx-ce serve 字段（claudeStartServe / claudeServeStatus 共用）
-	Port  int    `json:"port,omitempty"`
-	Model string `json:"model,omitempty"`
-	Cwd   string `json:"cwd,omitempty"`
 }
 
 type Response struct {

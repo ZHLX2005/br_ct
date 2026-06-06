@@ -15,7 +15,6 @@ package handler
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -28,30 +27,19 @@ import (
 //
 // 入参：
 //   - req.Name:    nx-ce 实例名（默认 "default"），对应 ~/.nx-ce/instances/{name}.json
-//   - req.Port:    端口（默认 3100；0 = 默认）
-//   - req.Model:   模型 ID（可选；空 = nx-ce 默认）
-//   - req.Cwd:     nx-ce 启动时的默认 cwd（可选；运行时每个 query 可覆盖）
-//   - req.WorkDir: native_host 视角的工作目录（npx 启动位置）
+//   - req.WorkDir: native_host 视角的工作目录（npx 启动位置；可选）
+//
+// 端口固定 3100，模型/cwd 由 nx-ce serve 默认行为决定（运行时每个 query 可覆盖）。
 func ClaudeStartServe(req protocol.Request) protocol.Response {
 	name := req.Name
 	if name == "" {
 		name = "default"
 	}
-	port := req.Port
-	if port == 0 {
-		port = 3100
-	}
 
 	args := []string{
 		"nx-ce", "serve",
 		"--name", name,
-		"--port", fmt.Sprintf("%d", port),
-	}
-	if req.Model != "" {
-		args = append(args, "--model", req.Model)
-	}
-	if req.Cwd != "" {
-		args = append(args, "--cwd", req.Cwd)
+		"--port", "3100",
 	}
 
 	// 委托给 executor.StartProcess：它会持 stdin pipe writer、写进程状态、生成日志

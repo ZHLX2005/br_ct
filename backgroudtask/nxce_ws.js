@@ -8,14 +8,13 @@
  *         → WebSocket ws://127.0.0.1:3100
  *           → npx nx-ce serve
  *
- * native_host 只在 WS 连不上时介入（启动 nx-ce serve），
+ * native_host 只在 sidebar 需要启动/停止 nx-ce 进程时介入；
  * 业务数据流完全走 WS，**不经 native_host 转发**。
  *
- * 多 tab 路由（§8.4 方案 E）：
- *   - 每个 tab 注册时分配 senderId (sender.tab.id)
- *   - query 走 turnId 配对：turn_start 时把最近活跃 tab 记为该 turn 的 owner
- *   - text/thinking/tool_use/done 按 turnId 路由回对应 tab
- *   - 多 tab 并发查询时按"最近一次 query"做 best-effort 路由
+ * 设计要点：
+ * - 启动 nx-ce 是 sidebar 自己的事（直调 native_host），本模块不做进程管理
+ * - 被动 close（nx-ce 死了）不自动重连——必须 sidebar 显式触发
+ * - 防止重连风暴：userWantsConnected（用户意图）+ connectGen（代际锁）
  */
 
 const NXCE_WS_URL = 'ws://127.0.0.1:3100';
@@ -34,7 +33,7 @@ let reconnectTimer = null;
 let userWantsConnected = false;
 let connectGen = 0;
 
-// 路由表
+// 路由表（多 tab 路由 / turn 配对）
 const sessionTabMap = new Map();
 const turnOwner = new Map();
 const recentTab = { tabId: null, turnId: null, sessionId: null };
@@ -96,8 +95,6 @@ function connect() {
 
       // 设计：被动 close（nx-ce 进程死了 / 网络断）不自动重连。
       // 任何重连都必须用户显式点 "连接" → ensureRunning。
-      // 唯一允许 scheduleReconnect 的情况：sock 标了 _userDisconnect=false 且仍想连 → 也不重连。
-      // 直接清掉意图。
       if (myGen === connectGen) {
         userWantsConnected = false;
       }
@@ -152,12 +149,12 @@ async function send(message) {
   ws.send(JSON.stringify(message));
 }
 
-// 业务消息返回 Promise（仅对响应类：getStatus / listSessions）
+// 业务消息返回 Promise（仅对响应类：getStatus / listSessions / getSkills / closeSession）
 const pendingRequests = new Map();
 let nextReqId = 1;
 
 function sendRequest(message) {
-  return new Promise(async (resolve) => {
+  return new Promise((resolve) => {
     const id = message.id ?? `req-${nextReqId++}`;
     const tagged = { ...message, id };
 
@@ -171,7 +168,7 @@ function sendRequest(message) {
     const expectedType = responseTypes[message.type];
     if (!expectedType) {
       // 非请求-响应类：fire-and-forget
-      try { await send(tagged); } catch (e) { resolve({ ok: false, error: e.message }); }
+      send(tagged).catch((e) => resolve({ ok: false, error: e.message }));
       return;
     }
 
@@ -182,12 +179,11 @@ function sendRequest(message) {
     }, 5000);
     pendingRequests.get(id).timer = timer;
 
-    try { await send(tagged); }
-    catch (e) {
+    send(tagged).catch((e) => {
       clearTimeout(timer);
       pendingRequests.delete(id);
       resolve({ ok: false, error: e.message });
-    }
+    });
   });
 }
 
@@ -227,7 +223,6 @@ function dispatch(msg) {
       if (tabId != null) {
         sendToTab(tabId, { action: 'nxce_event', event: msg });
       }
-      // 始终广播一份（覆盖 sidebar / 新 tab / 任何监听者）
       broadcastEvent(msg);
       if (msg.type === 'done') {
         turnOwner.delete(recentTab.turnId);
@@ -237,6 +232,7 @@ function dispatch(msg) {
     }
 
     case 'init': {
+      console.log('[NxceWS] init received, sessionId=' + msg.sessionId + ', skills=' + (msg.skills?.length || 0) + ', cwd=' + msg.cwd);
       if (recentTab.tabId != null) {
         recentTab.sessionId = msg.sessionId;
         sendToTab(recentTab.tabId, { action: 'nxce_event', event: msg });
@@ -252,7 +248,6 @@ function dispatch(msg) {
     case 'error':
     case 'pong':
     default:
-      // 找不到归属 → 广播给所有监听者
       broadcastEvent(msg);
       break;
   }
@@ -281,7 +276,7 @@ function sendToTab(tabId, payload) {
 }
 
 /* ============================================================
- *  native_host 转发（仅用于进程管理：start/status）
+ *  native_host 转发（仅用于 sidebar 主动调用的辅助命令）
  * ============================================================ */
 
 let nativePort = null;
@@ -348,103 +343,91 @@ function sendNative(payload) {
  *  对外 API
  * ============================================================ */
 
-export function setupNxceWs() {
-  // 不预连接（懒加载）—— 节省 service_worker 唤醒成本
-  // connect();
+// 业务命令 handler 集中注册
+const handlers = {
+  // === WS 业务消息（转发到 nx-ce serve） ===
+  query: async (msg, sender) => {
+    const tabId = sender?.tab?.id;
+    if (tabId != null) {
+      sessionTabMap.set(msg.session, tabId);
+      recentTab.tabId = tabId;
+    }
+    console.log('[NxceWS] query forward: session=' + msg.session + ', cwd=' + msg.cwd + ', promptLen=' + (msg.prompt?.length || 0));
+    await send({
+      type: 'query',
+      session: msg.session,
+      cwd: msg.cwd,
+      prompt: msg.prompt,
+      id: msg.queryId,
+    });
+    return { ok: true };
+  },
 
+  closeSession: async (msg) => {
+    await send({ type: 'closeSession', session: msg.session, cwd: msg.cwd });
+    return { ok: true };
+  },
+
+  getSkills: async (msg, sender) => {
+    if (!msg.cwd || !msg.cwd.trim()) {
+      console.warn('[nxce_ws] getSkills received empty cwd from', sender?.tab?.id);
+    }
+    const r = await sendRequest({ type: 'getSkills', session: msg.session, cwd: msg.cwd });
+    return r || { ok: false, error: 'timeout' };
+  },
+
+  getStatus: async (msg) => {
+    return await sendRequest({ type: 'getStatus', session: msg.session, cwd: msg.cwd });
+  },
+
+  listSessions: async () => {
+    return await sendRequest({ type: 'listSessions' });
+  },
+
+  // === WS 状态控制 ===
+  ping: async () => {
+    try { await connect(); return { ok: true, connected: true }; }
+    catch { return { ok: false, connected: false }; }
+  },
+
+  disconnect: () => {
+    disconnect();
+    return { ok: true };
+  },
+
+  // === native_host 转发（进程管理） ===
+  startServe: async (msg) => {
+    return await sendNative({
+      command: 'claudeStartServe',
+      name: msg?.name || 'default',
+    });
+  },
+
+  stopServe: async () => {
+    disconnect();
+    return await sendNative({ command: 'stopProcess', name: 'nxce-serve-default' }).catch((e) => ({ status: 'error', message: e.message }));
+  },
+
+  serveStatus: async () => {
+    return await sendNative({ command: 'claudeServeStatus', name: 'default' });
+  },
+};
+
+export function setupNxceWs() {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!message || message.action !== 'nxce_ws') return false;
 
     const { cmd } = message;
+    const handler = handlers[cmd];
+    if (!handler) {
+      sendResponse({ ok: false, error: 'unknown cmd: ' + cmd });
+      return false;
+    }
+
     (async () => {
       try {
-        switch (cmd) {
-          case 'query': {
-            // 记录发起者 tab（sidebar 可能是独立 webview，sender.tab 可能为空）
-            const tabId = sender?.tab?.id;
-            if (tabId != null) {
-              sessionTabMap.set(message.session, tabId);
-              recentTab.tabId = tabId;
-            }
-            await send({
-              type: 'query',
-              session: message.session,
-              cwd: message.cwd,
-              prompt: message.prompt,
-              id: message.queryId,
-            });
-            sendResponse({ ok: true });
-            break;
-          }
-          case 'closeSession': {
-            await send({
-              type: 'closeSession',
-              session: message.session,
-              cwd: message.cwd,
-            });
-            sendResponse({ ok: true });
-            break;
-          }
-          case 'getSkills': {
-            // 请求-响应：等 nx-ce 回 'skills' 消息
-            // Fix: cwd 缺省时记 warning 但仍转发 — nx-ce 自己有默认 cwd 处理。
-            // 真正的兜底在 sidebar 端 ensureCcTabSkills（用 CC_DEFAULT_PATH）。
-            if (!message.cwd || !message.cwd.trim()) {
-              console.warn('[nxce_ws] getSkills received empty cwd from', sender?.tab?.id);
-            }
-            const r = await sendRequest({
-              type: 'getSkills',
-              session: message.session,
-              cwd: message.cwd,
-            });
-            sendResponse(r || { ok: false, error: 'timeout' });
-            break;
-          }
-          case 'getStatus': {
-            const r = await sendRequest({
-              type: 'getStatus',
-              session: message.session,
-              cwd: message.cwd,
-            });
-            sendResponse(r);
-            break;
-          }
-          case 'listSessions': {
-            const r = await sendRequest({ type: 'listSessions' });
-            sendResponse(r);
-            break;
-          }
-          case 'serveStatus': {
-            const r = await sendNative({ command: 'claudeServeStatus', name: 'default' });
-            sendResponse(r);
-            break;
-          }
-          case 'ping': {
-            // 显式探测 WS 是否连得上（不触发 ensureRunning）
-            try {
-              await connect();
-              sendResponse({ ok: true, connected: true });
-            } catch {
-              sendResponse({ ok: false, connected: false });
-            }
-            break;
-          }
-          case 'disconnect': {
-            // 显式断开 WS（不杀 nx-ce 进程）
-            disconnect();
-            sendResponse({ ok: true });
-            break;
-          }
-          case 'stopServe': {
-            // 停止 nx-ce 进程 + 断 WS
-            disconnect();
-            await sendNative({ command: 'stopProcess', name: 'nxce-serve-default' }).catch(() => {});
-            sendResponse({ ok: true });
-            break;
-          }
-          default:
-            sendResponse({ ok: false, error: 'unknown cmd: ' + cmd });
-        }
+        const result = await handler(message, sender);
+        sendResponse(result ?? { ok: true });
       } catch (err) {
         sendResponse({ ok: false, error: err.message });
       }
@@ -453,5 +436,5 @@ export function setupNxceWs() {
     return true; // 异步响应
   });
 
-  console.log('[NxceWS] listener ready');
+  console.log('[NxceWS] listener ready (' + Object.keys(handlers).length + ' handlers)');
 }
