@@ -32,7 +32,7 @@ body {
   line-height: 1.4;
 }
 
-/* ===== App Shell: main + input ===== */
+/* ===== App Shell: header + main + input ===== */
 
 .app-shell {
   height: 100vh;
@@ -41,6 +41,122 @@ body {
   min-height: 0;
   position: relative;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), #ffffff 28%);
+}
+
+/* ===== 顶栏 Header ===== */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  padding: 10px 14px 6px;
+  user-select: none;
+}
+
+.app-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-header-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.app-header-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-color);
+  letter-spacing: -0.01em;
+}
+
+/* ===== Claude Code 切换按钮（橙色线条主义） ===== */
+
+.cc-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border: 1.5px solid #f97316;
+  border-radius: 20px;
+  background: transparent;
+  color: #f97316;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.cc-toggle-icon {
+  flex-shrink: 0;
+  color: #f97316;
+  transition: transform 0.2s ease;
+}
+
+.cc-toggle-label {
+  white-space: nowrap;
+}
+
+.cc-toggle:hover {
+  background: rgba(249, 115, 22, 0.07);
+  border-color: #ea580c;
+  color: #ea580c;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
+}
+
+.cc-toggle:hover .cc-toggle-icon {
+  transform: rotate(-8deg);
+}
+
+.cc-toggle:active {
+  transform: scale(0.96);
+}
+
+/* 激活状态（开启 Claude Code 模式时） */
+.cc-toggle.active {
+  background: #f97316;
+  color: #fff;
+  border-color: #f97316;
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.25);
+}
+
+.cc-toggle.active .cc-toggle-icon {
+  color: #fff;
+}
+
+/* ===== 模式状态机：data-mode 切换 ===== */
+
+/* —— AI Chat 模式（默认） —— */
+.app-shell[data-mode="aichat"] .page-cc-hint {
+  display: none;
+}
+
+/* —— Claude Code 模式 —— */
+.app-shell[data-mode="claude-code"] .platform-tabs {
+  display: none;
+}
+.app-shell[data-mode="claude-code"] .plus-menu-section:has(.platform-options-row),
+.app-shell[data-mode="claude-code"] .plus-menu-divider ~ .plus-menu-divider {
+  display: none;
+}
+.app-shell[data-mode="claude-code"] .response-status {
+  display: none;
+}
+.app-shell[data-mode="claude-code"] .chat-input-bar {
+  border-color: rgba(249, 115, 22, 0.15);
+}
+.app-shell[data-mode="claude-code"] .chat-input-bar:focus-within {
+  border-color: rgba(249, 115, 22, 0.3);
+  box-shadow:
+    0 10px 30px rgba(249, 115, 22, 0.08),
+    0 0 0 3px rgba(249, 115, 22, 0.08);
+}
+.app-shell[data-mode="claude-code"] .chat-input::placeholder {
+  color: rgba(249, 115, 22, 0.4);
 }
 
 .main-pages {

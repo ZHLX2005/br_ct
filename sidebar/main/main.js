@@ -6,6 +6,42 @@ import {
 } from "./mainUtils.js";
 import { initializePlatformOptions } from "../../popup/main/platformRenderer.js";
 
+// ==================== 模式状态机 ====================
+
+const MODES = {
+  AICHAT: "aichat",
+  CLAUDE_CODE: "claude-code",
+};
+
+let currentMode = MODES.AICHAT;
+
+function setMode(mode) {
+  if (mode === currentMode) return;
+  currentMode = mode;
+
+  const shell = document.querySelector(".app-shell");
+  if (!shell) return;
+  shell.dataset.mode = mode;
+
+  const toggleBtn = document.getElementById("cc-toggle");
+  if (!toggleBtn) return;
+
+  if (mode === MODES.CLAUDE_CODE) {
+    toggleBtn.classList.add("active");
+    toggleBtn.title = "切换 AI Chat 对话模式";
+  } else {
+    toggleBtn.classList.remove("active");
+    toggleBtn.title = "切换 Claude Code 对话模式";
+  }
+}
+
+function toggleMode() {
+  const next = currentMode === MODES.AICHAT ? MODES.CLAUDE_CODE : MODES.AICHAT;
+  setMode(next);
+}
+
+// ==================== 初始化 ====================
+
 document.addEventListener("DOMContentLoaded", async function () {
   try {
     console.log("[Sidebar] DOMContentLoaded");
@@ -16,6 +52,13 @@ document.addEventListener("DOMContentLoaded", async function () {
     console.log("[Sidebar] initializeResponseDisplay done");
     await loadStoredData();
     setupEventListeners();
+
+    // 模式切换
+    const ccToggle = document.getElementById("cc-toggle");
+    if (ccToggle) {
+      ccToggle.addEventListener("click", toggleMode);
+    }
+
     setupDragDrop();
   } catch (error) {
     console.error("初始化popup失败:", error);
