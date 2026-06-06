@@ -78,6 +78,8 @@ func main() {
 	// Claude Query
 	registry.Register("claudeQuery", handleClaudeQuery)
 	registry.Register("getClaudeSkills", handleGetClaudeSkills)
+	registry.Register("claudeStartServe", handler.ClaudeStartServe)
+	registry.Register("claudeServeStatus", handler.ClaudeServeStatus)
 
 	// 消息循环：放在 goroutine 里，让 main 在 stdin EOF 后还能继续做 children
 	// 的 pipe writer 持有者，避免 Chrome SW 断开时连坐杀死长寿命 child（如 nx-sx happy）。

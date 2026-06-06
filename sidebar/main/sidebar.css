@@ -271,6 +271,82 @@ body {
   transform: scale(0.92);
 }
 
+/* CC 状态指示 + 连接按钮（tabs 行尾部） */
+.cc-serve-spacer {
+  flex: 1;
+}
+.cc-serve-status {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  font-size: 11px;
+  color: #9ca3af;
+  user-select: none;
+}
+.app-shell[data-mode="claude-code"] .cc-serve-status {
+  display: inline-flex;
+}
+.cc-serve-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #d1d5db;
+  flex-shrink: 0;
+  transition: background 0.2s ease;
+}
+.cc-serve-status[data-state="connected"] .cc-serve-dot {
+  background: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.15);
+}
+.cc-serve-status[data-state="connecting"] .cc-serve-dot {
+  background: #f59e0b;
+  animation: cc-dot-pulse 1s ease-in-out infinite;
+}
+.cc-serve-status[data-state="error"] .cc-serve-dot {
+  background: #ef4444;
+}
+.cc-serve-status[data-state="connected"] {
+  color: #16a34a;
+}
+.cc-serve-status[data-state="error"] {
+  color: #ef4444;
+}
+@keyframes cc-dot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.cc-serve-btn {
+  display: none;
+  align-items: center;
+  gap: 3px;
+  padding: 0 8px;
+  height: 22px;
+  border: 1px solid rgba(249, 115, 22, 0.2);
+  border-radius: 5px;
+  background: rgba(249, 115, 22, 0.06);
+  color: #f97316;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+.app-shell[data-mode="claude-code"] .cc-serve-btn {
+  display: inline-flex;
+}
+.cc-serve-btn:hover {
+  background: rgba(249, 115, 22, 0.12);
+  border-color: rgba(249, 115, 22, 0.35);
+}
+.cc-serve-btn:active {
+  transform: scale(0.95);
+}
+.cc-serve-btn[data-state="loading"] {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 /* ===== CC 模式路径栏 ===== */
 
 .cc-path-bar {

@@ -50,6 +50,17 @@
             <path d="M6 1.5v9M1.5 6h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
         </button>
+        <span class="cc-serve-spacer"></span>
+        <span class="cc-serve-status" id="cc-serve-status" data-state="disconnected" title="nx-ce serve 状态">
+          <span class="cc-serve-dot"></span>
+          <span class="cc-serve-text">未连接</span>
+        </span>
+        <button class="cc-serve-btn" id="cc-serve-btn" title="启动 nx-ce serve">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+          <span>连接</span>
+        </button>
       </div>
 
       <!-- 主内容区 -->
