@@ -75,6 +75,7 @@ function createCcTab() {
   tab._messages = "";
   tab._path = CC_DEFAULT_PATH;
   tab._skills = [];       // 每个 tab 独立的 skill 缓存
+  tab._skillsCwd = null;   // 缓存来自哪个 cwd；改 path 时一并清掉
   tab._skillsLoading = false;
   tab.innerHTML = `
     <span class="cc-tab-icon">
@@ -151,14 +152,8 @@ function sendCcQuery(prompt, workDir, skills) {
         return;
       }
       if (!resp || !resp.ok) {
-        // WS 没连上 → 触发 ensureRunning 兜底
-        if (resp?.error?.includes?.('timeout') || resp?.error?.includes?.('connect')) {
-          chrome.runtime.sendMessage({ action: "nxce_ws", cmd: "ensureRunning" }, () => {
-            finish(new Error("WS 未连接，已请求启动 nx-ce，请稍后重试"));
-          });
-        } else {
-          finish(new Error(resp?.error || "WS query 失败"));
-        }
+        // Fix: 移除 ensureRunning 自动兜底。WS 没连上时直接报错让用户点连接按钮。
+        finish(new Error(resp?.error || "WS query 失败"));
       }
       // 不在这里 resolve — 等待 nxce_event 中的 'done' 消息
     });
@@ -212,12 +207,11 @@ function setupNxceEventListener() {
       }
       case 'init': {
         if (ev.sessionId) tab._sessionId = ev.sessionId;
-        // 缓存 skills（如果 init 消息带）
-        if (Array.isArray(ev.skills) && ev.skills.length > 0) {
-          tab._skills = ev.skills
-            .map((name) => ({ name, desc: '' }))
-            .sort((a, b) => a.name.localeCompare(b.name));
-        }
+        // 注：init 事件不再处理 skills 写入。
+        // 旧实现用 prompt: ' ' 占位 query 触发 init，再用 init.skills 缓存 —
+        //   但占位 query 会让 AI 真回复（"111" 等），造成乱答。
+        // 新实现走 nxce_ws 的 getSkills 请求-响应 API（见 ensureCcTabSkills），
+        //   不再发占位 query，init 事件仅保留 sessionId 同步。
         break;
       }
       case 'error': {
@@ -244,9 +238,20 @@ function setServeStatus(state, text) {
     if (txt) txt.textContent = text;
   }
   if (btn) {
-    btn.dataset.state = state === 'connecting' ? 'loading' : '';
+    // 用真实状态作为 dataset.state（之前 'connecting' 用 'loading' 是给 CSS 用，
+    // 但 click handler 也读 dataset.state——导致判断错误）
+    btn.dataset.state = state;
+    // CSS 仍然只关心 'connecting' 时禁用 cursor：用专门的 data-loading
+    btn.dataset.loading = state === 'connecting' ? 'true' : 'false';
     const lbl = btn.querySelector('span:last-child');
-    if (lbl) lbl.textContent = state === 'connected' ? '重启' : '连接';
+    if (lbl) {
+      lbl.textContent = {
+        disconnected: '连接',
+        connecting: '取消',
+        connected: '断开',
+        error: '重试',
+      }[state] || '连接';
+    }
   }
 }
 
@@ -266,24 +271,50 @@ function setupServeControls() {
   if (!btn) return;
 
   btn.addEventListener('click', async () => {
+    const state = btn.dataset.state;
+    if (state === 'connecting') {
+      // 启动中 → 取消
+      chrome.runtime.sendMessage({ action: 'nxce_ws', cmd: 'disconnect' }, () => {
+        setServeStatus('disconnected', '已取消');
+      });
+      return;
+    }
+    if (state === 'connected') {
+      // 已连接 → 断开
+      chrome.runtime.sendMessage({ action: 'nxce_ws', cmd: 'disconnect' }, () => {
+        setServeStatus('disconnected', '已断开');
+      });
+      return;
+    }
+    // disconnected / error → 启动 serve
+    // Fix: 直接调 native_host 的 claudeStartServe (native_host/main.go:80)，
+    // 不再走 nxsx 的 ensureRunning（nxsx 那边也会调 native_host，多余一层）。
     setServeStatus('connecting', '启动中…');
-    btn.dataset.state = 'loading';
-    chrome.runtime.sendMessage({ action: 'nxce_ws', cmd: 'ensureRunning' }, (resp) => {
-      btn.dataset.state = '';
-      if (resp?.ok) {
-        setServeStatus('connected', '已连接');
+    chrome.runtime.sendMessage({
+      action: 'nativeMessage',
+      payload: { command: 'claudeStartServe' },
+    }, (resp) => {
+      if (resp?.status === 'ok') {
+        // native_host 启动 nx-ce serve 需要时间，等 2s 后探测 WS
+        setTimeout(() => {
+          chrome.runtime.sendMessage({ action: 'nxce_ws', cmd: 'ping' }, (pingResp) => {
+            if (pingResp?.connected) {
+              setServeStatus('connected', '已连接');
+            } else {
+              setServeStatus('error', '启动后未连上，请重试');
+            }
+          });
+        }, 2000);
       } else {
-        setServeStatus('error', resp?.error || '启动失败');
+        setServeStatus('error', resp?.message || '启动失败');
       }
     });
   });
 
   // 模式切到 CC 时主动探测一次
-  // （懒：仅在用户首次进入 CC 模式时检查）
   const ccToggle = document.getElementById('cc-toggle');
   if (ccToggle) {
     ccToggle.addEventListener('click', () => {
-      // 切到 CC 模式时检查；切回时不动
       if (currentMode === MODES.CLAUDE_CODE) refreshServeStatus();
     });
   }
@@ -474,8 +505,11 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         tab._path = newPath;
         // 清空 skill 缓存，下次 / 时重新加载
+        // Fix: 同时让正在飞的占位 query init 事件失效（见 init case 的 cwd 校验）
         tab._skills = [];
+        tab._skillsCwd = null;
         tab._skillsLoading = false;
+        tab._pendingSkillInitCwd = newPath;
       });
     }
 
@@ -498,55 +532,59 @@ function ensureCcTabSkills(tab) {
   if (!tab) return;
   if (!tab._skills) tab._skills = [];
   if (!tab._skillsLoading) tab._skillsLoading = false;
-  if (tab._skillsLoading || tab._skills.length > 0) return;
+  // Fix: 如果当前 _skills 是当前 cwd 的，直接复用，避免重复请求
+  if (tab._skillsLoading) return;
+  if (tab._skills.length > 0 && tab._skillsCwd === tab._path) return;
   tab._skillsLoading = true;
 
-  // 思路：nx-ce 的 getSkills 需要 session 已 init；session 在首次 query 后才 init。
-  // 但 nx-ce 在任何 cwd 下 init 后，init 消息里的 skills 就是该 cwd 的可用 skills。
-  // 简化策略：调一次"空 prompt"让 nx-ce init session 并回 skills，然后关闭该 session。
-  // 但更稳的做法：直接复用上次的 init 缓存，或主动 query "hi" 获取一次。
+  // Fix: 改用 native_host 的 getClaudeSkills 命令（走 npx nx-ce skills CLI）。
   //
-  // 当前选择：发一个简短占位 query 触发 init，init 后立即 closeSession。
-  // skill 缓存由 init 事件（setupNxceEventListener 'init' case）写入。
+  // 原因：
+  //   nx-ce WS getSkills 必须 session 已 init 才能返回非空 skills（note: "session not yet initialized"）。
+  //   旧实现发 prompt: ' ' 占位 query 触发 init 拿 skills，但空 prompt 在某些 cwd 下
+  //   会让 Claude SDK 走不同路径导致乱回复。
+  //   native_host 的 getClaudeSkills (main.go:165) 直接调 npx nx-ce skills CLI，
+  //   不依赖 session init，**不会**让 Claude 跑任何东西。
   const session = tab.dataset.ccSession || `tab-${tab._tabId || 'default'}`;
-  const cwd = tab._path || '';
 
-  console.log(`[CC Skill] tab ${session} 首次拉取 skill（占位 query）`);
+  console.log(`[CC Skill] tab ${session} 通过 native_host 拉取 skills`);
 
-  // 占位 query 用 '/' 自身（不污染用户 prompt）—— 或者用 '_' 让 nx-ce 立即返回
+  // 通过 native_relay (chrome.runtime.sendMessage) → native_host → npx nx-ce skills
   chrome.runtime.sendMessage({
-    action: 'nxce_ws',
-    cmd: 'query',
-    session,
-    cwd,
-    prompt: ' ',  // 单空格：最快 init，无实际回复
-    queryId: `skill-init-${Date.now()}`,
+    action: 'nativeMessage',
+    payload: { command: 'getClaudeSkills' },
   }, (resp) => {
-    // 占位 query 不需要等结果；init 事件会把 skills 写入 tab._skills
+    tab._skillsLoading = false;
     if (chrome.runtime.lastError) {
-      tab._skillsLoading = false;
-      console.log('[CC Skill] 占位 query 失败:', chrome.runtime.lastError.message);
+      console.log('[CC Skill] getClaudeSkills 失败:', chrome.runtime.lastError.message);
       return;
     }
-    if (!resp?.ok) {
-      tab._skillsLoading = false;
-      console.log('[CC Skill] 占位 query 返回错误:', resp?.error);
+    if (!resp) {
+      console.log('[CC Skill] getClaudeSkills 无响应');
       return;
     }
-    // 成功发送后等待 init 事件；用轮询兜底
-    let waited = 0;
-    const timer = setInterval(() => {
-      waited += 200;
-      if (tab._skills.length > 0) {
-        clearInterval(timer);
-        tab._skillsLoading = false;
-        console.log(`[CC Skill] tab ${session} 加载 ${tab._skills.length} 个 skill`);
-      } else if (waited > 15000) {
-        clearInterval(timer);
-        tab._skillsLoading = false;
-        console.log('[CC Skill] 超时未拿到 skill');
-      }
-    }, 200);
+    if (resp.status === 'error') {
+      console.log('[CC Skill] getClaudeSkills 错误:', resp.message);
+      return;
+    }
+    // resp.data 是 native_host handleGetClaudeSkills 返回的 map，
+    // 包含 { skills: [...], tools: [...], slashCommands: [...], agents: [...] }
+    const data = resp.data || {};
+    // 取三类供 sidebar /skill 自动补全用：skills + slashCommands + agents
+    const slashList = data.slashCommands || data.skills || [];
+    const skillList = Array.isArray(slashList) ? slashList : [];
+    if (skillList.length > 0) {
+      tab._skills = skillList
+        .map((s) => {
+          if (typeof s === 'string') return { name: s, desc: '' };
+          return { name: s.name || s.id || String(s), desc: s.desc || s.description || '' };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name));
+      tab._skillsCwd = tab._path || '';
+      console.log(`[CC Skill] tab ${session} 加载 ${tab._skills.length} 个 skill`);
+    } else {
+      console.log('[CC Skill] getClaudeSkills 返回空列表');
+    }
   });
 }
 
@@ -660,6 +698,19 @@ async function handleCcSend() {
       skills.push(skillName);
       prompt = prompt.replace(match[0], '').trim();
     }
+  }
+
+  // Fix: 如果剥离 skill 之后 prompt 变空（用户其实只输入了 /skill 名），
+  // 但 skills 数组又非空 → 这是占位 query 的"残留"边界情况。
+  // 此时直接 return，不发请求避免 AI 跑一个无意义的空 prompt。
+  if (!prompt && skills.length === 0) {
+    console.log('[CC Send] prompt 为空，跳过发送');
+    return;
+  }
+  if (!prompt && skills.length > 0) {
+    console.log('[CC Send] prompt 仅含 /skill，跳过（待用户补充问题）');
+    alert('请在 /skill 后面补充问题内容');
+    return;
   }
 
   const workDir = pathInput ? pathInput.value.trim() : "";

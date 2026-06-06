@@ -342,7 +342,7 @@ body {
 .cc-serve-btn:active {
   transform: scale(0.95);
 }
-.cc-serve-btn[data-state="loading"] {
+.cc-serve-btn[data-loading="true"] {
   opacity: 0.6;
   cursor: wait;
 }

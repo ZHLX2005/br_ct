@@ -27,44 +27,50 @@ let ws = null;
 let wsReady = null;       // Promise<void>，等待 'connected'
 let reconnectAttempt = 0;
 let reconnectTimer = null;
-let manuallyClosed = false;
+
+// === 案例核心逻辑：用户意图 + 代际锁 ===
+// userWantsConnected: 唯一信号源，决定是否重连
+// connectGen: 自增；旧 connect 的回调看到不匹配就放弃
+let userWantsConnected = false;
+let connectGen = 0;
 
 // 路由表
-const sessionTabMap = new Map();  // sessionName (e.g. "tab-123") → tabId
-const turnOwner = new Map();       // turnId → tabId (按 turn 路由)
+const sessionTabMap = new Map();
+const turnOwner = new Map();
 const recentTab = { tabId: null, turnId: null, sessionId: null };
 
 /* ============================================================
- *  WS 连接管理
+ *  WS 连接管理（核心：稳定断连 + 防止重连风暴）
  * ============================================================ */
 
 function connect() {
+  // 已连或正在连 → 复用
+  if (ws && ws.readyState <= 1) return wsReady;
   if (wsReady) return wsReady;
-  // 若之前 ws 实例残留（error 后未 close），先强制关
+
+  // 残留 socket 强制关
   if (ws) {
     try { ws.close(); } catch {}
     ws = null;
   }
-  manuallyClosed = false;
+
+  // ① 标记用户意图；② 拿到本次代际
+  userWantsConnected = true;
+  const myGen = ++connectGen;
 
   const ready = new Promise((resolve, reject) => {
     let sock;
-    try {
-      sock = new WebSocket(NXCE_WS_URL);
-    } catch (err) {
-      reject(err);
-      return;
-    }
+    try { sock = new WebSocket(NXCE_WS_URL); }
+    catch (err) { reject(err); return; }
     ws = sock;
 
     const timer = setTimeout(() => {
-      // 超时 → 主动 close socket 触发 close handler
       try { sock.close(); } catch {}
       reject(new Error('WS connect timeout'));
     }, CONNECT_TIMEOUT_MS);
 
     sock.addEventListener('open', () => {
-      // 等 server 的 'connected' 握手消息
+      // 等 server 'connected' 握手消息
     });
 
     sock.addEventListener('message', (e) => {
@@ -72,6 +78,8 @@ function connect() {
       try { msg = JSON.parse(e.data); } catch { return; }
 
       if (msg.type === 'connected') {
+        if (sock._resolved) return;
+        sock._resolved = true;
         clearTimeout(timer);
         reconnectAttempt = 0;
         resolve();
@@ -84,93 +92,55 @@ function connect() {
       clearTimeout(timer);
       if (ws === sock) ws = null;
       if (wsReady === ready) wsReady = null;
-      // 失败 reject
-      reject(new Error('WS closed before handshake'));
-      if (!manuallyClosed) scheduleReconnect();
+      if (!sock._resolved) reject(new Error('WS closed before handshake'));
+
+      // 设计：被动 close（nx-ce 进程死了 / 网络断）不自动重连。
+      // 任何重连都必须用户显式点 "连接" → ensureRunning。
+      // 唯一允许 scheduleReconnect 的情况：sock 标了 _userDisconnect=false 且仍想连 → 也不重连。
+      // 直接清掉意图。
+      if (myGen === connectGen) {
+        userWantsConnected = false;
+      }
     });
 
     sock.addEventListener('error', () => {
-      // close handler 会跟着触发，不用这里 reject
+      // close handler 会跟着触发
     });
   });
 
   wsReady = ready;
-  // 失败后清掉 wsReady，方便下次重试
   ready.catch(() => {
+    if (myGen !== connectGen) return; // 已被新 connect 取代
     if (wsReady === ready) wsReady = null;
   });
   return ready;
 }
 
-function scheduleReconnect() {
-  if (reconnectTimer) return;
-  if (ensureRunningInFlight) return; // 已经在启动 nx-ce 了，不要并发重连
-  const base = RECONNECT_DELAYS[Math.min(reconnectAttempt, RECONNECT_DELAYS.length - 1)];
-  reconnectAttempt++;
-  // 加 0~500ms jitter，避免多个 tab 同时连时同步打
-  const delay = base + Math.floor(Math.random() * 500);
-  reconnectTimer = setTimeout(() => {
-    reconnectTimer = null;
-    connect().catch(async () => {
-      // 连不上 → 尝试经 native_host 启动
-      try { await ensureNxceRunning(); }
-      catch (e) { console.log('[NxceWS] ensureRunning failed:', e.message); }
-    });
-  }, delay);
+function scheduleReconnect(gen) {
+  // 保留函数以防未来需要。当前设计：所有重连必须用户显式触发，
+  // passive close / nx-ce 死掉 → userWantsConnected=false，不会重连。
+  // 此函数永远不会被调用。
+  return;
 }
 
-let ensureRunningInFlight = null;
-
-async function ensureNxceRunning() {
-  // 防止并发：多次重连失败时只启动一次
-  if (ensureRunningInFlight) return ensureRunningInFlight;
-
-  ensureRunningInFlight = (async () => {
-    // 1. 先尝试直连 WS（最权威——能连上就说明真的在跑）
-    try {
-      await connect();
-      console.log('[NxceWS] nx-ce 已在运行（直连成功）');
-      return;
-    } catch { /* 继续下一步 */ }
-
-    // 2. 看状态文件
-    let alreadyRunning = false;
-    try {
-      const statusResp = await sendNative({ command: 'claudeServeStatus', name: 'default' });
-      if (statusResp?.data?.exists && statusResp.data.lifecycleState === 'running') {
-        alreadyRunning = true;
-      }
-    } catch { /* 忽略 */ }
-
-    if (alreadyRunning) {
-      // 状态文件说在跑，但 WS 连不上 → 说明 nx-ce 进程僵尸，强制重启
-      console.log('[NxceWS] 状态显示 running 但连不上，强制重启');
-      await sendNative({ command: 'stopProcess', name: 'nxce-serve-default' }).catch(() => {});
-      await new Promise((r) => setTimeout(r, 1000));
-    }
-
-    // 3. 启动
-    console.log('[NxceWS] 经 native_host 启动 nx-ce serve');
-    await sendNative({
-      command: 'claudeStartServe',
-      name: 'default',
-      port: 3100,
-    });
-    // 等待 nx-ce 初始化 + 端口起来
-    for (let i = 0; i < 10; i++) {
-      await new Promise((r) => setTimeout(r, 500));
-      try {
-        await connect();
-        console.log('[NxceWS] 启动成功');
-        return;
-      } catch { /* 继续等 */ }
-    }
-    throw new Error('nx-ce 启动后仍无法连接');
-  })().finally(() => {
-    ensureRunningInFlight = null;
-  });
-
-  return ensureRunningInFlight;
+/**
+ * 显式断开（用户主动取消连接）。
+ * - 关闭用户意图
+ * - 自增 gen 让所有 in-flight 失效
+ * - 标记 sock 主动断开，避免 onclose 重连
+ */
+function disconnect() {
+  userWantsConnected = false;
+  connectGen++;
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  reconnectAttempt = 0;
+  if (ws) {
+    ws._userDisconnect = true;
+    try { ws.close(1000, 'user disconnect'); } catch {}
+    ws = null;
+  }
+  wsReady = null;
+  console.log('[NxceWS] 用户主动断开');
 }
 
 /* ============================================================
@@ -417,6 +387,11 @@ export function setupNxceWs() {
           }
           case 'getSkills': {
             // 请求-响应：等 nx-ce 回 'skills' 消息
+            // Fix: cwd 缺省时记 warning 但仍转发 — nx-ce 自己有默认 cwd 处理。
+            // 真正的兜底在 sidebar 端 ensureCcTabSkills（用 CC_DEFAULT_PATH）。
+            if (!message.cwd || !message.cwd.trim()) {
+              console.warn('[nxce_ws] getSkills received empty cwd from', sender?.tab?.id);
+            }
             const r = await sendRequest({
               type: 'getSkills',
               session: message.session,
@@ -439,11 +414,6 @@ export function setupNxceWs() {
             sendResponse(r);
             break;
           }
-          case 'ensureRunning': {
-            try { await ensureNxceRunning(); sendResponse({ ok: true }); }
-            catch (e) { sendResponse({ ok: false, error: e.message }); }
-            break;
-          }
           case 'serveStatus': {
             const r = await sendNative({ command: 'claudeServeStatus', name: 'default' });
             sendResponse(r);
@@ -459,14 +429,16 @@ export function setupNxceWs() {
             }
             break;
           }
+          case 'disconnect': {
+            // 显式断开 WS（不杀 nx-ce 进程）
+            disconnect();
+            sendResponse({ ok: true });
+            break;
+          }
           case 'stopServe': {
-            await sendNative({ command: 'stopProcess', name: 'nxce-serve-default' });
-            // 关闭当前 WS，让 UI 知道断开了
-            if (ws) {
-              try { ws.close(); } catch {}
-              ws = null;
-            }
-            wsReady = null;
+            // 停止 nx-ce 进程 + 断 WS
+            disconnect();
+            await sendNative({ command: 'stopProcess', name: 'nxce-serve-default' }).catch(() => {});
             sendResponse({ ok: true });
             break;
           }
