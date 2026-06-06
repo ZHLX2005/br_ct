@@ -41,7 +41,26 @@ function toggleMode() {
 
 // ==================== CC 多窗口管理 ====================
 
-let ccSessionCounter = 1;       // 下一个会话编号
+let ccSessionCounter = 1;
+const CC_DEFAULT_PATH = "C:\\Windows\\System32";
+
+/** 保存当前 tab 的消息和路径到 tab 对象 */
+function saveCcTabState(tab) {
+  if (!tab) return;
+  const rc = document.getElementById("response-content");
+  const pi = document.getElementById("cc-path-input");
+  if (rc) tab._messages = rc.innerHTML;
+  if (pi) tab._path = pi.value;
+}
+
+/** 恢复指定 tab 的消息和路径 */
+function restoreCcTabState(tab) {
+  if (!tab) return;
+  const rc = document.getElementById("response-content");
+  const pi = document.getElementById("cc-path-input");
+  if (rc) rc.innerHTML = tab._messages !== undefined ? tab._messages : "";
+  if (pi) pi.value = tab._path !== undefined ? tab._path : CC_DEFAULT_PATH;
+}
 
 function createCcTab() {
   ccSessionCounter++;
@@ -52,7 +71,9 @@ function createCcTab() {
   const tab = document.createElement("div");
   tab.className = "cc-tab";
   tab.dataset.ccSession = id;
-  tab._sessionId = null; // 每个 tab 存储自己的 sessionId
+  tab._sessionId = null;
+  tab._messages = "";        // 新 tab = 空白消息
+  tab._path = CC_DEFAULT_PATH;  // 新 tab = 默认路径
   tab.innerHTML = `
     <span class="cc-tab-icon">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -63,16 +84,15 @@ function createCcTab() {
     <span class="cc-tab-close" title="关闭">×</span>
   `;
 
-  // 插入到 + 按钮之前
   const addBtn = tabsEl.querySelector(".cc-tab-add");
-  if (addBtn) {
-    tabsEl.insertBefore(tab, addBtn);
-  } else {
-    tabsEl.appendChild(tab);
-  }
+  if (addBtn) tabsEl.insertBefore(tab, addBtn);
+  else tabsEl.appendChild(tab);
 
-  // 激活新 tab
+  // 保存当前 tab 状态 → 切换到新 tab → 恢复新 tab 状态
+  const currentActive = getActiveCcTab();
+  saveCcTabState(currentActive);
   switchCcTab(tab);
+  restoreCcTabState(tab);
 
   return tab;
 }
@@ -129,10 +149,25 @@ function sendCcQuery(prompt, workDir, skills) {
 }
 
 function switchCcTab(tab) {
+  if (!tab) return;
   const tabsEl = document.getElementById("cc-tabs");
   if (!tabsEl) return;
+
+  // 保存当前 tab 的状态
+  const current = getActiveCcTab();
+  if (current && current !== tab) {
+    current._path = document.getElementById("cc-path-input")?.value || CC_DEFAULT_PATH;
+    current._messages = document.getElementById("response-content")?.innerHTML || "";
+  }
+
   tabsEl.querySelectorAll(".cc-tab").forEach(t => t.classList.remove("active"));
   tab.classList.add("active");
+
+  // 恢复目标 tab 的状态
+  const pi = document.getElementById("cc-path-input");
+  const rc = document.getElementById("response-content");
+  if (pi) pi.value = tab._path !== undefined ? tab._path : CC_DEFAULT_PATH;
+  if (rc) rc.innerHTML = tab._messages !== undefined ? tab._messages : "";
 }
 
 function closeCcTab(tab) {
@@ -222,6 +257,15 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
 
     setupDragDrop();
+
+    // CC 路径栏变化 → 保存到当前 tab
+    const pathInput = document.getElementById("cc-path-input");
+    if (pathInput) {
+      pathInput.addEventListener("input", () => {
+        const tab = getActiveCcTab();
+        if (tab) tab._path = pathInput.value;
+      });
+    }
   } catch (error) {
     console.error("初始化popup失败:", error);
   }
@@ -266,6 +310,8 @@ async function handleCcSend() {
       </div>`;
     responseContent.appendChild(userMsg);
     responseContent.scrollTop = responseContent.scrollHeight;
+    // 保存到 tab
+    if (activeTab) activeTab._messages = responseContent.innerHTML;
   }
 
   // 显示加载动画
@@ -317,6 +363,8 @@ async function handleCcSend() {
         </div>`;
       responseContent.appendChild(aiMsg);
       responseContent.scrollTop = responseContent.scrollHeight;
+      // 保存到 tab
+      if (activeTab) activeTab._messages = responseContent.innerHTML;
     }
   } catch (err) {
     console.error("[CC Send] 发送失败:", err);
