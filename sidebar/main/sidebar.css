@@ -158,6 +158,159 @@ body {
   transform: scale(0.96);
 }
 
+.cc-add-btn {
+  display: none;
+}
+
+/* ===== CC 多窗口标签栏 ===== */
+
+.cc-tabs {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  padding: 0 14px 6px;
+  overflow-x: auto;
+  flex-shrink: 0;
+  scrollbar-width: none;
+}
+.cc-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.app-shell[data-mode="claude-code"] .cc-tabs {
+  display: flex;
+}
+
+.cc-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  background: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  user-select: none;
+}
+.cc-tab:hover {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(249, 115, 22, 0.2);
+}
+.cc-tab.active {
+  background: rgba(249, 115, 22, 0.07);
+  border-color: rgba(249, 115, 22, 0.2);
+  color: #ea580c;
+  font-weight: 500;
+}
+
+.cc-tab-icon {
+  display: flex;
+  align-items: center;
+  color: inherit;
+  opacity: 0.6;
+}
+.cc-tab.active .cc-tab-icon {
+  opacity: 0.9;
+}
+
+.cc-tab-label {
+  line-height: 1;
+}
+
+.cc-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  font-size: 12px;
+  line-height: 1;
+  color: #9ca3af;
+  opacity: 0;
+  transition: all 0.15s ease;
+  margin-left: 2px;
+}
+.cc-tab:hover .cc-tab-close {
+  opacity: 1;
+}
+.cc-tab-close:hover {
+  background: rgba(229, 62, 62, 0.1);
+  color: #e53e3e;
+}
+
+/* CC 标签栏 + 按钮（紧贴最后一个 tab） */
+.cc-tab-add {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 5px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+.app-shell[data-mode="claude-code"] .cc-tab-add {
+  display: inline-flex;
+}
+.cc-tab-add:hover {
+  background: rgba(249, 115, 22, 0.07);
+  border-color: rgba(249, 115, 22, 0.2);
+  color: #f97316;
+}
+.cc-tab-add:active {
+  transform: scale(0.92);
+}
+
+/* ===== CC 模式路径栏 ===== */
+
+.cc-path-bar {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px 4px;
+  margin: 0 8px 4px;
+  border-radius: 8px;
+  background: rgba(249, 115, 22, 0.04);
+  border: 1px solid rgba(249, 115, 22, 0.08);
+  flex-shrink: 0;
+}
+
+.app-shell[data-mode="claude-code"] .cc-path-bar {
+  display: flex;
+}
+
+.cc-path-icon {
+  flex-shrink: 0;
+  color: rgba(249, 115, 22, 0.4);
+}
+
+.cc-path-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #ea580c;
+  padding: 2px 0;
+}
+
+.cc-path-input::placeholder {
+  color: rgba(249, 115, 22, 0.3);
+}
+
 /* ===== 模式状态机：data-mode 切换 ===== */
 
 /* —— AI Chat 模式（默认） —— */

@@ -38,7 +38,91 @@ function toggleMode() {
   setMode(next);
 }
 
-// ==================== 初始化 ====================
+// ==================== CC 多窗口管理 ====================
+
+let ccSessionCounter = 1;       // 下一个会话编号
+
+function createCcTab() {
+  ccSessionCounter++;
+  const id = `cc-session-${ccSessionCounter}`;
+  const tabsEl = document.getElementById("cc-tabs");
+  if (!tabsEl) return null;
+
+  const tab = document.createElement("div");
+  tab.className = "cc-tab";
+  tab.dataset.ccSession = id;
+  tab.innerHTML = `
+    <span class="cc-tab-icon">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+      </svg>
+    </span>
+    <span class="cc-tab-label">会话 ${ccSessionCounter}</span>
+    <span class="cc-tab-close" title="关闭">×</span>
+  `;
+
+  // 插入到 + 按钮之前
+  const addBtn = tabsEl.querySelector(".cc-tab-add");
+  if (addBtn) {
+    tabsEl.insertBefore(tab, addBtn);
+  } else {
+    tabsEl.appendChild(tab);
+  }
+
+  // 激活新 tab
+  switchCcTab(tab);
+
+  return tab;
+}
+
+function switchCcTab(tab) {
+  const tabsEl = document.getElementById("cc-tabs");
+  if (!tabsEl) return;
+  tabsEl.querySelectorAll(".cc-tab").forEach(t => t.classList.remove("active"));
+  tab.classList.add("active");
+}
+
+function closeCcTab(tab) {
+  if (!tab) return;
+  const isActive = tab.classList.contains("active");
+  const prev = tab.previousElementSibling;
+  const next = tab.nextElementSibling;
+  tab.remove();
+
+  // 如果关了的是当前激活的，切换到相邻 tab
+  if (isActive) {
+    const target = prev && prev.classList.contains("cc-tab") ? prev
+                 : next && next.classList.contains("cc-tab") ? next
+                 : null;
+    if (target) {
+      switchCcTab(target);
+    }
+  }
+}
+
+function setupCcTabListeners() {
+  const tabsEl = document.getElementById("cc-tabs");
+  if (!tabsEl) return;
+
+  // 新建
+  const addBtn = document.getElementById("cc-tab-add");
+  if (addBtn) {
+    addBtn.addEventListener("click", createCcTab);
+  }
+
+  // 切换 & 关闭（事件代理）
+  tabsEl.addEventListener("click", (e) => {
+    const tab = e.target.closest(".cc-tab");
+    if (!tab) return;
+
+    if (e.target.classList.contains("cc-tab-close")) {
+      closeCcTab(tab);
+      return;
+    }
+
+    switchCcTab(tab);
+  });
+}
 
 document.addEventListener("DOMContentLoaded", async function () {
   try {
@@ -56,6 +140,9 @@ document.addEventListener("DOMContentLoaded", async function () {
     if (ccToggle) {
       ccToggle.addEventListener("click", toggleMode);
     }
+
+    // CC 多窗口管理
+    setupCcTabListeners();
 
     setupDragDrop();
   } catch (error) {

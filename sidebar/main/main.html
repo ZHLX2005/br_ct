@@ -38,6 +38,20 @@
         </button>
       </header>
 
+      <!-- CC 多窗口标签栏（仅 CC 模式可见） -->
+      <div class="cc-tabs" id="cc-tabs">
+        <div class="cc-tab active" data-cc-session="0">
+          <span class="cc-tab-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>
+          <span class="cc-tab-label">会话 1</span>
+          <span class="cc-tab-close" title="关闭">×</span>
+        </div>
+        <button class="cc-tab-add" id="cc-tab-add" title="新建对话">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M6 1.5v9M1.5 6h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+
       <!-- 主内容区 -->
       <div class="main-pages">
         <section class="page active" id="page-main">
@@ -75,6 +89,14 @@
           </div>
           <div class="extract-url" id="extract-url"></div>
           <pre class="extract-content" id="extract-content"></pre>
+        </div>
+
+        <!-- CC 模式路径栏（仅 CC 模式可见） -->
+        <div class="cc-path-bar" id="cc-path-bar">
+          <svg class="cc-path-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          </svg>
+          <input class="cc-path-input" id="cc-path-input" type="text" spellcheck="false" value="C:\Windows\System32" />
         </div>
 
         <!-- 底部输入栏 (Notion AI 风格) -->
