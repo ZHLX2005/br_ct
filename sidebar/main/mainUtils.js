@@ -47,6 +47,9 @@ let extractUrl;
 let extractContent;
 let closeResult;
 
+// 提取/划词文本缓存（不依赖 DOM 状态，确保发送时能取到）
+let _extractedTextCache = "";
+
 // 平台选择面板状态
 let isPlatformPanelOpen = false;
 
@@ -360,6 +363,7 @@ export function setupEventListeners() {
   if (closeResult) {
     closeResult.addEventListener("click", () => {
       if (extractResult) extractResult.style.display = "none";
+      _extractedTextCache = "";
     });
   }
 
@@ -1355,6 +1359,7 @@ async function toggleSelectionMode() {
  */
 function handleSidebarSelection(text, title, url) {
   if (!text || !text.trim()) return;
+  _extractedTextCache = text;
   if (extractResult) extractResult.style.display = "block";
   if (extractTitle) extractTitle.textContent = `划词: ${title || "未获取到标题"}`;
   if (extractUrl) extractUrl.textContent = url || "";
@@ -1379,9 +1384,16 @@ function applyPromptTemplate(template, userMessage, extractedText) {
   const hasCtxPlaceholder = template.includes("%v");
 
   if (hasUserPlaceholder || hasCtxPlaceholder) {
-    return template
+    let result = template
       .replace(/%v/g, ctx)
       .replace(/%s/g, user);
+
+    // 模板有 %s 但没有 %v，且有提取内容 → 提取内容兜底前置
+    if (!hasCtxPlaceholder && ctx) {
+      result = ctx + "\n\n" + result;
+    }
+
+    return result;
   }
 
   // 没有占位符但有提取内容 → 提取内容兜底前置
@@ -1398,14 +1410,12 @@ function applyPromptTemplate(template, userMessage, extractedText) {
  * 没有可见的提取结果时返回空串。
  */
 function getExtractedContentText() {
-  if (!extractResult || extractResult.style.display === "none" || !extractContent) {
-    return "";
+  // 优先用 DOM 内容（划词/提取展示），兜底用缓存
+  if (extractContent) {
+    const domText = (extractContent.textContent || "").trim();
+    if (domText && domText !== "未获取到内容") return domText;
   }
-
-  const text = (extractContent.textContent || "").trim();
-  if (!text || text === "未获取到内容") return "";
-
-  return text;
+  return _extractedTextCache;
 }
 
 // ==================== 工作区标签 ====================
