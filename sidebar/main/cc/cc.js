@@ -422,6 +422,13 @@ function _initHistoryPopup() {
 
   function close() { popup.style.display = 'none'; }
 
+  // 挂到 window 上让内联 onclick 也能用
+  window._ccRestoreSession = (sessionId, cwd) => {
+    console.log('[cc] inline _ccRestoreSession:', { sessionId, cwd });
+    close();
+    _restoreSession(sessionId, cwd);
+  };
+
   btn.addEventListener('click', async (e) => {
     e.stopPropagation();
     if (popup.style.display === 'block') { close(); return; }
@@ -433,36 +440,44 @@ function _initHistoryPopup() {
       popup.style.display = 'block';
       return;
     }
+    // 每个 item 创建时直接绑定点击（不用委托，不依赖内联）
+    const itemsHtml = resp.data.sessions.map((s, i) => {
+      const state = s.lifecycleState || 'stopped';
+      const sessionName = _escHtml(s.name || s.key || '');
+      const cwd = _escHtml(s.cwd || '');
+      const model = s.model ? _escHtml(s.model) : '';
+      return `<div class="cc-history-item" data-session="${sessionName}" data-cwd="${cwd}">` +
+        `<span class="cc-session-dot" data-state="${_escHtml(state)}"></span>` +
+        `<span class="cc-session-name">${_escHtml(s.name || 'unknown')}</span>` +
+        `<span class="cc-session-meta">${cwd}${model ? ' · ' + model : ''}</span>` +
+        `</div>`;
+    }).join('');
+
     popup.innerHTML =
       '<div class="cc-history-header">历史会话</div>' +
-      '<div class="cc-history-list">' +
-      resp.data.sessions.map(s => {
-        const state = s.lifecycleState || 'stopped';
-        return `<div class="cc-history-item" data-session="${_escHtml(s.name || s.key || '')}" data-cwd="${_escHtml(s.cwd || '')}">` +
-          `<span class="cc-session-dot" data-state="${_escHtml(state)}"></span>` +
-          `<span class="cc-session-name">${_escHtml(s.name || 'unknown')}</span>` +
-          `<span class="cc-session-meta">${_escHtml(s.cwd || '')}${s.model ? ' · ' + _escHtml(s.model) : ''}</span>` +
-          `</div>`;
-      }).join('') +
-      '</div>';
+      '<div class="cc-history-list">' + itemsHtml + '</div>';
     popup.style.display = 'block';
+
+    // 直接给每个 item 绑定独立 click 事件（最可靠）
+    popup.querySelectorAll('.cc-history-item').forEach(el => {
+      el.addEventListener('click', (e) => {
+        const sessionName = el.dataset.session;
+        const cwd = el.dataset.cwd;
+        console.log('[cc] direct item click:', { sessionName, cwd });
+        if (!sessionName) return;
+        close();
+        _restoreSession(sessionName, cwd);
+      });
+    });
+
+    console.log('[cc] history popup shown, items:', resp.data.sessions.length);
   });
 
-  popup.addEventListener('click', (e) => {
-    const item = e.target.closest('.cc-history-item');
-    if (!item) return;
-    const sessionName = item.dataset.session;
-    const cwd = item.dataset.cwd;
-    console.log('[cc] history item clicked:', { sessionName, cwd, raw: item.outerHTML?.slice(0, 120) });
-    if (!sessionName) return;
-    close();
-    _restoreSession(sessionName, cwd);
-  });
-
+  // 点击外部关闭（不用 capture，与内部 handler 不冲突）
   document.addEventListener('click', (e) => {
     if (popup.style.display !== 'block') return;
     if (!btn.contains(e.target) && !popup.contains(e.target)) close();
-  }, { capture: true });
+  });
 }
 
 function _restoreSession(sessionId, cwd) {

@@ -22,6 +22,7 @@
   flex-shrink: 0;
   scrollbar-width: none;
   position: relative;
+  position: relative;
 }
 .cc-tabs::-webkit-scrollbar { display: none; }
 
