@@ -39,6 +39,7 @@ func ClaudeStartServe(req protocol.Request) protocol.Response {
 	args := []string{
 		"nx-ce", "serve",
 		"--name", name,
+		"--port", "43720",
 	}
 
 	// 委托给 executor.StartProcess：它会持 stdin pipe writer、写进程状态、生成日志
