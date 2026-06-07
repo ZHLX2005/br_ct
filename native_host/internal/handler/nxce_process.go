@@ -29,7 +29,7 @@ import (
 //   - req.Name:    nx-ce 实例名（默认 "default"），对应 ~/.nx-ce/instances/{name}.json
 //   - req.WorkDir: native_host 视角的工作目录（npx 启动位置；可选）
 //
-// 端口固定 3100，模型/cwd 由 nx-ce serve 默认行为决定（运行时每个 query 可覆盖）。
+// 端口由 nx-ce serve 默认决定（43720），不在启动参数中硬编码。
 func ClaudeStartServe(req protocol.Request) protocol.Response {
 	name := req.Name
 	if name == "" {
@@ -39,7 +39,6 @@ func ClaudeStartServe(req protocol.Request) protocol.Response {
 	args := []string{
 		"nx-ce", "serve",
 		"--name", name,
-		"--port", "3100",
 	}
 
 	// 委托给 executor.StartProcess：它会持 stdin pipe writer、写进程状态、生成日志

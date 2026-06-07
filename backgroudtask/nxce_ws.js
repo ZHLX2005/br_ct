@@ -17,7 +17,8 @@
  * - 防止重连风暴：userWantsConnected（用户意图）+ connectGen（代际锁）
  */
 
-const NXCE_WS_URL = 'ws://127.0.0.1:3100';
+const WS_PORT = 43720; // nx-ce serve 默认端口
+const NXCE_WS_URL = `ws://127.0.0.1:${WS_PORT}`;
 const NATIVE_HOST = 'com.brochat.prompts_editor';
 const RECONNECT_DELAYS = [500, 1000, 2000, 5000, 10000];
 const CONNECT_TIMEOUT_MS = 5000;
