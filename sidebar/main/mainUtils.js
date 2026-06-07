@@ -1384,7 +1384,12 @@ function applyPromptTemplate(template, userMessage, extractedText) {
       .replace(/%s/g, user);
   }
 
-  // 兼容旧行为：没有占位符时附加在用户消息之后
+  // 没有占位符但有提取内容 → 提取内容兜底前置
+  if (ctx) {
+    return ctx + "\n\n" + user + " " + template;
+  }
+
+  // 完全无占位符、无提取：向后兼容
   return user + " " + template;
 }
 
@@ -1400,15 +1405,7 @@ function getExtractedContentText() {
   const text = (extractContent.textContent || "").trim();
   if (!text || text === "未获取到内容") return "";
 
-  const title = (extractTitle?.textContent || "").trim();
-  const url = (extractUrl?.textContent || "").trim();
-
-  const parts = ["[网页内容]"];
-  if (title && title !== "未获取到标题") parts.push(`标题：${title}`);
-  if (url) parts.push(`链接：${url}`);
-  parts.push("正文：", text);
-
-  return parts.join("\n");
+  return text;
 }
 
 // ==================== 工作区标签 ====================
