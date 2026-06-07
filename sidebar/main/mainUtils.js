@@ -69,6 +69,9 @@ let savedPlatformStates = {};
 // 历史下拉状态
 let isHistoryOpen = false;
 
+// 划词选择模式
+let isSelectionMode = false;
+
 /**
  * 防抖保存消息内容
  */
@@ -122,7 +125,6 @@ export async function initializePopup() {
     promptBarClear: document.getElementById("prompt-bar-clear"),
     historyDropdown: document.getElementById("history-dropdown"),
     footHistoryBtn: document.getElementById("foot-history-btn"),
-    footAddWorkspace: document.getElementById("foot-add-workspace"),
   };
 
   // 提取页面文本相关元素
@@ -132,6 +134,9 @@ export async function initializePopup() {
   extractUrl = document.getElementById("extract-url");
   extractContent = document.getElementById("extract-content");
   closeResult = document.getElementById("close-result");
+
+  // 划词按钮
+  elements.selectionBtn = document.getElementById("toolbar-selection");
 
   // 自动聚焦输入框
   focusInputAndSetCursor(elements.messageInput);
@@ -321,14 +326,19 @@ export function setupEventListeners() {
     });
   }
 
+  // 划词模式切换
+  if (elements.selectionBtn) {
+    elements.selectionBtn.addEventListener("click", toggleSelectionMode);
+  }
+
   // 清除提示词
   elements.promptBarClear?.addEventListener("click", clearSelectedPrompt);
 
   // 历史按钮切换
   elements.footHistoryBtn?.addEventListener("click", toggleHistoryDropdown);
 
-  // 工作区添加按钮
-  elements.footAddWorkspace?.addEventListener("click", () => {
+  // 顶部 + 按钮 → 添加工作区
+  elements.workspaceTabAdd?.addEventListener("click", () => {
     addCurrentPageToWorkspace();
   });
 
@@ -1146,6 +1156,11 @@ export function initializeResponseDisplay() {
       handlePlatformCapture(platformId, request.data);
     }
 
+    // 划词选择结果
+    if (request.action === "sidebarSelectionResult") {
+      handleSidebarSelection(request.text, request.title, request.url);
+    }
+
     return false;
   });
 
@@ -1212,7 +1227,7 @@ function closeAllAITabs() {
       closePlatformPanel();
     }
     setTimeout(() => {
-      resetButtonState(elements.closeTabsButton, "关闭AI标签页");
+      resetButtonState(elements.closeTabsButton, "关闭AI");
       elements.closeTabsButton.style.cursor = 'pointer';
     }, 1500);
   });
@@ -1262,6 +1277,52 @@ async function extractPageText() {
     extractButton.textContent = originalText;
     extractButton.disabled = false;
   }
+}
+
+// ==================== 划词选择模式 ====================
+
+/**
+ * 切换划词模式：写入 storage + 广播到所有标签页
+ * 内容脚本始终注入，通过本开关控制激活/休眠（injected-dom-toggle-pattern）
+ */
+async function toggleSelectionMode() {
+  if (isSelectionMode) {
+    // 关闭模式
+    isSelectionMode = false;
+    elements.selectionBtn?.classList.remove("active");
+    await chrome.storage.local.set({ sidebarSelectionEnabled: false });
+    // 广播到所有标签页
+    const tabs = await chrome.tabs.query({});
+    tabs.forEach(t => {
+      chrome.tabs.sendMessage(t.id, { action: "sidebarSelectionToggle", enabled: false }).catch(() => {});
+    });
+    showTempMessage("划词模式已关闭");
+    return;
+  }
+
+  // 开启模式
+  isSelectionMode = true;
+  elements.selectionBtn?.classList.add("active");
+  showTempMessage("划词模式已开启，在页面上选择文本");
+
+  await chrome.storage.local.set({ sidebarSelectionEnabled: true });
+  // 广播到所有标签页
+  const tabs = await chrome.tabs.query({});
+  tabs.forEach(t => {
+    chrome.tabs.sendMessage(t.id, { action: "sidebarSelectionToggle", enabled: true }).catch(() => {});
+  });
+}
+
+/**
+ * 处理划词选择结果 — 显示到提取结果面板（作为 %v 上下文）
+ */
+function handleSidebarSelection(text, title, url) {
+  if (!text || !text.trim()) return;
+  if (extractResult) extractResult.style.display = "block";
+  if (extractTitle) extractTitle.textContent = `划词: ${title || "未获取到标题"}`;
+  if (extractUrl) extractUrl.textContent = url || "";
+  if (extractContent) extractContent.textContent = text;
+  showTempMessage(`已获取 ${text.length} 字符`, 2000);
 }
 
 // ==================== Prompt 占位符 ====================

@@ -74,6 +74,7 @@ export function setupHtmlTextReaderListener() {
             extractPageText(sendResponse);
             return true;
         }
+
         return false;
     });
 }

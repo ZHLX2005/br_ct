@@ -12,7 +12,6 @@
       <!-- ===== 顶部工具栏 ===== -->
       <div class="toolbar">
         <button class="toolbar-platform-btn" id="platform-selector-btn">
-          <span class="toolbar-platform-icon">🤖</span>
           <span class="toolbar-platform-label">AI 平台</span>
           <span class="toolbar-platform-count" id="platform-count">0</span>
           <svg class="toolbar-chevron" id="selector-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
@@ -20,10 +19,24 @@
           </svg>
         </button>
         <div class="toolbar-actions">
-          <button class="toolbar-action-btn" id="toolbar-extract" title="提取页面文本">📄</button>
+          <button class="toolbar-action-btn toolbar-sel-btn" id="toolbar-selection" title="划词选择页面文本">划词</button>
+          <button class="toolbar-action-btn" id="toolbar-extract" title="提取页面文本">提取</button>
           <button class="toolbar-action-btn" id="toolbar-select-all">全选</button>
-          <button class="toolbar-action-btn toolbar-action-close" id="toolbar-close-ai">关闭AI页</button>
+          <button class="toolbar-action-btn toolbar-action-close" id="toolbar-close-ai">关闭AI</button>
         </div>
+      </div>
+
+      <!-- ===== 工作区标签（移到上方） ===== -->
+      <div class="workspace-tabs" id="workspace-tabs">
+        <button class="workspace-tab-add" id="workspace-tab-add" title="添加当前页面到工作区">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+
+      <!-- 右键菜单 -->
+      <div class="tab-context-menu" id="tab-context-menu" style="display:none">
+        <div class="context-menu-item" data-action="close">关闭标签页</div>
+        <div class="context-menu-item danger" data-action="remove">移除工作区</div>
       </div>
 
       <!-- ===== 已勾选平台快捷按钮 ===== -->
@@ -40,24 +53,12 @@
 
       <!-- ===== 当前提示词指示器 ===== -->
       <div class="prompt-bar" id="prompt-bar" style="display:none">
-        <span class="prompt-bar-icon">📋</span>
-        <span class="prompt-bar-label">当前提示词:</span>
+        <span class="prompt-bar-label">提示词:</span>
         <span class="prompt-bar-name" id="prompt-bar-name"></span>
         <span class="prompt-bar-alias" id="prompt-bar-alias"></span>
-        <button class="prompt-bar-clear" id="prompt-bar-clear" title="清除提示词">✕</button>
-      </div>
-
-      <!-- ===== 工作区标签 ===== -->
-      <div class="workspace-tabs" id="workspace-tabs">
-        <button class="workspace-tab-add" id="workspace-tab-add" title="添加当前页面到工作区">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <button class="prompt-bar-clear" id="prompt-bar-clear" title="清除提示词">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
         </button>
-      </div>
-
-      <!-- 右键菜单 -->
-      <div class="tab-context-menu" id="tab-context-menu" style="display:none">
-        <div class="context-menu-item" data-action="close">✕ 关闭标签页</div>
-        <div class="context-menu-item danger" data-action="remove">移除工作区</div>
       </div>
 
       <!-- ===== 回复/聊天内容区 ===== -->
@@ -80,7 +81,9 @@
         <div class="extract-result" id="extract-result" style="display: none;">
           <div class="extract-result-header">
             <span class="extract-title" id="extract-title"></span>
-            <button class="close-result" id="close-result" type="button">×</button>
+            <button class="close-result" id="close-result" type="button">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+            </button>
           </div>
           <div class="extract-url" id="extract-url"></div>
           <pre class="extract-content" id="extract-content"></pre>
@@ -101,10 +104,6 @@
               <button class="foot-btn" id="foot-history-btn" title="历史消息">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/><path d="M6 3.5v3l2 1.2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
                 历史
-              </button>
-              <button class="foot-btn" id="foot-add-workspace" title="添加当前页面到工作区">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-                工作区
               </button>
             </div>
             <div class="chat-input-foot-right">
