@@ -1,28 +1,66 @@
 /**
- * cc.js — Claude Code 模块
- *
- * 从 main.js 分离出来的全部 CC 逻辑。
- * main.js import 本模块来使用这些函数，CSS/DOM 完全不变。
+ * cc.js — Claude Code 模块（完全自包含）
+ * mount()：加载 cc.css，注入 cc.html，初始化 tab/WS/serve/skill
+ * unmount()：断开 WS，清空 #app-view
  */
 
-// ==================== 工具 ====================
+// ==================== mount / unmount ====================
 
-function escHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
+let _ws = null;
+let _wsReady = null;
+let _runtimeInit = false;
+let _ccSessionCounter = 1;
+const CC_DEFAULT_PATH = 'C:\\Windows\\System32';
+const CONNECT_TIMEOUT_MS = 5000;
+
+export async function mount(container) {
+  // 1. 加载 cc.css
+  if (!document.querySelector('link[href*="cc/cc.css"]')) {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = './cc/cc.css';
+    document.head.appendChild(link);
+  }
+
+  // 2. 注入模板
+  const resp = await fetch('./cc/cc.html');
+  container.innerHTML = await resp.text();
+
+  // 初始化第一个 tab（模板中的硬编码 tab）
+  const firstTab = document.querySelector('.cc-tab.active');
+  if (firstTab && !firstTab._skills) {
+    Object.assign(firstTab, { _sessionId: null, _messages: '', _path: CC_DEFAULT_PATH, _skills: [], _skillsCwd: null, _skillsLoading: false });
+  }
+
+  // 3. 初始化子系统
+  _initTabListeners();
+  _initServeControls();
+  _initSkillAutocomplete();
+  if (!_runtimeInit) {
+    _initNxceEventListener();
+    _runtimeInit = true;
+  }
 }
 
-// ==================== CC 多窗口管理 ====================
+export function unmount(container) {
+  _disconnectWs();
+  container.innerHTML = '';
+}
 
-let ccSessionCounter = 1;
-const CC_DEFAULT_PATH = 'C:\\Windows\\System32';
+// force cc input to stay empty
+export async function handleCcSend() { _handleSend(); }
 
-export { CC_DEFAULT_PATH };
+// tab management
+export function getActiveCcTab() { return document.querySelector('.cc-tab.active'); }
+export function createCcTab() { return _createTab(); }
+export function switchCcTab(tab) { _switchTab(tab); }
+export function closeCcTab(tab) { _closeTab(tab); }
 
-export function setCcSessionCounter(val) { ccSessionCounter = val; }
+// ==================== Tab ====================
 
-function saveCcTabState(tab) {
+function _getActiveTab() { return document.querySelector('.cc-tab.active'); }
+
+function _saveTabState(tab) {
   if (!tab) return;
   const rc = document.getElementById('response-content');
   const pi = document.getElementById('cc-path-input');
@@ -30,69 +68,47 @@ function saveCcTabState(tab) {
   if (pi) tab._path = pi.value;
 }
 
-function restoreCcTabState(tab) {
+function _restoreTabState(tab) {
   if (!tab) return;
   const rc = document.getElementById('response-content');
   const pi = document.getElementById('cc-path-input');
-  if (rc) rc.innerHTML = tab._messages !== undefined ? tab._messages : '';
-  if (pi) pi.value = tab._path !== undefined ? tab._path : CC_DEFAULT_PATH;
+  if (rc) rc.innerHTML = tab._messages ?? '';
+  if (pi) pi.value = tab._path ?? CC_DEFAULT_PATH;
 }
 
-export function getActiveCcTab() {
-  return document.querySelector('.cc-tab.active');
-}
-
-export function createCcTab() {
-  ccSessionCounter++;
-  const id = `cc-session-${ccSessionCounter}`;
+function _createTab() {
+  _ccSessionCounter++;
+  const id = 'cc-session-' + _ccSessionCounter;
   const tabsEl = document.getElementById('cc-tabs');
   if (!tabsEl) return null;
-
   const tab = document.createElement('div');
   tab.className = 'cc-tab';
   tab.dataset.ccSession = id;
-  tab._sessionId = null;
-  tab._messages = '';
-  tab._path = CC_DEFAULT_PATH;
-  tab._skills = [];
-  tab._skillsCwd = null;
-  tab._skillsLoading = false;
-  tab.innerHTML =
-    '<span class="cc-tab-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>' +
-    '<span class="cc-tab-label">会话 ' + ccSessionCounter + '</span>' +
-    '<span class="cc-tab-close" title="关闭">×</span>';
-
-  const addBtn = tabsEl.querySelector('.cc-tab-add');
-  if (addBtn) tabsEl.insertBefore(tab, addBtn);
-  else tabsEl.appendChild(tab);
-
-  const currentActive = getActiveCcTab();
-  saveCcTabState(currentActive);
-  switchCcTab(tab);
-  restoreCcTabState(tab);
+  Object.assign(tab, { _sessionId: null, _messages: '', _path: CC_DEFAULT_PATH, _skills: [], _skillsCwd: null, _skillsLoading: false });
+  tab.innerHTML = '<span class="cc-tab-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span><span class="cc-tab-label">会话 ' + _ccSessionCounter + '</span><span class="cc-tab-close" title="关闭">×</span>';
+  tabsEl.insertBefore(tab, tabsEl.querySelector('.cc-tab-add'));
+  _saveTabState(_getActiveTab());
+  _switchTab(tab);
+  _restoreTabState(tab);
   return tab;
 }
 
-export function switchCcTab(tab) {
+function _switchTab(tab) {
   if (!tab) return;
   const tabsEl = document.getElementById('cc-tabs');
   if (!tabsEl) return;
-
-  const current = getActiveCcTab();
-  if (current && current !== tab) {
-    current._path = document.getElementById('cc-path-input')?.value || CC_DEFAULT_PATH;
-    current._messages = document.getElementById('response-content')?.innerHTML || '';
+  const cur = _getActiveTab();
+  if (cur && cur !== tab) {
+    cur._path = document.getElementById('cc-path-input')?.value || CC_DEFAULT_PATH;
+    cur._messages = document.getElementById('response-content')?.innerHTML || '';
   }
-
-  tabsEl.querySelectorAll('.cc-tab').forEach(function(t) { t.classList.remove('active'); });
+  tabsEl.querySelectorAll('.cc-tab').forEach(t => t.classList.remove('active'));
   tab.classList.add('active');
-
   const pi = document.getElementById('cc-path-input');
   const rc = document.getElementById('response-content');
-  if (pi) pi.value = tab._path !== undefined ? tab._path : CC_DEFAULT_PATH;
-  if (rc) rc.innerHTML = tab._messages !== undefined ? tab._messages : '';
-
-  if (current && current !== tab) {
+  if (pi) pi.value = tab._path ?? CC_DEFAULT_PATH;
+  if (rc) rc.innerHTML = tab._messages ?? '';
+  if (cur && cur !== tab) {
     tab._sessionId = null;
     tab._skills = [];
     tab._skillsCwd = null;
@@ -100,462 +116,300 @@ export function switchCcTab(tab) {
   }
 }
 
-export function closeCcTab(tab) {
+function _closeTab(tab) {
   if (!tab) return;
-  const isActive = tab.classList.contains('active');
+  const active = tab.classList.contains('active');
   const prev = tab.previousElementSibling;
   const next = tab.nextElementSibling;
   tab.remove();
-
-  if (isActive) {
-    const target = prev && prev.classList.contains('cc-tab') ? prev
-                 : next && next.classList.contains('cc-tab') ? next
-                 : null;
-    if (target) switchCcTab(target);
+  if (active) {
+    const t = prev?.classList.contains('cc-tab') ? prev : next?.classList.contains('cc-tab') ? next : null;
+    if (t) _switchTab(t);
   }
 }
 
-export function setupCcTabListeners() {
+function _initTabListeners() {
   const tabsEl = document.getElementById('cc-tabs');
   if (!tabsEl) return;
-
-  const addBtn = document.getElementById('cc-tab-add');
-  if (addBtn) addBtn.addEventListener('click', createCcTab);
-
-  tabsEl.addEventListener('click', function(e) {
+  document.getElementById('cc-tab-add')?.addEventListener('click', _createTab);
+  tabsEl.addEventListener('click', e => {
     const tab = e.target.closest('.cc-tab');
     if (!tab) return;
-    if (e.target.classList.contains('cc-tab-close')) {
-      closeCcTab(tab);
-      return;
-    }
-    switchCcTab(tab);
+    if (e.target.classList.contains('cc-tab-close')) { _closeTab(tab); return; }
+    _switchTab(tab);
   });
-}
-
-// ==================== WS 查询 ====================
-
-export function sendCcQuery(prompt, workDir, skills) {
-  const tab = getActiveCcTab();
-  if (!tab) return Promise.reject(new Error('无激活的 CC 会话'));
-
-  const session = tab.dataset.ccSession || ('tab-' + (tab._tabId || 'default'));
-  tab._pendingSkills = (skills || '').split(',').filter(Boolean);
-
-  return new Promise(function(resolve, reject) {
-    var settled = false;
-    function finish(err, payload) {
-      if (settled) return;
-      settled = true;
-      tab._activeQuery = null;
-      if (err) reject(err); else resolve(payload);
-    }
-
-    tab._activeQuery = { resolve: function(r) { finish(null, r); }, reject: function(e) { finish(e); } };
-
-    chrome.runtime.sendMessage({
-      action: 'nxce_ws',
-      cmd: 'query',
-      session: session,
-      cwd: workDir || '',
-      prompt: prompt,
-      skills: (skills || '').split(',').filter(Boolean),
-      queryId: 'q-' + Date.now(),
-    }, function(resp) {
-      if (chrome.runtime.lastError) {
-        finish(new Error(chrome.runtime.lastError.message));
-        return;
+  const pathInput = document.getElementById('cc-path-input');
+  if (pathInput) {
+    let last = pathInput.value;
+    pathInput.addEventListener('input', () => {
+      const tab = _getActiveTab();
+      if (!tab) return;
+      const nv = pathInput.value;
+      if (nv === last) return;
+      if (tab._path && tab._path !== nv) {
+        chrome.runtime.sendMessage({ action: 'nxce_ws', cmd: 'closeSession', session: tab.dataset.ccSession, cwd: tab._path });
       }
-      if (!resp || !resp.ok) {
-        finish(new Error(resp?.error || 'WS query 失败'));
-      }
+      last = nv;
+      tab._path = nv; tab._skills = []; tab._skillsCwd = null; tab._skillsLoading = false; tab._sessionId = null;
+      const rc = document.getElementById('response-content');
+      if (rc) { rc.innerHTML = ''; tab._messages = ''; }
     });
-  });
+  }
 }
 
-// ==================== WS 事件监听 ====================
+// ==================== WS ====================
 
-export function setupNxceEventListener() {
-  chrome.runtime.onMessage.addListener(function(msg) {
+function _disconnectWs() {
+  if (_ws) { try { _ws.close(); } catch {} _ws = null; }
+  _wsReady = null;
+}
+
+function _connect() {
+  if (_ws && _ws.readyState <= 1) return _wsReady;
+  if (_wsReady) return _wsReady;
+  if (_ws) { try { _ws.close(); } catch {} _ws = null; }
+  const r = new Promise((resolve, reject) => {
+    let sock;
+    try { sock = new WebSocket('ws://127.0.0.1:43720'); } catch (err) { reject(err); return; }
+    _ws = sock;
+    const timer = setTimeout(() => { try { sock.close(); } catch {} reject(new Error('timeout')); }, CONNECT_TIMEOUT_MS);
+    sock.addEventListener('message', e => {
+      let msg;
+      try { msg = JSON.parse(e.data); } catch { return; }
+      if (msg.type === 'connected') { if (sock._resolved) return; sock._resolved = true; clearTimeout(timer); resolve(); return; }
+      _dispatch(msg);
+    });
+    sock.addEventListener('close', () => { clearTimeout(timer); if (_ws === sock) _ws = null; if (_wsReady === r) _wsReady = null; });
+  });
+  _wsReady = r; r.catch(() => { if (_wsReady === r) _wsReady = null; });
+  return r;
+}
+
+async function _wsSend(msg) { await _connect(); _ws.send(JSON.stringify(msg)); }
+
+// ==================== WS dispatch ====================
+
+function _dispatch(msg) {
+  const tab = _getActiveTab();
+  if (!tab) return;
+  switch (msg.type) {
+    case 'turn_start': tab._streamingText = ''; tab._streamingThinking = ''; tab._streamingTools = []; break;
+    case 'text':
+      if (tab._silentTurn) { tab._streamingText = (tab._streamingText || '') + (msg.content || ''); break; }
+      tab._streamingText = (tab._streamingText || '') + (msg.content || '');
+      _appendStream(tab, msg.content);
+      break;
+    case 'thinking': tab._streamingThinking = (tab._streamingThinking || '') + (msg.content || ''); break;
+    case 'tool_use': if (!tab._streamingTools) tab._streamingTools = []; tab._streamingTools.push({ name: msg.name, input: msg.input, id: msg.id }); break;
+    case 'done':
+      if (msg.sessionId) tab._sessionId = msg.sessionId;
+      if (tab._activeQuery) tab._activeQuery.resolve({ status: 'ok', data: { text: tab._streamingText, sessionId: tab._sessionId } });
+      if (tab._silentTurn) { tab._silentTurn = false; break; }
+      _finalizeStream(tab);
+      break;
+    case 'init':
+      if (msg.sessionId) tab._sessionId = msg.sessionId;
+      if (msg.cwd && tab._path && msg.cwd !== tab._path) break;
+      const skills = [...new Set([...(Array.isArray(msg.slashCommands) ? msg.slashCommands : []), ...(Array.isArray(msg.skills) ? msg.skills : [])])];
+      if (skills.length > 0) {
+        tab._skills = skills.map(s => typeof s === 'string' ? { name: s, desc: '' } : { name: s.name || String(s), desc: s.desc || '' }).sort((a, b) => a.name.localeCompare(b.name));
+        tab._skillsCwd = tab._path || msg.cwd; tab._skillsLoading = false;
+      }
+      break;
+    case 'error': if (tab._activeQuery) tab._activeQuery.reject(new Error(msg.content || 'error')); break;
+  }
+}
+
+function _initNxceEventListener() {
+  chrome.runtime.onMessage.addListener(msg => {
     if (!msg || msg.action !== 'nxce_event') return false;
-    var ev = msg.event;
-    var tab = getActiveCcTab();
-    if (!tab) return false;
-
-    switch (ev.type) {
-      case 'turn_start':
-        tab._streamingText = '';
-        tab._streamingThinking = '';
-        tab._streamingTools = [];
-        break;
-      case 'text':
-        if (tab._silentTurn) {
-          if (!tab._streamingText) tab._streamingText = '';
-          tab._streamingText += ev.content || '';
-          break;
-        }
-        if (!tab._streamingText) tab._streamingText = '';
-        tab._streamingText += ev.content || '';
-        appendCcStream(tab, ev.content);
-        break;
-      case 'thinking':
-        if (!tab._streamingThinking) tab._streamingThinking = '';
-        tab._streamingThinking += ev.content || '';
-        break;
-      case 'tool_use':
-        if (!tab._streamingTools) tab._streamingTools = [];
-        tab._streamingTools.push({ name: ev.name, input: ev.input, id: ev.id });
-        break;
-      case 'done':
-        if (ev.sessionId) tab._sessionId = ev.sessionId;
-        if (tab._activeQuery) {
-          tab._activeQuery.resolve({ status: 'ok', data: { text: tab._streamingText, sessionId: tab._sessionId } });
-        }
-        if (tab._silentTurn) {
-          tab._silentTurn = false;
-          break;
-        }
-        finalizeCcStream(tab);
-        break;
-      case 'init':
-        if (ev.sessionId) tab._sessionId = ev.sessionId;
-        var initCwd = ev.cwd || '';
-        var currentCwd = tab._path || '';
-        if (initCwd && currentCwd && initCwd !== currentCwd) break;
-        var initSkills = Array.isArray(ev.skills) ? ev.skills : [];
-        var initSlash = Array.isArray(ev.slashCommands) ? ev.slashCommands : [];
-        var merged = [...new Set([...initSlash, ...initSkills])];
-        if (merged.length > 0) {
-          tab._skills = merged
-            .map(function(s) { return typeof s === 'string' ? { name: s, desc: '' } : { name: s.name || String(s), desc: s.desc || '' }; })
-            .sort(function(a, b) { return a.name.localeCompare(b.name); });
-          tab._skillsCwd = currentCwd || initCwd;
-          tab._skillsLoading = false;
-        }
-        break;
-      case 'error':
-        if (tab._activeQuery) {
-          tab._activeQuery.reject(new Error(ev.content || 'nxce error'));
-        }
-        break;
-    }
+    _dispatch(msg.event);
     return false;
   });
 }
 
-// ==================== Serve 控制 ====================
-
-export function setServeStatus(state, text) {
-  var el = document.getElementById('cc-serve-status');
-  var btn = document.getElementById('cc-serve-btn');
-  if (el) {
-    el.dataset.state = state;
-    var txt = el.querySelector('.cc-serve-text');
-    if (txt) txt.textContent = text;
+function _appendStream(tab, chunk) {
+  const rc = document.getElementById('response-content');
+  if (!rc) return;
+  let s = rc.querySelector('.cc-stream-bubble');
+  if (!s) {
+    s = document.createElement('div');
+    s.className = 'notion-chat-message cc-stream-bubble';
+    s.innerHTML = '<div class="notion-chat-avatar" style="background:#f97316;display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;flex-shrink:0;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 6"/></svg></div><div class="notion-chat-bubble"><div class="notion-chat-bubble-header"><span class="notion-chat-bubble-name" style="color:#ea580c">' + (tab.querySelector('.cc-tab-label')?.textContent || 'Claude Code') + '</span></div><div class="notion-chat-bubble-content cc-stream-content"></div></div>';
+    rc.appendChild(s); rc.scrollTop = rc.scrollHeight;
   }
+  const c = s.querySelector('.cc-stream-content');
+  if (c) c.textContent += chunk;
+  rc.scrollTop = rc.scrollHeight; tab._messages = rc.innerHTML;
+}
+
+function _finalizeStream(tab) {
+  const rc = document.getElementById('response-content');
+  if (!rc) return;
+  const s = rc.querySelector('.cc-stream-bubble');
+  if (s) {
+    const c = s.querySelector('.cc-stream-content');
+    if (c) c.innerHTML = _escHtml(c.textContent || '').replace(/\n/g, '<br>');
+    s.classList.remove('cc-stream-bubble');
+  }
+  const ld = rc.querySelector('.cc-loading'); if (ld) ld.remove();
+  tab._messages = rc.innerHTML;
+}
+
+// ==================== Serve ====================
+
+function _setServeStatus(state, text) {
+  const el = document.getElementById('cc-serve-status');
+  const btn = document.getElementById('cc-serve-btn');
+  if (el) { el.dataset.state = state; const t = el.querySelector('.cc-serve-text'); if (t) t.textContent = text; }
   if (btn) {
     btn.dataset.state = state;
     btn.dataset.loading = state === 'connecting' ? 'true' : 'false';
-    var lbl = btn.querySelector('span:last-child');
-    if (lbl) {
-      lbl.textContent = ({
-        disconnected: '连接',
-        connecting: '取消',
-        connected: '断开',
-        error: '重试'
-      })[state] || '连接';
-    }
+    const l = btn.querySelector('span:last-child');
+    if (l) l.textContent = ({ disconnected: '连接', connecting: '取消', connected: '断开', error: '重试' })[state] || '连接';
   }
 }
 
-export function refreshServeStatus() {
-  setServeStatus('connecting', '探测…');
-  chrome.runtime.sendMessage({ action: 'nxce_ws', cmd: 'ping' }, function(resp) {
-    if (resp?.connected) {
-      setServeStatus('connected', '已连接');
-    } else {
-      setServeStatus('disconnected', '未连接');
-    }
-  });
-}
-
-export function setupServeControls(getCurrentMode) {
-  var btn = document.getElementById('cc-serve-btn');
+function _initServeControls() {
+  const btn = document.getElementById('cc-serve-btn');
   if (!btn) return;
-
-  btn.addEventListener('click', async function() {
-    var state = btn.dataset.state;
-    if (state === 'connecting') {
-      chrome.runtime.sendMessage({ action: 'nxce_ws', cmd: 'disconnect' }, function() { setServeStatus('disconnected', '已取消'); });
+  btn.addEventListener('click', async () => {
+    const state = btn.dataset.state;
+    if (state === 'connecting' || state === 'connected') {
+      chrome.runtime.sendMessage({ action: 'nxce_ws', cmd: 'disconnect' }, () => _setServeStatus('disconnected', '已断开'));
       return;
     }
-    if (state === 'connected') {
-      chrome.runtime.sendMessage({ action: 'nxce_ws', cmd: 'disconnect' }, function() { setServeStatus('disconnected', '已断开'); });
-      return;
-    }
-    setServeStatus('connecting', '启动中…');
-    chrome.runtime.sendMessage({
-      action: 'nativeMessage',
-      payload: { command: 'claudeStartServe' },
-    }, function(resp) {
+    _setServeStatus('connecting', '启动中…');
+    chrome.runtime.sendMessage({ action: 'nativeMessage', payload: { command: 'claudeStartServe' } }, resp => {
       if (resp?.status === 'ok') {
-        setTimeout(function() {
-          chrome.runtime.sendMessage({ action: 'nxce_ws', cmd: 'ping' }, function(p) {
-            setServeStatus(p?.connected ? 'connected' : 'error', p?.connected ? '已连接' : '启动后未连上，请重试');
-          });
+        setTimeout(() => {
+          chrome.runtime.sendMessage({ action: 'nxce_ws', cmd: 'ping' }, p => _setServeStatus(p?.connected ? 'connected' : 'error', p?.connected ? '已连接' : '启动后未连上'));
         }, 2000);
-      } else {
-        setServeStatus('error', resp?.message || '启动失败');
-      }
+      } else _setServeStatus('error', resp?.message || '启动失败');
     });
   });
-
-  var ccToggle = document.getElementById('cc-toggle');
-  if (ccToggle) {
-    ccToggle.addEventListener('click', function() {
-      if (getCurrentMode() === 'claude-code') refreshServeStatus();
-    });
-  }
 }
 
-// ==================== 流式渲染 ====================
+// ==================== Send ====================
 
-function appendCcStream(tab, chunk) {
-  var rc = document.getElementById('response-content');
-  if (!rc) return;
-  var stream = rc.querySelector('.cc-stream-bubble');
-  if (!stream) {
-    stream = document.createElement('div');
-    stream.className = 'notion-chat-message cc-stream-bubble';
-    stream.innerHTML =
-      '<div class="notion-chat-avatar" style="background:#f97316;display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;flex-shrink:0;">' +
-        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 6"/></svg>' +
-      '</div>' +
-      '<div class="notion-chat-bubble">' +
-        '<div class="notion-chat-bubble-header">' +
-          '<span class="notion-chat-bubble-name" style="color:#ea580c">' + (tab.querySelector('.cc-tab-label')?.textContent || 'Claude Code') + '</span>' +
-        '</div>' +
-        '<div class="notion-chat-bubble-content cc-stream-content"></div>' +
-      '</div>';
-    rc.appendChild(stream);
-    rc.scrollTop = rc.scrollHeight;
-  }
-  var content = stream.querySelector('.cc-stream-content');
-  if (content) {
-    content.textContent += chunk;
-    rc.scrollTop = rc.scrollHeight;
-  }
-  tab._messages = rc.innerHTML;
-}
-
-function finalizeCcStream(tab) {
-  var rc = document.getElementById('response-content');
-  if (!rc) return;
-  var stream = rc.querySelector('.cc-stream-bubble');
-  if (stream) {
-    var content = stream.querySelector('.cc-stream-content');
-    if (content) {
-      content.innerHTML = escHtml(content.textContent || '').replace(/\n/g, '<br>');
-    }
-    stream.classList.remove('cc-stream-bubble');
-  }
-  tab._messages = rc.innerHTML;
-}
-
-// ==================== CC 发送 ====================
-
-export async function handleCcSend() {
-  var input = document.getElementById('chat-input');
-  var pathInput = document.getElementById('cc-path-input');
+async function _handleSend() {
+  const input = document.getElementById('chat-input');
+  const pathInput = document.getElementById('cc-path-input');
   if (!input) return;
-
-  var raw = input.value.trim();
+  const raw = input.value.trim();
   if (!raw) return;
+  const tab = _getActiveTab();
+  if (!tab) return;
 
-  var activeTab = getActiveCcTab();
-  if (!activeTab) return;
-
-  var skillRegex = /\/([\w-]+)/g;
-  var match;
-  var skills = [];
-  var prompt = raw;
-  var tabSkills = activeTab._skills || [];
-  while ((match = skillRegex.exec(raw)) !== null) {
-    if (tabSkills.some(function(s) { return s.name === match[1]; })) {
-      skills.push(match[1]);
-      prompt = prompt.replace(match[0], '').trim();
-    }
+  const tabSkills = tab._skills || [];
+  const skills = [];
+  let prompt = raw;
+  let m;
+  while ((m = /\/([\w-]+)/g.exec(raw)) !== null) {
+    if (tabSkills.some(s => s.name === m[1])) { skills.push(m[1]); prompt = prompt.replace(m[0], '').trim(); }
   }
-
   if (!prompt && skills.length === 0) return;
-  if (!prompt && skills.length > 0) { alert('请在 /skill 后面补充问题内容'); return; }
+  if (!prompt && skills.length > 0) { alert('请在 /skill 后面补充问题'); return; }
 
-  var workDir = pathInput ? pathInput.value.trim() : '';
+  const workDir = pathInput?.value.trim() || '';
+  input.value = ''; input.dispatchEvent(new Event('input'));
 
-  input.value = '';
-  input.dispatchEvent(new Event('input'));
-
-  var responseContent = document.getElementById('response-content');
-  if (responseContent) {
-    var skillsBadge = skills.length > 0
-      ? '<div class="cc-bubble-skills">' + skills.map(function(s) { return '<span class="cc-skill-tag">' + escHtml(s) + '</span>'; }).join('') + '</div>'
-      : '';
-    var userMsg = document.createElement('div');
-    userMsg.className = 'notion-chat-message notion-chat-message--user';
-    userMsg.innerHTML =
-      '<div class="notion-chat-bubble notion-chat-bubble--user" style="flex:0 1 auto;max-width:88%;">' +
-        '<div class="notion-chat-bubble-header"><span class="notion-chat-bubble-name">You</span></div>' +
-        '<div class="notion-chat-bubble-content">' + escHtml(prompt) + '</div>' +
-        skillsBadge +
-      '</div>';
-    responseContent.appendChild(userMsg);
-    responseContent.scrollTop = responseContent.scrollHeight;
-    activeTab._messages = responseContent.innerHTML;
+  const rc = document.getElementById('response-content');
+  if (rc) {
+    const badges = skills.length ? '<div class="cc-bubble-skills">' + skills.map(s => '<span class="cc-skill-tag">' + _escHtml(s) + '</span>').join('') + '</div>' : '';
+    const u = document.createElement('div');
+    u.className = 'notion-chat-message notion-chat-message--user';
+    u.innerHTML = '<div class="notion-chat-bubble notion-chat-bubble--user" style="flex:0 1 auto;max-width:88%;"><div class="notion-chat-bubble-header"><span class="notion-chat-bubble-name">You</span></div><div class="notion-chat-bubble-content">' + _escHtml(prompt) + '</div>' + badges + '</div>';
+    rc.appendChild(u); rc.scrollTop = rc.scrollHeight; tab._messages = rc.innerHTML;
   }
 
-  var loadingEl = document.createElement('div');
-  loadingEl.className = 'cc-loading';
-  loadingEl.innerHTML =
-    '<div class="notion-chat-avatar">' +
-      '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>' +
-    '</div>' +
-    '<div class="cc-loading-dots"><span class="cc-loading-dot"></span><span class="cc-loading-dot"></span><span class="cc-loading-dot"></span></div>';
-  if (responseContent) {
-    responseContent.appendChild(loadingEl);
-    responseContent.scrollTop = responseContent.scrollHeight;
-  }
+  const ld = document.createElement('div');
+  ld.className = 'cc-loading';
+  ld.innerHTML = '<div class="notion-chat-avatar"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div><div class="cc-loading-dots"><span class="cc-loading-dot"></span><span class="cc-loading-dot"></span><span class="cc-loading-dot"></span></div>';
+  if (rc) { rc.appendChild(ld); rc.scrollTop = rc.scrollHeight; }
 
-  var skillPrefix = skills.length > 0 ? '[已选择 skill: ' + skills.join(', ') + '] ' : '';
-  var finalPrompt = skillPrefix + prompt;
-
+  const prefix = skills.length ? '[已选择 skill: ' + skills.join(', ') + '] ' : '';
   try {
-    await sendCcQuery(finalPrompt, workDir, skills.join(','));
+    const session = tab.dataset.ccSession || 'default';
+    await new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (err, v) => { if (settled) return; settled = true; tab._activeQuery = null; if (err) reject(err); else resolve(v); };
+      tab._activeQuery = { resolve: r => finish(null, r), reject: e => finish(e) };
+      chrome.runtime.sendMessage({ action: 'nxce_ws', cmd: 'query', session, cwd: workDir, prompt: prefix + prompt, skills, queryId: 'q-' + Date.now() }, resp => {
+        if (chrome.runtime.lastError) { finish(new Error(chrome.runtime.lastError.message)); return; }
+        if (!resp?.ok) finish(new Error(resp?.error || '失败'));
+      });
+    });
   } catch (err) {
-    if (loadingEl.parentNode) loadingEl.remove();
-    if (responseContent) {
-      var stream = responseContent.querySelector('.cc-stream-bubble');
-      if (stream) stream.remove();
-      var errMsg = document.createElement('div');
-      errMsg.className = 'notion-chat-message';
-      errMsg.innerHTML = '<div class="notion-chat-bubble" style="border-color:#e53e3e;"><div class="notion-chat-bubble-content" style="color:#e53e3e;">发送失败: ' + escHtml(err.message) + '</div></div>';
-      responseContent.appendChild(errMsg);
+    if (ld.parentNode) ld.remove();
+    if (rc) {
+      rc.querySelector('.cc-stream-bubble')?.remove();
+      const e = document.createElement('div');
+      e.className = 'notion-chat-message';
+      e.innerHTML = '<div class="notion-chat-bubble" style="border-color:#e53e3e;"><div class="notion-chat-bubble-content" style="color:#e53e3e;">' + _escHtml(err.message) + '</div></div>';
+      rc.appendChild(e);
     }
-  } finally {
-    if (loadingEl.parentNode) loadingEl.remove();
-  }
+  } finally { if (ld.parentNode) ld.remove(); }
 }
 
-// ==================== /skill 自动补全 ====================
+// ==================== Skill autocomplete ====================
 
-function ensureCcTabSkills(tab) {
-  if (!tab) return;
-  if (!tab._skills) tab._skills = [];
-  if (!tab._skillsLoading) tab._skillsLoading = false;
-  if (tab._skillsLoading) return;
+function _getTabSkills(tab) {
+  if (!tab || tab._skillsLoading) return;
   if (tab._skills.length > 0 && tab._skillsCwd === tab._path) return;
   tab._skillsLoading = true;
-
-  var session = tab.dataset.ccSession || 'default';
-  var cwd = tab._path || CC_DEFAULT_PATH;
+  const session = tab.dataset.ccSession || 'default';
+  const cwd = tab._path || CC_DEFAULT_PATH;
   tab._silentTurn = true;
-
-  chrome.runtime.sendMessage({
-    action: 'nxce_ws',
-    cmd: 'query',
-    session: session,
-    cwd: cwd,
-    prompt: ' ',
-    queryId: 'skill-init-' + Date.now(),
-  }, function(resp) {
+  chrome.runtime.sendMessage({ action: 'nxce_ws', cmd: 'query', session, cwd, prompt: ' ', queryId: 'skill-init-' + Date.now() }, resp => {
     if (chrome.runtime.lastError || !resp?.ok) { tab._skillsLoading = false; return; }
-    var waited = 0;
-    var timer = setInterval(function() {
-      waited += 200;
-      if (tab._skills.length > 0 || waited > 10000) { clearInterval(timer); tab._skillsLoading = false; }
-    }, 200);
+    let w = 0;
+    const t = setInterval(() => { w += 200; if (tab._skills.length > 0 || w > 10000) { clearInterval(t); tab._skillsLoading = false; } }, 200);
   });
 }
 
-export function setupCcSkillAutocomplete(getCurrentMode) {
-  var input = document.getElementById('chat-input');
-  var popup = document.getElementById('cc-skill-popup');
+function _initSkillAutocomplete() {
+  const input = document.getElementById('chat-input');
+  const popup = document.getElementById('cc-skill-popup');
   if (!input || !popup) return;
-
-  var sel = -1;
-
+  let sel = -1;
   function close() { popup.style.display = 'none'; sel = -1; }
-
   function show(items) {
-    if (items.length === 0) {
-      popup.innerHTML = '<div class="cc-skill-empty">无匹配 Skill</div>';
-    } else {
-      popup.innerHTML = items.map(function(s, i) {
-        return '<div class="cc-skill-item' + (i === sel ? ' selected' : '') + '" data-i="' + i + '">' +
-          '<span class="cc-skill-item-icon">S</span>' +
-          '<span class="cc-skill-item-name">' + escHtml(s.name) + '</span>' +
-          '<span class="cc-skill-item-desc">' + escHtml(s.desc || '') + '</span>' +
-        '</div>';
-      }).join('');
-    }
+    popup.innerHTML = items.length === 0 ? '<div class="cc-skill-empty">无匹配 Skill</div>' : items.map((s, i) => '<div class="cc-skill-item' + (i === sel ? ' selected' : '') + '" data-i="' + i + '"><span class="cc-skill-item-icon">S</span><span class="cc-skill-item-name">' + _escHtml(s.name) + '</span><span class="cc-skill-item-desc">' + _escHtml(s.desc || '') + '</span></div>').join('');
     popup.style.display = 'block';
   }
-
-  function pickSkill(name) {
-    var cur = input.selectionStart || 0;
-    var v = input.value;
-    var sp = v.lastIndexOf('/', cur);
+  function pick(name) {
+    const cur = input.selectionStart || 0; const v = input.value; const sp = v.lastIndexOf('/', cur);
     if (sp < 0) return;
     input.value = v.slice(0, sp) + '/' + name + ' ' + v.slice(cur);
-    var np = sp + name.length + 2;
-    input.setSelectionRange(np, np);
-    input.dispatchEvent(new Event('input'));
-    close();
-    input.focus();
+    const np = sp + name.length + 2; input.setSelectionRange(np, np); input.dispatchEvent(new Event('input')); close(); input.focus();
   }
-
-  input.addEventListener('input', function() {
-    if (getCurrentMode() !== 'claude-code') return close();
-    var cur = input.selectionStart || 0;
-    var v = input.value;
-    var sp = v.lastIndexOf('/', cur);
+  input.addEventListener('input', () => {
+    const cur = input.selectionStart || 0; const v = input.value; const sp = v.lastIndexOf('/', cur);
     if (sp < 0 || sp >= cur) return close();
-    var word = v.slice(sp + 1, cur);
+    const word = v.slice(sp + 1, cur);
     if (word.includes(' ')) return close();
-
-    var tab = getActiveCcTab();
-    if (tab) ensureCcTabSkills(tab);
-    var skills = tab?._skills || [];
-
-    var matched = skills.filter(function(s) { return s.name.toLowerCase().includes(word.toLowerCase()); }).slice(0, 20);
-    sel = matched.length > 0 ? 0 : -1;
-    show(matched);
+    const tab = _getActiveTab();
+    if (tab) _getTabSkills(tab);
+    const matched = (tab?._skills || []).filter(s => s.name.toLowerCase().includes(word.toLowerCase())).slice(0, 20);
+    sel = matched.length > 0 ? 0 : -1; show(matched);
   });
-
-  input.addEventListener('keydown', function(e) {
+  input.addEventListener('keydown', e => {
     if (popup.style.display !== 'block') return;
-    var items = popup.querySelectorAll('.cc-skill-item');
+    const items = popup.querySelectorAll('.cc-skill-item');
     if (!items.length && e.key !== 'Escape') return;
-
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      var name = items[sel]?.querySelector('.cc-skill-item-name')?.textContent;
-      if (name) pickSkill(name);
-      return;
-    }
-    if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(sel + 1, items.length - 1); items.forEach(function(el, i) { el.classList.toggle('selected', i === sel); }); items[sel]?.scrollIntoView({ block: 'nearest' }); return; }
-    if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(sel - 1, 0); items.forEach(function(el, i) { el.classList.toggle('selected', i === sel); }); items[sel]?.scrollIntoView({ block: 'nearest' }); return; }
+    if (e.key === 'Tab') { e.preventDefault(); const n = items[sel]?.querySelector('.cc-skill-item-name')?.textContent; if (n) pick(n); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(sel + 1, items.length - 1); items.forEach((el, i) => el.classList.toggle('selected', i === sel)); items[sel]?.scrollIntoView({ block: 'nearest' }); return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(sel - 1, 0); items.forEach((el, i) => el.classList.toggle('selected', i === sel)); items[sel]?.scrollIntoView({ block: 'nearest' }); return; }
     if (e.key === 'Escape') { close(); return; }
   });
+  popup.addEventListener('mousedown', e => { const item = e.target.closest('.cc-skill-item'); if (!item) return; const n = item.querySelector('.cc-skill-item-name')?.textContent; if (n) pick(n); });
+}
 
-  document.addEventListener('click', function(e) {
-    if (!e.target.closest('.chat-input-middle')) close();
-  });
+// ==================== Utils ====================
 
-  popup.addEventListener('mousedown', function(e) {
-    var item = e.target.closest('.cc-skill-item');
-    if (!item) return;
-    var name = item.querySelector('.cc-skill-item-name')?.textContent;
-    if (name) pickSkill(name);
-  });
+function _escHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
 }
