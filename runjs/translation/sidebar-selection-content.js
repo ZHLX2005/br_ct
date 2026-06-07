@@ -17,28 +17,28 @@
     Object.assign(btn.style, {
       position: 'fixed',
       zIndex: '2147483647',
-      background: '#4361ee',
-      color: '#fff',
-      border: 'none',
+      background: '#fff',
+      color: '#1d1d1f',
+      border: '1px solid #d1d5db',
       borderRadius: '6px',
       padding: '5px 12px',
       fontSize: '12px',
       fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
       fontWeight: '500',
       cursor: 'pointer',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.18)',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
       display: 'none',
       lineHeight: '1.4',
       userSelect: 'none',
       letterSpacing: '0.01em',
     });
-    btn.addEventListener('mouseenter', () => { btn.style.background = '#3a56d4'; });
-    btn.addEventListener('mouseleave', () => { btn.style.background = '#4361ee'; });
+    btn.addEventListener('mouseenter', () => { btn.style.background = '#f3f4f6'; });
+    btn.addEventListener('mouseleave', () => { btn.style.background = '#fff'; });
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (currentSelection) {
         chrome.runtime.sendMessage({
-          action: 'sidebarSelectionResult',
+          action: 'sideSelExtracted',
           text: currentSelection,
           title: document.title,
           url: location.href,

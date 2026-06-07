@@ -41,17 +41,20 @@ export function showTempMessage(message, duration = 2000) {
     messageEl.id = "temp-message";
     messageEl.style.cssText = `
       position: fixed;
-      top: 50%;
+      bottom: 80px;
       left: 50%;
-      transform: translate(-50%, -50%);
-      background: rgba(0, 0, 0, 0.8);
-      color: white;
-      padding: 12px 20px;
-      border-radius: 6px;
+      transform: translateX(-50%);
+      background: #2d2d2d;
+      color: #e5e5e5;
+      padding: 8px 16px;
+      border-radius: 8px;
       z-index: 10000;
-      font-size: 14px;
+      font-size: 13px;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
       pointer-events: none;
-      transition: opacity 0.3s;
+      transition: opacity 0.25s ease;
+      white-space: nowrap;
     `;
     document.body.appendChild(messageEl);
   }

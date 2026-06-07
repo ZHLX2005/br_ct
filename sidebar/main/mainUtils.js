@@ -1186,10 +1186,20 @@ export function initializeResponseDisplay() {
     // 划词选择结果
     if (request.action === "sidebarSelectionResult") {
       handleSidebarSelection(request.text, request.title, request.url);
+      // 清除 storage 中的 pending 数据，避免下次加载时重复
+      chrome.storage.session.remove("pendingSelection").catch(() => {});
     }
 
     return false;
   });
+
+  // 加载时检查是否有 pending 的划词结果（sidebar 关闭时通过 storage 中转）
+  chrome.storage.session.get("pendingSelection").then((data) => {
+    if (data.pendingSelection) {
+      handleSidebarSelection(data.pendingSelection.text, data.pendingSelection.title, data.pendingSelection.url);
+      chrome.storage.session.remove("pendingSelection").catch(() => {});
+    }
+  }).catch(() => {});
 
   renderCurrentPlatform();
   console.log("多平台回复展示模块已初始化");
