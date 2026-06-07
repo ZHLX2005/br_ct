@@ -345,6 +345,12 @@ export function setupEventListeners() {
   // 关闭AI标签页按钮
   elements.closeTabsButton?.addEventListener("click", closeAllAITabs);
 
+  // 清空聊天内容
+  elements.clearChatBtn?.addEventListener("click", () => {
+    resetResponseDisplay();
+    showTempMessage("聊天内容已清空");
+  });
+
   // 提取页面文本按钮
   if (extractButton) {
     extractButton.addEventListener("click", extractPageText);
