@@ -8,6 +8,7 @@
   height: 100%;
   min-height: 0;
   padding: 0;
+  position: relative;
 }
 
 /* ---- CC 多窗口标签栏 ---- */
@@ -20,6 +21,7 @@
   overflow-x: auto;
   flex-shrink: 0;
   scrollbar-width: none;
+  position: relative;
 }
 .cc-tabs::-webkit-scrollbar { display: none; }
 
@@ -60,6 +62,62 @@
 }
 .cc-tab-add:hover { background: rgba(249, 115, 22, 0.07); border-color: rgba(249, 115, 22, 0.2); color: #f97316; }
 .cc-tab-add:active { transform: scale(0.92); }
+
+/* 历史会话按钮 */
+.cc-history-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  border: 1px solid rgba(0, 0, 0, 0.08); border-radius: 5px;
+  background: transparent; color: #9ca3af; cursor: pointer; flex-shrink: 0;
+  transition: all 0.15s ease; padding: 0; margin-right: 4px;
+}
+.cc-history-btn:hover { background: rgba(249, 115, 22, 0.07); border-color: rgba(249, 115, 22, 0.2); color: #f97316; }
+.cc-history-btn:active { transform: scale(0.92); }
+
+/* 历史会话浮层 */
+.cc-history-popup {
+  position: absolute; z-index: 300;
+  left: 14px; right: 14px; top: 100%; margin-top: 4px;
+  max-height: 240px; overflow-y: auto;
+  background: rgba(255,255,255,0.98);
+  border: 1px solid rgba(15,23,42,0.06); border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(15,23,42,0.12);
+  backdrop-filter: blur(10px);
+}
+.cc-history-popup::-webkit-scrollbar { width: 3px; }
+.cc-history-popup::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 2px; }
+.cc-history-header { padding: 8px 12px; font-size: 11px; font-weight: 600; color: var(--text-secondary); border-bottom: 1px solid rgba(0,0,0,0.04); text-transform: uppercase; letter-spacing: 0.03em; }
+.cc-history-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; cursor: pointer; transition: background 0.1s;
+  border-bottom: 1px solid rgba(0,0,0,0.03);
+}
+.cc-history-item:last-child { border-bottom: none; }
+.cc-history-item:hover { background: rgba(249,115,22,0.05); }
+.cc-session-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.cc-session-dot[data-state="running"] { background: #22c55e; box-shadow: 0 0 0 2px rgba(34,197,94,0.15); }
+.cc-session-dot[data-state="stopped"] { background: #9ca3af; }
+.cc-session-dot[data-state="crashed"] { background: #ef4444; }
+.cc-session-dot[data-state="resuming"] { background: #f59e0b; animation: cc-dot-pulse 1s ease-in-out infinite; }
+.cc-session-name { flex: 1; font-size: 12px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-session-meta { font-size: 10px; color: var(--text-muted); white-space: nowrap; }
+
+/* session 状态 badge（response-content 右上角） */
+.cc-status-badge {
+  position: absolute; top: 6px; right: 8px; z-index: 5;
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 10px;
+  font-size: 10px; font-weight: 500;
+  background: rgba(255,255,255,0.92);
+  border: 1px solid var(--border-light);
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+}
+.cc-status-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+.cc-status-badge[data-state="running"] .cc-status-dot { background: #22c55e; box-shadow: 0 0 0 2px rgba(34,197,94,0.15); }
+.cc-status-badge[data-state="stopped"] .cc-status-dot { background: #9ca3af; }
+.cc-status-badge[data-state="crashed"] .cc-status-dot { background: #ef4444; }
+.cc-status-badge[data-state="resuming"] .cc-status-dot { background: #f59e0b; animation: cc-dot-pulse 1s ease-in-out infinite; }
 
 /* serve 状态指示 */
 .cc-serve-spacer { flex: 1; }

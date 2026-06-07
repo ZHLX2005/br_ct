@@ -39,7 +39,7 @@ export async function mount(container) {
     initializePlatformOptions();
     _runtimeInit = true;
   }
-  initializePopup();
+  await initializePopup();
   initResponse();
   await loadStoredData().catch(() => {});
   setupEventListeners();

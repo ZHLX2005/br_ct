@@ -675,6 +675,12 @@ function renderPlatformPills() {
 
     pill.addEventListener('click', (e) => {
       e.stopPropagation();
+      // 先切换侧边栏显示（更新 activePlatformId + 渲染消息）
+      activePlatformId = platformId;
+      renderCurrentPlatform();
+      renderPlatformTabs();
+      scrollToBottom(true);
+      // 再切浏览器标签页
       switchToPlatformTab(platformId);
     });
 

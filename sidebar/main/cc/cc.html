@@ -8,6 +8,12 @@
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1.5v9M1.5 6h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
   </button>
   <span class="cc-serve-spacer"></span>
+  <button class="cc-history-btn" id="cc-history-btn" title="历史会话">
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/>
+      <path d="M6 3v3l2 1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </button>
   <span class="cc-serve-status" id="cc-serve-status" data-state="disconnected" title="nx-ce serve 状态">
     <span class="cc-serve-dot"></span>
     <span class="cc-serve-text">未连接</span>
@@ -18,8 +24,17 @@
   </button>
 </div>
 
+<div class="cc-history-popup" id="cc-history-popup" style="display:none">
+  <div class="cc-history-header">历史会话</div>
+  <div class="cc-history-list" id="cc-history-list"></div>
+</div>
+
 <section class="cc-page" id="page-main">
   <div class="response-content" id="response-content">
+    <div class="cc-status-badge" id="cc-status-badge" style="display:none">
+      <span class="cc-status-dot"></span>
+      <span class="cc-status-text"></span>
+    </div>
     <div class="response-placeholder response-placeholder--cc">
       <svg class="rp-cc-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
       <span class="rp-cc-label">Claude Code</span>

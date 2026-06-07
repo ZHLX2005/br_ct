@@ -1,7 +1,7 @@
 /**
  * cc.js — Claude Code 模块（完全自包含）
  * mount()：加载 cc.css，注入 cc.html，初始化 tab/WS/serve/skill
- * unmount()：断开 WS，清空 #app-view
+ * unmount()：断开 WS，关闭所有 session，清空 #app-view
  */
 
 // ==================== mount / unmount ====================
@@ -10,8 +10,11 @@ let _ws = null;
 let _wsReady = null;
 let _runtimeInit = false;
 let _ccSessionCounter = 1;
+let _statusTimer = null;
+let _lastSessionForPath = {};
 const CC_DEFAULT_PATH = 'C:\\Windows\\System32';
 const CONNECT_TIMEOUT_MS = 5000;
+const STATUS_POLL_INTERVAL = 30000;
 
 export async function mount(container) {
   // 1. 加载 cc.css
@@ -26,16 +29,20 @@ export async function mount(container) {
   const resp = await fetch('./cc/cc.html');
   container.innerHTML = await resp.text();
 
-  // 初始化第一个 tab（模板中的硬编码 tab）
+  // 初始化第一个 tab（模板中的硬编码 tab）— 用 UUID 覆盖 session
   const firstTab = document.querySelector('.cc-tab.active');
-  if (firstTab && !firstTab._skills) {
+  if (firstTab) {
+    firstTab.dataset.ccSession = crypto.randomUUID();
     Object.assign(firstTab, { _sessionId: null, _messages: '', _path: CC_DEFAULT_PATH, _skills: [], _skillsCwd: null, _skillsLoading: false });
   }
 
   // 3. 初始化子系统
   _initTabListeners();
+  _initHistoryPopup();
+  _initSendButton();
   _initServeControls();
   _initSkillAutocomplete();
+  _initStatusPolling();
   if (!_runtimeInit) {
     _initNxceEventListener();
     _runtimeInit = true;
@@ -43,6 +50,16 @@ export async function mount(container) {
 }
 
 export function unmount(container) {
+  if (_statusTimer) { clearInterval(_statusTimer); _statusTimer = null; }
+  // 关闭所有 tab 的 session
+  document.querySelectorAll('.cc-tab').forEach(tab => {
+    if (tab.dataset.ccSession) {
+      chrome.runtime.sendMessage({
+        action: 'nxce_ws', cmd: 'closeSession',
+        session: tab.dataset.ccSession, cwd: tab._path,
+      }).catch(() => {});
+    }
+  });
   _disconnectWs();
   container.innerHTML = '';
 }
@@ -78,12 +95,11 @@ function _restoreTabState(tab) {
 
 function _createTab() {
   _ccSessionCounter++;
-  const id = 'cc-session-' + _ccSessionCounter;
   const tabsEl = document.getElementById('cc-tabs');
   if (!tabsEl) return null;
   const tab = document.createElement('div');
   tab.className = 'cc-tab';
-  tab.dataset.ccSession = id;
+  tab.dataset.ccSession = crypto.randomUUID();
   Object.assign(tab, { _sessionId: null, _messages: '', _path: CC_DEFAULT_PATH, _skills: [], _skillsCwd: null, _skillsLoading: false });
   tab.innerHTML = '<span class="cc-tab-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span><span class="cc-tab-label">会话 ' + _ccSessionCounter + '</span><span class="cc-tab-close" title="关闭">×</span>';
   tabsEl.insertBefore(tab, tabsEl.querySelector('.cc-tab-add'));
@@ -108,16 +124,21 @@ function _switchTab(tab) {
   const rc = document.getElementById('response-content');
   if (pi) pi.value = tab._path ?? CC_DEFAULT_PATH;
   if (rc) rc.innerHTML = tab._messages ?? '';
-  if (cur && cur !== tab) {
-    tab._sessionId = null;
-    tab._skills = [];
-    tab._skillsCwd = null;
-    tab._skillsLoading = false;
-  }
+  // 切换后立即查 skills 用于 / 补全（若未缓存则发起获取）
+  _getTabSkills(tab);
+  // 切换后立即重新查状态
+  _restartStatusPoll();
 }
 
 function _closeTab(tab) {
   if (!tab) return;
+  // close session
+  const session = tab.dataset.ccSession;
+  const cwd = tab._path;
+  if (session) {
+    chrome.runtime.sendMessage({ action: 'nxce_ws', cmd: 'closeSession', session, cwd }).catch(() => {});
+    if (_lastSessionForPath[cwd] === session) delete _lastSessionForPath[cwd];
+  }
   const active = tab.classList.contains('active');
   const prev = tab.previousElementSibling;
   const next = tab.nextElementSibling;
@@ -153,8 +174,107 @@ function _initTabListeners() {
       tab._path = nv; tab._skills = []; tab._skillsCwd = null; tab._skillsLoading = false; tab._sessionId = null;
       const rc = document.getElementById('response-content');
       if (rc) { rc.innerHTML = ''; tab._messages = ''; }
+      // 路径变了，重新查状态
+      _restartStatusPoll();
     });
   }
+}
+
+// ==================== History Popup ====================
+
+function _initHistoryPopup() {
+  const btn = document.getElementById('cc-history-btn');
+  const popup = document.getElementById('cc-history-popup');
+  if (!btn || !popup) return;
+
+  function close() { popup.style.display = 'none'; }
+
+  btn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (popup.style.display === 'block') { close(); return; }
+    const resp = await chrome.runtime.sendMessage({ action: 'nxce_ws', cmd: 'listSessions' });
+    if (!resp?.ok || !resp.data?.sessions?.length) {
+      popup.innerHTML = '<div class="cc-history-header">历史会话</div><div style="padding:20px;text-align:center;color:#9ca3af;font-size:12px;">暂无历史会话</div>';
+      popup.style.display = 'block';
+      return;
+    }
+    const list = document.getElementById('cc-history-list');
+    if (!list) return;
+    list.innerHTML = resp.data.sessions.map(s => {
+      const state = s.lifecycleState || 'stopped';
+      return '<div class="cc-history-item" data-session="' + _escHtml(s.name || '') + '" data-cwd="' + _escHtml(s.cwd || '') + '">' +
+        '<span class="cc-session-dot" data-state="' + _escHtml(state) + '"></span>' +
+        '<span class="cc-session-name">' + _escHtml(s.name || 'unknown') + '</span>' +
+        '<span class="cc-session-meta">' + _escHtml(s.cwd || '') + (s.model ? ' · ' + _escHtml(s.model) : '') + '</span>' +
+        '</div>';
+    }).join('');
+    popup.style.display = 'block';
+  });
+
+  // 点击某条历史会话 → 新建 tab 加载
+  popup.addEventListener('click', (e) => {
+    const item = e.target.closest('.cc-history-item');
+    if (!item) return;
+    const sessionId = item.dataset.session;
+    const cwd = item.dataset.cwd;
+    if (!sessionId) return;
+    close();
+    _restoreSession(sessionId, cwd);
+  });
+
+  // 点击外部关闭
+  document.addEventListener('click', (e) => {
+    if (popup.style.display !== 'block') return;
+    if (!btn.contains(e.target) && !popup.contains(e.target)) close();
+  }, { capture: true });
+}
+
+function _restoreSession(sessionId, cwd) {
+  const tab = _createTab();
+  if (!tab) return;
+  // nx-ce: session id = name, same name:cwd resumes the historical session
+  tab.dataset.ccSession = sessionId;
+  if (cwd) { tab._path = cwd; tab._skills = []; tab._skillsCwd = null; }
+  _getTabSkills(tab); // 刷新 skills 以支持 / 补全
+  _restoreTabState(tab);
+  _restartStatusPoll();
+}
+
+// ==================== Status Polling ====================
+
+function _initStatusPolling() {
+  _restartStatusPoll();
+}
+
+function _restartStatusPoll() {
+  if (_statusTimer) { clearInterval(_statusTimer); _statusTimer = null; }
+  _fetchStatus();
+  _statusTimer = setInterval(_fetchStatus, STATUS_POLL_INTERVAL);
+}
+
+function _fetchStatus() {
+  const tab = _getActiveTab();
+  const badge = document.getElementById('cc-status-badge');
+  if (!tab || !badge) return;
+  const cwd = tab._path;
+  if (!cwd) return;
+  chrome.runtime.sendMessage({
+    action: 'nxce_ws', cmd: 'getStatus',
+    session: tab.dataset.ccSession,
+    cwd,
+  }, (resp) => {
+    if (chrome.runtime.lastError || !resp?.ok || !resp.data) {
+      badge.style.display = 'none';
+      return;
+    }
+    // nx-ce v0.2.7+: lifecycleState 精确状态 (running/stopped/crashed/resuming)
+    const state = resp.data.lifecycleState || (resp.data.isActive ? 'running' : 'stopped');
+    const statusMap = { running: '运行中', stopped: '已停止', crashed: '已崩溃', resuming: '恢复中' };
+    const textEl = badge.querySelector('.cc-status-text');
+    if (textEl) textEl.textContent = statusMap[state] || state;
+    badge.dataset.state = state;
+    badge.style.display = 'inline-flex';
+  });
 }
 
 // ==================== WS ====================
@@ -256,6 +376,33 @@ function _finalizeStream(tab) {
   tab._messages = rc.innerHTML;
 }
 
+// ==================== Send Button ====================
+
+function _initSendButton() {
+  const sendBtn = document.getElementById('chat-btn-send');
+  const input = document.getElementById('chat-input');
+  if (sendBtn) {
+    sendBtn.addEventListener('click', _handleSend);
+    sendBtn.disabled = false;
+  }
+  if (input) {
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        _handleSend();
+      }
+    });
+    // 输入变化时启用/禁用发送按钮 + 自动调整高度
+    const autoResize = () => {
+      if (sendBtn) sendBtn.disabled = !input.value.trim();
+      input.style.height = 'auto';
+      input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+    };
+    input.addEventListener('input', autoResize);
+    autoResize();
+  }
+}
+
 // ==================== Serve ====================
 
 function _setServeStatus(state, text) {
@@ -328,14 +475,15 @@ async function _handleSend() {
   ld.innerHTML = '<div class="notion-chat-avatar"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div><div class="cc-loading-dots"><span class="cc-loading-dot"></span><span class="cc-loading-dot"></span><span class="cc-loading-dot"></span></div>';
   if (rc) { rc.appendChild(ld); rc.scrollTop = rc.scrollHeight; }
 
-  const prefix = skills.length ? '[已选择 skill: ' + skills.join(', ') + '] ' : '';
   try {
     const session = tab.dataset.ccSession || 'default';
     await new Promise((resolve, reject) => {
       let settled = false;
       const finish = (err, v) => { if (settled) return; settled = true; tab._activeQuery = null; if (err) reject(err); else resolve(v); };
       tab._activeQuery = { resolve: r => finish(null, r), reject: e => finish(e) };
-      chrome.runtime.sendMessage({ action: 'nxce_ws', cmd: 'query', session, cwd: workDir, prompt: prefix + prompt, skills, queryId: 'q-' + Date.now() }, resp => {
+      const queryMsg = { action: 'nxce_ws', cmd: 'query', session, cwd: workDir, prompt, queryId: 'q-' + Date.now() };
+      if (skills.length > 0) queryMsg.skills = skills;
+      chrome.runtime.sendMessage(queryMsg, resp => {
         if (chrome.runtime.lastError) { finish(new Error(chrome.runtime.lastError.message)); return; }
         if (!resp?.ok) finish(new Error(resp?.error || '失败'));
       });
@@ -360,11 +508,11 @@ function _getTabSkills(tab) {
   tab._skillsLoading = true;
   const session = tab.dataset.ccSession || 'default';
   const cwd = tab._path || CC_DEFAULT_PATH;
-  tab._silentTurn = true;
-  chrome.runtime.sendMessage({ action: 'nxce_ws', cmd: 'query', session, cwd, prompt: ' ', queryId: 'skill-init-' + Date.now() }, resp => {
-    if (chrome.runtime.lastError || !resp?.ok) { tab._skillsLoading = false; return; }
-    let w = 0;
-    const t = setInterval(() => { w += 200; if (tab._skills.length > 0 || w > 10000) { clearInterval(t); tab._skillsLoading = false; } }, 200);
+  chrome.runtime.sendMessage({ action: 'nxce_ws', cmd: 'getSkills', session, cwd }, resp => {
+    tab._skillsLoading = false;
+    if (!resp?.ok || !resp.data?.skills) return;
+    tab._skills = resp.data.skills.map(s => typeof s === 'string' ? { name: s, desc: '' } : { name: s.name || String(s), desc: s.desc || '' }).sort((a, b) => a.name.localeCompare(b.name));
+    tab._skillsCwd = cwd;
   });
 }
 
