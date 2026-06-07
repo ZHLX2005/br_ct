@@ -21,3 +21,6 @@ generate_key.js
 debug_selector.js
 _run_debug.js
 .claude/prompts.log
+.omc/
+native_host/.omc/
+.CLAUDE/logs/
