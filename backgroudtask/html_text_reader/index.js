@@ -74,6 +74,35 @@ export function setupHtmlTextReaderListener() {
             extractPageText(sendResponse);
             return true;
         }
+
+        // 划词提取结果 — 先存到 session storage，再打开 sidebar 并转发
+        if (request.action === "sideSelExtracted") {
+            // 1) 存到 session storage（可靠：sidebar 加载后自己来取）
+            chrome.storage.session.set({
+                pendingSelection: {
+                    text: request.text,
+                    title: request.title,
+                    url: request.url,
+                }
+            }).catch(() => {});
+
+            // 2) 打开 sidebar（如果没开）
+            const windowId = sender.tab?.windowId;
+            if (windowId) {
+                chrome.sidePanel.open({ windowId }).catch(() => {});
+            }
+
+            // 3) 也尝试直接转发（sidebar 已经开着的情况，快速路径）
+            chrome.runtime.sendMessage({
+                action: "sidebarSelectionResult",
+                text: request.text,
+                title: request.title,
+                url: request.url,
+            }).catch(() => {});
+            sendResponse({ status: "success" });
+            return true;
+        }
+
         return false;
     });
 }

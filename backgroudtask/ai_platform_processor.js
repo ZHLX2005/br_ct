@@ -180,7 +180,124 @@ export function setupMessageListener() {
       sendResponse({ status: "closing_tabs" });
       return true;
     }
+
+    // 直接发送模式：jsdom 注入，不捕获回复
+    if (request.action === "directSend") {
+      const { platform, message, switchToTab } = request;
+      handleDirectSend(platform, message, switchToTab)
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ status: "error", error: error.message }));
+      return true;
+    }
+
+    // 查询已注入的平台标签页状态
+    if (request.action === "getPlatformTabStatus") {
+      getPlatformTabStatus()
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ status: "error", error: error.message }));
+      return true;
+    }
+
+    // 获取当前激活标签页信息（用于添加到工作区）
+    if (request.action === "getCurrentTabInfo") {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs && tabs[0]) {
+          sendResponse({ status: "success", tab: { id: tabs[0].id, title: tabs[0].title, url: tabs[0].url, favIconUrl: tabs[0].favIconUrl } });
+        } else {
+          sendResponse({ status: "error", error: "未找到当前标签页" });
+        }
+      });
+      return true;
+    }
+
+    // 切换到指定标签页
+    if (request.action === "switchToTab") {
+      chrome.tabs.update(request.tabId, { active: true }, () => {
+        if (chrome.runtime.lastError) {
+          sendResponse({ status: "error", error: chrome.runtime.lastError.message });
+        } else {
+          sendResponse({ status: "success" });
+        }
+      });
+      return true;
+    }
+
+    // 只打开平台标签页，不发送消息（用于 tab click 导航）
+    if (request.action === "openPlatformTab") {
+      const { platform } = request;
+      openPlatformTab(platform)
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ status: "error", error: error.message }));
+      return true;
+    }
   });
+}
+
+/**
+ * 获取各平台已注入的标签页状态
+ */
+async function getPlatformTabStatus() {
+  const status = {};
+  for (const [platform, tabIds] of injectedTabs) {
+    const validTabs = [];
+    for (const tabId of tabIds) {
+      try {
+        const tab = await chrome.tabs.get(tabId);
+        validTabs.push({ id: tab.id, title: tab.title, url: tab.url });
+      } catch (e) {
+        // tab no longer exists
+      }
+    }
+    if (validTabs.length > 0) {
+      status[platform] = validTabs;
+    }
+  }
+  return { status: "success", tabs: status };
+}
+
+/**
+ * 直接发送：只注入基础脚本，不注入 response listener，
+ * 不做 clipboard capture，发送即完成。
+ */
+async function handleDirectSend(platform, message, switchToTab = true) {
+  const tab = await findOrCreatePlatformTab(platform, !!switchToTab, !!switchToTab);
+  await waitForTabComplete(tab.id);
+
+  // 只注入基础内容脚本，不注入 response listener
+  const platformInjected = injectedTabs.get(platform);
+  if (!platformInjected || !platformInjected.has(tab.id)) {
+    await injectScript(tab.id, platform);
+  }
+
+  // 空消息 → 不发送，只是打开标签页
+  if (!message || !message.trim()) {
+    return { status: "success", platform, tabId: tab.id };
+  }
+
+  try {
+    await sendMessage(tab.id, message, "sidebar-direct");
+    if (switchToTab) {
+      await chrome.tabs.update(tab.id, { active: true });
+    }
+    return { status: "success", platform, tabId: tab.id };
+  } catch (err) {
+    // 重试：重新注入并发送
+    console.warn(`[directSend] ${platform} 首次发送失败，尝试重注:`, err.message);
+    injectedTabs.get(platform)?.delete(tab.id);
+    await injectScript(tab.id, platform);
+    await sendMessage(tab.id, message, "sidebar-direct");
+    if (switchToTab) {
+      await chrome.tabs.update(tab.id, { active: true });
+    }
+    return { status: "success", platform, tabId: tab.id, retried: true };
+  }
+}
+
+/**
+ * 只打开平台标签页，不发送消息（用于点击平台页签导航）
+ */
+async function openPlatformTab(platform) {
+  return handleDirectSend(platform, "", true);
 }
 
 export async function processTaskQueueConcurrent(queue, options = {}, source = "popup") {

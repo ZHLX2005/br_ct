@@ -47,8 +47,56 @@ let extractUrl;
 let extractContent;
 let closeResult;
 
-// + 菜单状态
-let isPlusMenuOpen = false;
+// 平台选择面板状态
+let isPlatformPanelOpen = false;
+
+// 工作区标签
+let workspaceTabs = [];         // { localId, tabId, title, url, favIconUrl }
+let workspaceTabCounter = 0;
+
+// 右键菜单
+let contextMenuTarget = null;   // 当前右键点击的目标索引
+
+// 直接发送模式（默认启用，可切换）
+let isDirectMode = true;
+const MODE_STORAGE_KEY = "sidebar_send_mode";
+
+async function loadSendMode() {
+  try {
+    const result = await chrome.storage.session?.get(MODE_STORAGE_KEY);
+    if (result?.[MODE_STORAGE_KEY] !== undefined) {
+      isDirectMode = result[MODE_STORAGE_KEY];
+      updateModeToggleUI();
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function toggleSendMode() {
+  isDirectMode = !isDirectMode;
+  updateModeToggleUI();
+  try {
+    chrome.storage.session?.set({ [MODE_STORAGE_KEY]: isDirectMode });
+  } catch (e) { /* ignore */ }
+  showTempMessage(isDirectMode ? "已切换为直发模式" : "已切换为复制模式");
+}
+
+function updateModeToggleUI() {
+  if (!elements.modeToggle) return;
+  elements.modeToggle.textContent = isDirectMode ? "直发" : "复制";
+  elements.modeToggle.classList.toggle("active", isDirectMode);
+}
+
+// AI 平台 -> 真实标签页映射缓存
+let platformTabCache = {};      // platform -> { tabId, title, url }
+
+// 保存的平台状态（页面加载时从 storage 恢复，供 platform panel 使用）
+let savedPlatformStates = {};
+
+// 历史下拉状态
+let isHistoryOpen = false;
+
+// 划词选择模式
+let isSelectionMode = false;
 
 /**
  * 防抖保存消息内容
@@ -85,24 +133,38 @@ export async function initializePopup() {
   elements = {
     messageInput: document.getElementById("chat-input"),
     sendButton: document.getElementById("chat-btn-send"),
-    closeTabsButton: document.getElementById("close-tabs-button"),
-    selectAllButton: document.getElementById("select-all"),
+    closeTabsButton: document.getElementById("toolbar-close-ai"),
+    selectAllButton: document.getElementById("toolbar-select-all"),
     historySelect: document.getElementById("history-select"),
     promptOptimizerSelect: document.getElementById("prompt-optimizer-select"),
-    plusButton: document.getElementById("chat-btn-plus"),
-    plusMenu: document.getElementById("plus-menu"),
-    plusOverlay: document.getElementById("plus-menu-overlay"),
-    platformTabs: document.getElementById("platform-tabs"),
-    openOptionsButton: document.getElementById("open-options"),
+    workspaceTabs: document.getElementById("workspace-tabs"),
+    workspaceTabAdd: document.getElementById("workspace-tab-add"),
+    platformPanel: document.getElementById("platform-panel"),
+    platformSelectorBtn: document.getElementById("platform-selector-btn"),
+    platformCount: document.getElementById("platform-count"),
+    platformOptionsRow: document.getElementById("platform-options-row"),
+    platformPills: document.getElementById("platform-pills"),
+    contextMenu: document.getElementById("tab-context-menu"),
+    promptBar: document.getElementById("prompt-bar"),
+    promptBarName: document.getElementById("prompt-bar-name"),
+    promptBarAlias: document.getElementById("prompt-bar-alias"),
+    promptBarClear: document.getElementById("prompt-bar-clear"),
+    historyDropdown: document.getElementById("history-dropdown"),
+    footHistoryBtn: document.getElementById("foot-history-btn"),
+    modeToggle: document.getElementById("mode-toggle"),
   };
 
   // 提取页面文本相关元素
-  extractButton = document.getElementById("extract-text-button");
+  extractButton = document.getElementById("toolbar-extract");
   extractResult = document.getElementById("extract-result");
   extractTitle = document.getElementById("extract-title");
   extractUrl = document.getElementById("extract-url");
   extractContent = document.getElementById("extract-content");
   closeResult = document.getElementById("close-result");
+
+  // 划词按钮
+  elements.selectionBtn = document.getElementById("toolbar-selection");
+  elements.clearChatBtn = document.getElementById("toolbar-clear-chat");
 
   // 自动聚焦输入框
   focusInputAndSetCursor(elements.messageInput);
@@ -110,11 +172,26 @@ export async function initializePopup() {
   // 初始化 /alias 快捷输入
   initAliasShortcut(elements.messageInput, PROMPT_TEMPLATES, elements.promptOptimizerSelect);
 
-  // 初始化优化器下拉框
+  // 初始化优化器下拉框（隐藏，仅用于 /alias 功能）
   populateOptimizer(elements.promptOptimizerSelect, PROMPT_TEMPLATES);
 
   // 加载并应用平台可见性设置
   await loadPlatformVisibilitySettings();
+
+  // 初始化工作区标签
+  initWorkspaceTabs();
+
+  // 同步平台计数
+  updatePlatformCount();
+
+  // 恢复发送模式
+  loadSendMode();
+
+  // 同步当前提示词指示器
+  syncPromptIndicator();
+
+  // 刷新平台标签页状态
+  refreshPlatformTabStatus();
 }
 
 /**
@@ -168,6 +245,7 @@ export async function loadStoredData() {
  * 恢复平台选择状态
  */
 function restorePlatformStates(platformStates) {
+  savedPlatformStates = { ...platformStates };
   const checkboxes = document.querySelectorAll('.platform-icon-option input[type="checkbox"]');
   checkboxes.forEach((cb) => {
     if (platformStates.hasOwnProperty(cb.dataset.platform)) {
@@ -175,16 +253,15 @@ function restorePlatformStates(platformStates) {
     }
   });
   updateSelectAllButton();
-  renderPlatformTabs();
+  updatePlatformCount();
 }
 
 /**
  * 设置所有事件监听器
  */
 export function setupEventListeners() {
-  // + 菜单切换
-  elements.plusButton?.addEventListener("click", togglePlusMenu);
-  elements.plusOverlay?.addEventListener("click", closePlusMenu);
+  // 平台选择按钮展开/收起
+  elements.platformSelectorBtn?.addEventListener("click", togglePlatformPanel);
 
   // 监听来自options页面的平台可见性更新消息
   setupPlatformVisibilityMessageListener((settings) => {
@@ -235,45 +312,28 @@ export function setupEventListeners() {
     await debouncedSaveMessage(elements.messageInput.value);
   });
 
-  // 历史记录选择
+  // 历史消息选择
   elements.historySelect.addEventListener("change", () => {
     if (elements.historySelect.value) {
       elements.messageInput.value = elements.historySelect.value;
       elements.messageInput.dispatchEvent(new Event("input"));
-      closePlusMenu();
+      closeHistoryDropdown();
     }
   });
 
-  // 优化器选择
-  elements.promptOptimizerSelect.addEventListener("change", async (e) => {
-    const value = e.detail.value;
-    try {
-      await saveOptimizerSetting(value);
-    } catch (error) {
-      console.error("保存优化器设置失败:", error);
-    }
-  });
-
-  // 平台复选框变化
-  const checkboxes = document.querySelectorAll('.platform-icon-option input[type="checkbox"]');
-  checkboxes.forEach((cb) => {
-    cb.addEventListener("change", async () => {
-      togglePlatformCheckbox(cb, cb.checked);
+  // 平台复选框变化（在 platform panel 里）
+  const panelCheckboxes = () => document.querySelectorAll('#platform-panel .platform-icon-option input[type="checkbox"]');
+  elements.platformPanel?.addEventListener("change", async (e) => {
+    if (e.target.matches('.platform-icon-option input[type="checkbox"]')) {
+      togglePlatformCheckbox(e.target, e.target.checked);
       try {
-        await savePlatformStates(document.querySelectorAll('.platform-icon-option input[type="checkbox"]'));
+        await savePlatformStates(panelCheckboxes());
       } catch (error) {
         console.error("保存平台状态失败:", error);
       }
       updateSelectAllButton();
-      renderPlatformTabs();
-
-      // 自动切换到该平台
-      if (cb.checked) {
-        const platforms = getCheckedPlatforms();
-        activePlatformId = platforms[0];
-        renderCurrentPlatform();
-      }
-    });
+      updatePlatformCount();
+    }
   });
 
   // 全选/取消全选按钮
@@ -284,6 +344,12 @@ export function setupEventListeners() {
 
   // 关闭AI标签页按钮
   elements.closeTabsButton?.addEventListener("click", closeAllAITabs);
+
+  // 清空聊天内容
+  elements.clearChatBtn?.addEventListener("click", () => {
+    resetResponseDisplay();
+    showTempMessage("聊天内容已清空");
+  });
 
   // 提取页面文本按钮
   if (extractButton) {
@@ -297,34 +363,249 @@ export function setupEventListeners() {
     });
   }
 
-  // 打开设置页面
-  elements.openOptionsButton?.addEventListener("click", () => {
-    chrome.runtime.openOptionsPage();
+  // 划词模式切换
+  if (elements.selectionBtn) {
+    elements.selectionBtn.addEventListener("click", toggleSelectionMode);
+  }
+
+  // 清除提示词
+  elements.promptBarClear?.addEventListener("click", clearSelectedPrompt);
+
+  // 历史按钮切换
+  elements.footHistoryBtn?.addEventListener("click", toggleHistoryDropdown);
+
+  // 直发/复制模式切换
+  elements.modeToggle?.addEventListener("click", toggleSendMode);
+
+  // 顶部 + 按钮 → 添加工作区
+  elements.workspaceTabAdd?.addEventListener("click", () => {
+    addCurrentPageToWorkspace();
   });
+
+  // 右键菜单事件
+  elements.contextMenu?.addEventListener("click", (e) => {
+    const item = e.target.closest(".context-menu-item");
+    if (!item || contextMenuTarget === null) return;
+    const action = item.dataset.action;
+    handleContextMenuAction(action, contextMenuTarget);
+    hideContextMenu();
+  });
+
+  // 点击空白区域关闭右键菜单 & 平台面板
+  document.addEventListener("click", (e) => {
+    if (elements.contextMenu && !elements.contextMenu.contains(e.target)) {
+      hideContextMenu();
+    }
+    // 点击面板外关闭平台面板
+    if (isPlatformPanelOpen
+      && !elements.platformSelectorBtn?.contains(e.target)
+      && !elements.platformPanel?.contains(e.target)) {
+      closePlatformPanel();
+    }
+  });
+
+  // 阻止右键默认菜单（仅在工作区标签区域）
+  elements.workspaceTabs?.addEventListener("contextmenu", (e) => {
+    const tabEl = e.target.closest(".workspace-tab");
+    if (tabEl) {
+      e.preventDefault();
+      const idx = parseInt(tabEl.dataset.index);
+      if (!isNaN(idx)) {
+        showContextMenu(e.clientX, e.clientY, idx);
+      }
+    }
+  });
+
+  // 监听提示词优化器变化，同步指示器
+  elements.promptOptimizerSelect?.addEventListener("change", (e) => {
+    syncPromptIndicator();
+  });
+
+  // 定时刷新平台标签页状态
+  // 不刷新 renderPlatformTabs 了，因为已经没有那个 UI 了
+  setInterval(() => {
+    refreshPlatformTabStatus();
+    updatePlatformCount();
+  }, 15000);
 }
 
-// ==================== + 菜单 ====================
+// ==================== 平台选择面板 ====================
 
-function togglePlusMenu() {
-  if (isPlusMenuOpen) {
-    closePlusMenu();
+function togglePlatformPanel() {
+  if (isPlatformPanelOpen) {
+    closePlatformPanel();
   } else {
-    openPlusMenu();
+    openPlatformPanel();
   }
 }
 
-function openPlusMenu() {
-  isPlusMenuOpen = true;
-  elements.plusMenu.style.display = "block";
-  elements.plusOverlay.style.display = "block";
-  elements.plusButton.classList.add("active");
+function openPlatformPanel() {
+  isPlatformPanelOpen = true;
+  elements.platformSelectorBtn?.classList.add("active");
+  elements.platformPanel?.classList.add("open");
+  // 填充平台选项（如果还没填充）
+  if (elements.platformOptionsRow && !elements.platformOptionsRow.children.length) {
+    renderPlatformOptions();
+  }
 }
 
-function closePlusMenu() {
-  isPlusMenuOpen = false;
-  elements.plusMenu.style.display = "none";
-  elements.plusOverlay.style.display = "none";
-  elements.plusButton.classList.remove("active");
+function closePlatformPanel() {
+  isPlatformPanelOpen = false;
+  elements.platformSelectorBtn?.classList.remove("active");
+  elements.platformPanel?.classList.remove("open");
+}
+
+function renderPlatformOptions() {
+  if (!elements.platformOptionsRow) return;
+
+  const order = Object.keys(PLATFORM_CONFIG);
+
+  elements.platformOptionsRow.innerHTML = order.map(id => {
+    const config = PLATFORM_CONFIG[id];
+    if (!config) return '';
+    const name = config.shortName || config.name || id;
+    const icon = config.shortIcon || config.icon || '?';
+    const color = config.color || '#4361ee';
+    // 通过已加载的 savedPlatformStates 决定初始勾选状态
+    const checked = savedPlatformStates[id] !== false;
+    return `
+      <label class="platform-icon-option">
+        <input type="checkbox" data-platform="${id}" ${checked ? 'checked' : ''}>
+        <div class="icon-wrapper" style="border-color:${color};color:${checked ? 'white' : color};background:${checked ? color : '#f0f4ff'}">${icon}</div>
+        <span class="platform-label">${name}</span>
+      </label>`;
+  }).join('');
+
+  // 让 checkbox 的视觉和状态同步
+  elements.platformOptionsRow.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    const wrapper = cb.closest('.platform-icon-option')?.querySelector('.icon-wrapper');
+    if (!wrapper) return;
+    const color = wrapper.style.borderColor || '#4361ee';
+    const updateVisual = () => {
+      wrapper.style.background = cb.checked ? color : '#f0f4ff';
+      wrapper.style.color = cb.checked ? 'white' : color;
+    };
+    cb.addEventListener('change', updateVisual);
+    updateVisual();
+  });
+}
+
+function updatePlatformCount() {
+  if (!elements.platformCount) return;
+  const count = document.querySelectorAll('#platform-panel .platform-icon-option input[type="checkbox"]:checked').length;
+  elements.platformCount.textContent = count;
+  renderPlatformPills();
+}
+
+/**
+ * 渲染已勾选平台的快捷按钮（pills）
+ * 每个 pill 点击直接映射到对应的浏览器标签页
+ */
+function renderPlatformPills() {
+  if (!elements.platformPills) return;
+
+  // 确定已勾选的平台列表
+  const checkboxes = document.querySelectorAll('#platform-panel .platform-icon-option input[type="checkbox"]');
+  let activePlatforms;
+
+  if (checkboxes.length > 0) {
+    // 面板已渲染 → 从 DOM checkbox 读取
+    activePlatforms = [];
+    checkboxes.forEach(cb => { if (cb.checked) activePlatforms.push(cb.dataset.platform); });
+  } else {
+    // 面板还没渲染 → 用 savedPlatformStates 推断
+    const savedKeys = Object.keys(savedPlatformStates);
+    if (savedKeys.length > 0) {
+      activePlatforms = savedKeys.filter(id => savedPlatformStates[id] !== false);
+    } else {
+      // 从未保存过 → 默认全部
+      activePlatforms = Object.keys(PLATFORM_CONFIG);
+    }
+  }
+
+  if (activePlatforms.length === 0) {
+    elements.platformPills.innerHTML = '';
+    return;
+  }
+
+  elements.platformPills.innerHTML = '';
+  activePlatforms.forEach(platformId => {
+    const config = PLATFORM_CONFIG[platformId];
+    if (!config) return;
+    const name = config.shortName || config.name || platformId;
+
+    const pill = document.createElement('button');
+    pill.className = 'platform-pill';
+    pill.dataset.platform = platformId;
+    pill.title = `切换到 ${name}`;
+    pill.textContent = name;
+
+    pill.addEventListener('click', (e) => {
+      e.stopPropagation();
+      switchToPlatformTab(platformId);
+    });
+
+    elements.platformPills.appendChild(pill);
+  });
+}
+
+// ==================== 提示词指示器 ====================
+
+function syncPromptIndicator() {
+  if (!elements.promptBar) return;
+  const selectedValue = elements.promptOptimizerSelect?.querySelector('.selected-value');
+  const value = selectedValue?.dataset?.value;
+  const label = selectedValue?.textContent || '';
+  const template = selectedValue?.dataset?.template;
+
+  if (value && value !== '' && label !== '不使用优化') {
+    // 找到对应的模板信息获取 alias
+    let alias = '';
+    for (const key in PROMPT_TEMPLATES) {
+      if (key === value && PROMPT_TEMPLATES[key].alias) {
+        alias = '/' + PROMPT_TEMPLATES[key].alias;
+        break;
+      }
+    }
+    elements.promptBarName.textContent = label;
+    elements.promptBarAlias.textContent = alias || '';
+    elements.promptBar.style.display = '';
+  } else {
+    elements.promptBar.style.display = 'none';
+  }
+}
+
+function clearSelectedPrompt() {
+  const selectedValue = elements.promptOptimizerSelect?.querySelector('.selected-value');
+  if (selectedValue) {
+    selectedValue.textContent = '不使用优化';
+    selectedValue.dataset.value = '';
+    selectedValue.dataset.template = '';
+  }
+  // 触发 change 事件
+  const event = new CustomEvent('change', { detail: { value: '', template: '', label: '不使用优化' } });
+  elements.promptOptimizerSelect?.dispatchEvent(event);
+  syncPromptIndicator();
+}
+
+// ==================== 历史消息下拉 ====================
+
+function toggleHistoryDropdown() {
+  if (isHistoryOpen) {
+    closeHistoryDropdown();
+  } else {
+    openHistoryDropdown();
+  }
+}
+
+function openHistoryDropdown() {
+  isHistoryOpen = true;
+  if (elements.historyDropdown) elements.historyDropdown.style.display = 'block';
+}
+
+function closeHistoryDropdown() {
+  isHistoryOpen = false;
+  if (elements.historyDropdown) elements.historyDropdown.style.display = 'none';
 }
 
 // ==================== 输入框自动调整 ====================
@@ -332,8 +613,7 @@ function closePlusMenu() {
 function autoResizeInput(el) {
   if (!el) return;
   el.style.height = "auto";
-  const newHeight = Math.min(el.scrollHeight, 120);
-  el.style.height = newHeight + "px";
+  el.style.height = el.scrollHeight + "px";
 }
 
 function updateSendButton() {
@@ -345,38 +625,23 @@ function updateSendButton() {
   elements.sendButton.disabled = !hasText;
 }
 
-// ==================== 平台标签 ====================
+// ==================== 平台标签（已迁移到 platform panel） ====================
 
+// 旧的 renderPlatformTabs 已由 platform-panel 替代
+// 保留一个空桩给旧调用点使用
 function renderPlatformTabs() {
-  if (!elements.platformTabs) return;
-  const platforms = getCheckedPlatforms();
-
-  if (platforms.length === 0) {
-    elements.platformTabs.innerHTML = "";
-    return;
-  }
-
-  elements.platformTabs.innerHTML = platforms.map(id => {
-    const config = PLATFORM_CONFIG[id];
-    const name = config?.name || id;
-    const color = config?.color || "#666";
-    const icon = config?.shortIcon || config?.icon || id[0]?.toUpperCase() || "?";
-    const activeClass = activePlatformId === id ? " active" : "";
-    return `<button class="platform-tab${activeClass}" data-platform="${id}" style="--tab-color:${color}">${icon} ${name}</button>`;
-  }).join("");
-
-  elements.platformTabs.querySelectorAll(".platform-tab").forEach(tab => {
-    tab.addEventListener("click", () => {
-      activePlatformId = tab.dataset.platform;
-      renderPlatformTabs();
-      renderCurrentPlatform();
-    });
-  });
+  // no-op: 平台选择现在在 platform-panel 中通过 checkbox 完成
 }
 
 // ==================== 发送逻辑 ====================
 
 async function startSending() {
+  // 直接发送模式：不捕获回复，发送后跳转到 AI 页面
+  if (isDirectMode) {
+    await startDirectSend();
+    return;
+  }
+
   if (saveTimeout) {
     clearTimeout(saveTimeout);
     saveTimeout = null;
@@ -390,11 +655,14 @@ async function startSending() {
   const templateKey = selectedValue.dataset.value;
   const templateContent = selectedValue.dataset.template;
 
+  const extractedText = getExtractedContentText();
+
   let finalMessage = originalMessage;
   if (templateKey && templateContent) {
-    finalMessage = templateContent.includes("%s")
-      ? templateContent.replace("%s", originalMessage)
-      : originalMessage + " " + templateContent;
+    finalMessage = applyPromptTemplate(templateContent, originalMessage, extractedText);
+  } else if (extractedText) {
+    // 没有模板但有提取内容：把上下文拼在用户消息前面
+    finalMessage = extractedText + "\n\n" + originalMessage;
   }
 
   const selectedPlatforms = Array.from(document.querySelectorAll('.platform-icon-option input[type="checkbox"]'))
@@ -915,8 +1183,23 @@ export function initializeResponseDisplay() {
       handlePlatformCapture(platformId, request.data);
     }
 
+    // 划词选择结果
+    if (request.action === "sidebarSelectionResult") {
+      handleSidebarSelection(request.text, request.title, request.url);
+      // 清除 storage 中的 pending 数据，避免下次加载时重复
+      chrome.storage.session.remove("pendingSelection").catch(() => {});
+    }
+
     return false;
   });
+
+  // 加载时检查是否有 pending 的划词结果（sidebar 关闭时通过 storage 中转）
+  chrome.storage.session.get("pendingSelection").then((data) => {
+    if (data.pendingSelection) {
+      handleSidebarSelection(data.pendingSelection.text, data.pendingSelection.title, data.pendingSelection.url);
+      chrome.storage.session.remove("pendingSelection").catch(() => {});
+    }
+  }).catch(() => {});
 
   renderCurrentPlatform();
   console.log("多平台回复展示模块已初始化");
@@ -957,7 +1240,7 @@ async function toggleSelectAll() {
     console.error("保存平台状态失败:", error);
   }
 
-  renderPlatformTabs();
+  updatePlatformCount();
 
   const platforms = getCheckedPlatforms();
   if (platforms.length) {
@@ -978,13 +1261,13 @@ function closeAllAITabs() {
       showTempMessage("关闭标签页失败");
     } else {
       showTempMessage("正在关闭AI标签页");
+      closePlatformPanel();
     }
     setTimeout(() => {
-      resetButtonState(elements.closeTabsButton, "关闭AI标签页");
+      resetButtonState(elements.closeTabsButton, "关闭AI");
       elements.closeTabsButton.style.cursor = 'pointer';
     }, 1500);
   });
-  closePlusMenu();
 }
 
 // ==================== 提取页面文本 ====================
@@ -1031,7 +1314,434 @@ async function extractPageText() {
     extractButton.textContent = originalText;
     extractButton.disabled = false;
   }
-  closePlusMenu();
+}
+
+// ==================== 划词选择模式 ====================
+
+/**
+ * 切换划词模式：写入 storage + 广播到所有标签页
+ * 内容脚本始终注入，通过本开关控制激活/休眠（injected-dom-toggle-pattern）
+ */
+async function toggleSelectionMode() {
+  if (isSelectionMode) {
+    // 关闭模式
+    isSelectionMode = false;
+    elements.selectionBtn?.classList.remove("active");
+    await chrome.storage.local.set({ sidebarSelectionEnabled: false });
+    // 广播到所有标签页
+    const tabs = await chrome.tabs.query({});
+    tabs.forEach(t => {
+      chrome.tabs.sendMessage(t.id, { action: "sidebarSelectionToggle", enabled: false }).catch(() => {});
+    });
+    showTempMessage("划词模式已关闭");
+    return;
+  }
+
+  // 开启模式
+  isSelectionMode = true;
+  elements.selectionBtn?.classList.add("active");
+  showTempMessage("划词模式已开启，在页面上选择文本");
+
+  await chrome.storage.local.set({ sidebarSelectionEnabled: true });
+  // 广播到所有标签页
+  const tabs = await chrome.tabs.query({});
+  tabs.forEach(t => {
+    chrome.tabs.sendMessage(t.id, { action: "sidebarSelectionToggle", enabled: true }).catch(() => {});
+  });
+}
+
+/**
+ * 处理划词选择结果 — 显示到提取结果面板（作为 %v 上下文）
+ */
+function handleSidebarSelection(text, title, url) {
+  if (!text || !text.trim()) return;
+  if (extractResult) extractResult.style.display = "block";
+  if (extractTitle) extractTitle.textContent = `划词: ${title || "未获取到标题"}`;
+  if (extractUrl) extractUrl.textContent = url || "";
+  if (extractContent) extractContent.textContent = text;
+  showTempMessage(`已获取 ${text.length} 字符`, 2000);
+}
+
+// ==================== Prompt 占位符 ====================
+
+/**
+ * 占位符说明：
+ *   %s — 用户输入的原始消息（string）
+ *   %v — 提取的网页上下文（string，提取面板隐藏时为空）
+ *
+ * 模板里没出现任何占位符时，沿用旧行为：模板拼在用户消息后面（向后兼容）。
+ */
+function applyPromptTemplate(template, userMessage, extractedText) {
+  const user = userMessage ?? "";
+  const ctx = extractedText ?? "";
+
+  const hasUserPlaceholder = template.includes("%s");
+  const hasCtxPlaceholder = template.includes("%v");
+
+  if (hasUserPlaceholder || hasCtxPlaceholder) {
+    return template
+      .replace(/%v/g, ctx)
+      .replace(/%s/g, user);
+  }
+
+  // 没有占位符但有提取内容 → 提取内容兜底前置
+  if (ctx) {
+    return ctx + "\n\n" + user + " " + template;
+  }
+
+  // 完全无占位符、无提取：向后兼容
+  return user + " " + template;
+}
+
+/**
+ * 读取当前展示的"提取页面文本"结果，格式化为可注入 prompt 的字符串。
+ * 没有可见的提取结果时返回空串。
+ */
+function getExtractedContentText() {
+  if (!extractResult || extractResult.style.display === "none" || !extractContent) {
+    return "";
+  }
+
+  const text = (extractContent.textContent || "").trim();
+  if (!text || text === "未获取到内容") return "";
+
+  return text;
+}
+
+// ==================== 工作区标签 ====================
+
+const WORKSPACE_STORAGE_KEY = "sidebar_workspace_tabs";
+
+async function initWorkspaceTabs() {
+  // 从 storage 恢复持久化的工作区
+  try {
+    const result = await chrome.storage.session?.get(WORKSPACE_STORAGE_KEY);
+    if (result?.[WORKSPACE_STORAGE_KEY]) {
+      workspaceTabs = result[WORKSPACE_STORAGE_KEY].map(t => ({
+        ...t,
+        localId: ++workspaceTabCounter,
+      }));
+      // 过滤已关闭的标签页
+      await refreshWorkspaceTabs();
+    }
+  } catch (e) {
+    // session storage may not be available
+  }
+  renderWorkspaceTabs();
+}
+
+async function saveWorkspaceTabs() {
+  try {
+    const toSave = workspaceTabs.map(t => ({
+      tabId: t.tabId,
+      title: t.title,
+      url: t.url,
+      favIconUrl: t.favIconUrl,
+    }));
+    await chrome.storage.session?.set({ [WORKSPACE_STORAGE_KEY]: toSave });
+  } catch (e) {
+    // ignore
+  }
+}
+
+function renderWorkspaceTabs() {
+  if (!elements.workspaceTabs) return;
+
+  // 保留 "+" 按钮
+  const addBtn = elements.workspaceTabAdd;
+  elements.workspaceTabs.innerHTML = "";
+
+  workspaceTabs.forEach((tab, i) => {
+    const el = document.createElement("button");
+    el.className = "workspace-tab";
+    el.dataset.index = i;
+
+    const favicon = tab.favIconUrl
+      ? `<img class="workspace-tab-favicon" src="${escapeAttr(tab.favIconUrl)}" onerror="this.style.display='none'">`
+      : `<span class="workspace-tab-favicon" style="background:#e5e7eb;border-radius:2px;"></span>`;
+
+    const title = tab.title || "新标签页";
+    const maxTitle = title.length > 20 ? title.slice(0, 20) + "…" : title;
+
+    el.innerHTML = `
+      ${favicon}
+      <span class="workspace-tab-title">${escapeHtml(maxTitle)}</span>
+      <span class="workspace-tab-close" data-index="${i}">×</span>
+    `;
+
+    el.addEventListener("click", (e) => {
+      if (e.target.closest(".workspace-tab-close")) return;
+      switchToWorkspaceTab(i);
+    });
+
+    el.querySelector(".workspace-tab-close").addEventListener("click", (e) => {
+      e.stopPropagation();
+      removeWorkspaceTab(i);
+    });
+
+    elements.workspaceTabs.appendChild(el);
+  });
+
+  // 重新添加 "+" 按钮
+  if (addBtn) elements.workspaceTabs.appendChild(addBtn);
+}
+
+async function addCurrentPageToWorkspace() {
+  try {
+    const response = await chrome.runtime.sendMessage({ action: "getCurrentTabInfo" });
+    if (response?.status === "success" && response.tab) {
+      const tab = response.tab;
+      // 去重
+      if (workspaceTabs.some(t => t.tabId === tab.id)) {
+        showTempMessage("该标签页已在工作区中");
+        return;
+      }
+      workspaceTabs.push({
+        localId: ++workspaceTabCounter,
+        tabId: tab.id,
+        title: tab.title || "新标签页",
+        url: tab.url || "",
+        favIconUrl: tab.favIconUrl || "",
+      });
+      renderWorkspaceTabs();
+      saveWorkspaceTabs();
+      showTempMessage("已添加到工作区");
+    } else {
+      showTempMessage("获取当前标签页失败");
+    }
+  } catch (err) {
+    console.error("添加到工作区失败:", err);
+    showTempMessage("添加到工作区失败");
+  }
+}
+
+async function switchToWorkspaceTab(index) {
+  const tab = workspaceTabs[index];
+  if (!tab) return;
+  try {
+    // 验证 tab 是否还存在
+    await chrome.tabs.get(tab.tabId);
+    await chrome.runtime.sendMessage({ action: "switchToTab", tabId: tab.tabId });
+  } catch (err) {
+    // tab 已关闭，移除
+    console.warn("工作区标签页已关闭，移除", tab.tabId);
+    workspaceTabs.splice(index, 1);
+    renderWorkspaceTabs();
+    saveWorkspaceTabs();
+    showTempMessage("该标签页已关闭");
+  }
+}
+
+async function removeWorkspaceTab(index) {
+  workspaceTabs.splice(index, 1);
+  renderWorkspaceTabs();
+  saveWorkspaceTabs();
+}
+
+async function refreshWorkspaceTabs() {
+  const valid = [];
+  for (const tab of workspaceTabs) {
+    try {
+      const t = await chrome.tabs.get(tab.tabId);
+      tab.title = t.title;
+      tab.url = t.url;
+      tab.favIconUrl = t.favIconUrl;
+      valid.push(tab);
+    } catch (e) {
+      // tab closed, drop it
+    }
+  }
+  workspaceTabs = valid;
+  return workspaceTabs;
+}
+
+// ==================== 右键菜单 ====================
+
+function showContextMenu(x, y, index) {
+  if (!elements.contextMenu) return;
+  contextMenuTarget = index;
+  elements.contextMenu.style.left = x + "px";
+  elements.contextMenu.style.top = y + "px";
+  elements.contextMenu.style.display = "block";
+}
+
+function hideContextMenu() {
+  if (!elements.contextMenu) return;
+  elements.contextMenu.style.display = "none";
+  contextMenuTarget = null;
+}
+
+function handleContextMenuAction(action, index) {
+  const tab = workspaceTabs[index];
+  if (!tab) return;
+
+  switch (action) {
+    case "close":
+      // 关闭标签页
+      try {
+        chrome.tabs.remove(tab.tabId);
+      } catch (e) { /* ignore */ }
+      removeWorkspaceTab(index);
+      break;
+
+    case "remove":
+      // 仅移除工作区，不关闭标签页
+      removeWorkspaceTab(index);
+      break;
+  }
+}
+
+/**
+ * 直接发送入口 — 不捕获回复，发送后把消息展示到聊天框、切换到 AI 标签页
+ */
+async function startDirectSend() {
+  if (saveTimeout) {
+    clearTimeout(saveTimeout);
+    saveTimeout = null;
+  }
+  await debouncedSaveMessage(elements.messageInput.value);
+
+  const originalMessage = validateMessageInput(elements.messageInput.value);
+  if (!originalMessage) return;
+
+  const selectedValue = elements.promptOptimizerSelect.querySelector(".selected-value");
+  const templateKey = selectedValue.dataset.value;
+  const templateContent = selectedValue.dataset.template;
+
+  const extractedText = getExtractedContentText();
+
+  let finalMessage = originalMessage;
+  if (templateKey && templateContent) {
+    finalMessage = applyPromptTemplate(templateContent, originalMessage, extractedText);
+  } else if (extractedText) {
+    finalMessage = extractedText + "\n\n" + originalMessage;
+  }
+
+  const selectedPlatforms = Array.from(document.querySelectorAll('#platform-panel .platform-icon-option input[type="checkbox"]'))
+    .filter((checkbox) => {
+      const option = checkbox.closest('.platform-icon-option');
+      return option && option.style.display !== 'none' && checkbox.checked;
+    })
+    .map((checkbox) => checkbox.dataset.platform);
+
+  if (!validatePlatformSelection(selectedPlatforms)) return;
+
+  // 先把用户消息写入聊天框（仅展示用，不等待回复）
+  const sendTimestamp = Date.now();
+  if (!activePlatformId || !selectedPlatforms.includes(activePlatformId)) {
+    activePlatformId = selectedPlatforms[0];
+  }
+  selectedPlatforms.forEach((platformId) => {
+    const ps = getPlatformState(platformId);
+    const conversationId = ps.activeConvId || DEFAULT_CONVERSATION_ID;
+    appendUserMessage(platformId, conversationId, originalMessage, sendTimestamp);
+  });
+  renderCurrentPlatform();
+  scrollToBottom(true);
+
+  setSidebarSendButtonState("busy", "直发");
+
+  let successCount = 0;
+  try {
+    for (const platform of selectedPlatforms) {
+      const result = await chrome.runtime.sendMessage({
+        action: "directSend",
+        platform,
+        message: finalMessage,
+        switchToTab: true,
+      });
+      if (result?.status === "success") {
+        successCount++;
+        const tabInfo = await chrome.tabs.get(result.tabId);
+        platformTabCache[platform] = {
+          tabId: result.tabId,
+          title: tabInfo.title,
+          url: tabInfo.url,
+        };
+      } else {
+        console.error(`[directSend] ${platform} 失败:`, result?.error);
+      }
+    }
+
+    updatePlatformCount();
+    showTempMessage(`直接发送完成: ${successCount}/${selectedPlatforms.length}`);
+
+    // 清空输入框
+    elements.messageInput.value = "";
+    autoResizeInput(elements.messageInput);
+    updateSendButton();
+
+  } catch (error) {
+    console.error("直接发送失败:", error);
+    showTempMessage("发送失败，请重试");
+  } finally {
+    updateSendButton();
+  }
+}
+
+// ==================== AI 平台标签页映射 ====================
+
+/**
+ * 切换到 AI 平台的真实浏览器标签页
+ * 无标签页时创建，有标签页时切换
+ */
+async function switchToPlatformTab(platformId) {
+  const cached = platformTabCache[platformId];
+
+  // 先查后台注入状态
+  try {
+    const status = await chrome.runtime.sendMessage({ action: "getPlatformTabStatus" });
+    if (status?.status === "success" && status.tabs?.[platformId]?.length > 0) {
+      const tabInfo = status.tabs[platformId][0];
+      platformTabCache[platformId] = tabInfo;
+      await chrome.runtime.sendMessage({ action: "switchToTab", tabId: tabInfo.id });
+      return;
+    }
+  } catch (e) { /* fall through */ }
+
+  // 无缓存 → 尝试直接查询当前打开的标签页
+  if (cached) {
+    try {
+      await chrome.tabs.get(cached.tabId);
+      await chrome.runtime.sendMessage({ action: "switchToTab", tabId: cached.tabId });
+      return;
+    } catch (e) {
+      delete platformTabCache[platformId];
+    }
+  }
+
+  // 通过 background 创建（不发送消息）
+  await chrome.runtime.sendMessage({
+    action: "openPlatformTab",
+    platform: platformId,
+  });
+  // 更新缓存
+  await refreshPlatformTabStatus();
+}
+
+/**
+ * 查询后台各平台标签页状态并刷新缓存
+ */
+async function refreshPlatformTabStatus() {
+  try {
+    const response = await chrome.runtime.sendMessage({ action: "getPlatformTabStatus" });
+    if (response?.status === "success" && response.tabs) {
+      for (const [platform, tabs] of Object.entries(response.tabs)) {
+        if (tabs.length > 0) {
+          platformTabCache[platform] = tabs[0];
+        }
+      }
+      updatePlatformCount();
+    }
+  } catch (e) {
+    // background may not be ready
+  }
+}
+
+// ==================== 工具函数 ====================
+
+function escapeAttr(str) {
+  return String(str || "").replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 // ==================== 向后兼容 ====================

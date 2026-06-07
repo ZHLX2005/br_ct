@@ -217,7 +217,7 @@ function initAliasShortcut(textarea, templates, promptOptimizerSelect) {
   function createPopup() {
     popup = document.createElement('div');
     popup.className = 'alias-popup';
-    popup.style.cssText = 'position:absolute;z-index:10000;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);max-height:200px;overflow-y:auto;min-width:200px;display:none;';
+    popup.style.cssText = 'position:fixed;z-index:10000;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);max-height:200px;overflow-y:auto;min-width:200px;display:none;';
     document.body.appendChild(popup);
 
     popup.addEventListener('click', (e) => {
@@ -229,8 +229,25 @@ function initAliasShortcut(textarea, templates, promptOptimizerSelect) {
   function showPopup() {
     if (!popup) createPopup();
     const rect = textarea.getBoundingClientRect();
-    popup.style.left = rect.left + 'px';
-    popup.style.top = (rect.bottom + 4) + 'px';
+    const popupHeight = Math.min(200, popup.scrollHeight || 200);
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const popupWidth = 240; // 估算弹窗宽度
+
+    // 水平边界保护
+    const left = Math.max(4, Math.min(rect.left, window.innerWidth - popupWidth));
+    popup.style.left = left + 'px';
+    popup.style.maxHeight = '200px';
+
+    if (spaceBelow >= popupHeight + 8 || spaceBelow >= spaceAbove) {
+      // 下方空间充足 → 向下展开
+      popup.style.top = (rect.bottom + 4) + 'px';
+      popup.style.bottom = 'auto';
+    } else {
+      // 下方空间不足 → 向上展开
+      popup.style.top = 'auto';
+      popup.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+    }
     popup.style.display = 'block';
   }
 
