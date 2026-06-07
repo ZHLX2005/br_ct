@@ -199,11 +199,11 @@ body {
 }
 .workspace-tab-add:hover { background: #f1f5f9; color: var(--primary); border-color: rgba(67,97,238,0.25); }
 
-/* ===== 平台快捷按钮（已勾选平台） ===== */
+/* ===== 平台快捷按钮（已勾选平台，纯文字无图标） ===== */
 .platform-pills {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 3px;
   padding: 4px 8px 2px;
   flex-shrink: 0;
   min-height: 26px;
@@ -215,40 +215,23 @@ body {
 .platform-pill {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px 2px 6px;
+  padding: 2px 7px;
   border: 1px solid var(--border);
   border-radius: 4px;
-  background: white;
+  background: transparent;
   cursor: pointer;
   font-size: 10px;
   font-weight: 500;
-  color: var(--text);
+  color: var(--text-secondary);
   transition: all 0.12s ease;
   user-select: none;
   white-space: nowrap;
   letter-spacing: 0.01em;
 }
 .platform-pill:hover {
-  border-color: var(--primary);
-  background: #f0f4ff;
-}
-.platform-pill-icon {
-  width: 14px;
-  height: 14px;
-  border-radius: 3px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 8px;
-  font-weight: 700;
-  color: white;
-  flex-shrink: 0;
-}
-.platform-pill-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  border-color: #cbd5e1;
+  background: var(--bg-subtle);
+  color: var(--text);
 }
 
 /* ===== 平台选择面板 ===== */
@@ -315,25 +298,29 @@ body {
   max-width: 100%;
 }
 
-/* ===== 提示词指示器 ===== */
+/* ===== 提示词指示器（中性简洁，左侧蓝条点缀） ===== */
 .prompt-bar {
   display: flex;
   align-items: center;
   gap: 5px;
   padding: 4px 10px;
   flex-shrink: 0;
-  background: #fffbeb;
-  border-bottom: 1px solid #fde68a;
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border-light);
+  border-left: 3px solid var(--primary);
   font-size: 11px;
+  margin-left: 8px;
+  padding-left: 7px;
+  border-radius: 0 3px 3px 0;
 }
 .prompt-bar-label {
-  color: var(--text-secondary);
+  color: var(--text-muted);
   white-space: nowrap;
   font-size: 10px;
 }
-.prompt-bar-name { font-weight: 600; color: #92400e; }
+.prompt-bar-name { font-weight: 600; color: var(--text); }
 .prompt-bar-alias {
-  color: var(--primary);
+  color: var(--text-secondary);
   font-weight: 500;
   font-size: 10px;
   margin-left: 2px;
@@ -566,17 +553,30 @@ body {
   gap: 6px;
 }
 
-.direct-badge {
+.mode-toggle {
   display: inline-flex;
   align-items: center;
-  padding: 2px 6px;
-  border-radius: 3px;
-  background: rgba(67,97,238,0.08);
-  color: var(--primary);
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: white;
+  color: var(--text-secondary);
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.02em;
   text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  white-space: nowrap;
+}
+.mode-toggle:hover {
+  border-color: #cbd5e1;
+  background: var(--bg-subtle);
+}
+.mode-toggle.active {
+  border-color: var(--primary);
+  background: rgba(67,97,238,0.08);
+  color: var(--primary);
 }
 
 .send-btn {

@@ -57,8 +57,34 @@ let workspaceTabCounter = 0;
 // 右键菜单
 let contextMenuTarget = null;   // 当前右键点击的目标索引
 
-// 直接发送模式（默认启用）
-const isDirectMode = true;
+// 直接发送模式（默认启用，可切换）
+let isDirectMode = true;
+const MODE_STORAGE_KEY = "sidebar_send_mode";
+
+async function loadSendMode() {
+  try {
+    const result = await chrome.storage.session?.get(MODE_STORAGE_KEY);
+    if (result?.[MODE_STORAGE_KEY] !== undefined) {
+      isDirectMode = result[MODE_STORAGE_KEY];
+      updateModeToggleUI();
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function toggleSendMode() {
+  isDirectMode = !isDirectMode;
+  updateModeToggleUI();
+  try {
+    chrome.storage.session?.set({ [MODE_STORAGE_KEY]: isDirectMode });
+  } catch (e) { /* ignore */ }
+  showTempMessage(isDirectMode ? "已切换为直发模式" : "已切换为复制模式");
+}
+
+function updateModeToggleUI() {
+  if (!elements.modeToggle) return;
+  elements.modeToggle.textContent = isDirectMode ? "直发" : "复制";
+  elements.modeToggle.classList.toggle("active", isDirectMode);
+}
 
 // AI 平台 -> 真实标签页映射缓存
 let platformTabCache = {};      // platform -> { tabId, title, url }
@@ -125,6 +151,7 @@ export async function initializePopup() {
     promptBarClear: document.getElementById("prompt-bar-clear"),
     historyDropdown: document.getElementById("history-dropdown"),
     footHistoryBtn: document.getElementById("foot-history-btn"),
+    modeToggle: document.getElementById("mode-toggle"),
   };
 
   // 提取页面文本相关元素
@@ -137,6 +164,7 @@ export async function initializePopup() {
 
   // 划词按钮
   elements.selectionBtn = document.getElementById("toolbar-selection");
+  elements.clearChatBtn = document.getElementById("toolbar-clear-chat");
 
   // 自动聚焦输入框
   focusInputAndSetCursor(elements.messageInput);
@@ -155,6 +183,9 @@ export async function initializePopup() {
 
   // 同步平台计数
   updatePlatformCount();
+
+  // 恢复发送模式
+  loadSendMode();
 
   // 同步当前提示词指示器
   syncPromptIndicator();
@@ -265,7 +296,7 @@ export function setupEventListeners() {
   elements.messageInput.addEventListener("keydown", async (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      startDirectSend();
+      startSending();
     }
     if (e.ctrlKey && e.key === "s") {
       e.preventDefault();
@@ -309,7 +340,7 @@ export function setupEventListeners() {
   elements.selectAllButton?.addEventListener("click", toggleSelectAll);
 
   // 发送按钮
-  elements.sendButton?.addEventListener("click", startDirectSend);
+  elements.sendButton?.addEventListener("click", startSending);
 
   // 关闭AI标签页按钮
   elements.closeTabsButton?.addEventListener("click", closeAllAITabs);
@@ -336,6 +367,9 @@ export function setupEventListeners() {
 
   // 历史按钮切换
   elements.footHistoryBtn?.addEventListener("click", toggleHistoryDropdown);
+
+  // 直发/复制模式切换
+  elements.modeToggle?.addEventListener("click", toggleSendMode);
 
   // 顶部 + 按钮 → 添加工作区
   elements.workspaceTabAdd?.addEventListener("click", () => {
@@ -492,26 +526,13 @@ function renderPlatformPills() {
   activePlatforms.forEach(platformId => {
     const config = PLATFORM_CONFIG[platformId];
     if (!config) return;
-    const icon = config.shortIcon || config.icon || '?';
     const name = config.shortName || config.name || platformId;
-    const color = config.color || '#4361ee';
 
     const pill = document.createElement('button');
     pill.className = 'platform-pill';
     pill.dataset.platform = platformId;
     pill.title = `切换到 ${name}`;
-
-    const iconEl = document.createElement('span');
-    iconEl.className = 'platform-pill-icon';
-    iconEl.style.background = color;
-    iconEl.textContent = icon;
-
-    const nameEl = document.createElement('span');
-    nameEl.className = 'platform-pill-name';
-    nameEl.textContent = name;
-
-    pill.appendChild(iconEl);
-    pill.appendChild(nameEl);
+    pill.textContent = name;
 
     pill.addEventListener('click', (e) => {
       e.stopPropagation();

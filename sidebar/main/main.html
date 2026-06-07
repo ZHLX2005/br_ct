@@ -22,6 +22,7 @@
           <button class="toolbar-action-btn toolbar-sel-btn" id="toolbar-selection" title="划词选择页面文本">划词</button>
           <button class="toolbar-action-btn" id="toolbar-extract" title="提取页面文本">提取</button>
           <button class="toolbar-action-btn" id="toolbar-select-all">全选</button>
+          <button class="toolbar-action-btn" id="toolbar-clear-chat" title="清空聊天内容">清空</button>
           <button class="toolbar-action-btn toolbar-action-close" id="toolbar-close-ai">关闭AI</button>
         </div>
       </div>
@@ -107,7 +108,7 @@
               </button>
             </div>
             <div class="chat-input-foot-right">
-              <span class="direct-badge">直发</span>
+              <button class="mode-toggle" id="mode-toggle" title="切换直发/复制模式">直发</button>
               <button class="send-btn" id="chat-btn-send" disabled>
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                   <path d="M2 8l12-6-6 12-2-4-4-2z" fill="currentColor" stroke="currentColor" stroke-width="0.5" stroke-linejoin="round"/>
