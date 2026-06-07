@@ -1,0 +1,55 @@
+<template id="cc-template">
+  <!-- CC 标签栏 -->
+  <div class="cc-tabs" id="cc-tabs">
+    <div class="cc-tab active" data-cc-session="0">
+      <span class="cc-tab-icon">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+        </svg>
+      </span>
+      <span class="cc-tab-label">会话 1</span>
+      <span class="cc-tab-close" title="关闭">×</span>
+    </div>
+    <button class="cc-tab-add" id="cc-tab-add" title="新建对话">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path d="M6 1.5v9M1.5 6h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </button>
+    <span class="cc-serve-spacer"></span>
+    <span class="cc-serve-status" id="cc-serve-status" data-state="disconnected" title="nx-ce serve 状态">
+      <span class="cc-serve-dot"></span>
+      <span class="cc-serve-text">未连接</span>
+    </span>
+    <button class="cc-serve-btn" id="cc-serve-btn" title="启动 nx-ce serve">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M5 12h14M12 5l7 7-7 7"/>
+      </svg>
+      <span>连接</span>
+    </button>
+  </div>
+
+  <!-- 页面区 -->
+  <section class="cc-page" id="page-main">
+    <div class="response-content" id="response-content">
+      <div class="response-placeholder response-placeholder--cc">
+        <svg class="rp-cc-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="16 18 22 12 16 6"/>
+          <polyline points="8 6 2 12 8 18"/>
+        </svg>
+        <span class="rp-cc-label">Claude Code</span>
+        <span class="rp-cc-sub">与 Claude Code 开始对话</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 路径栏 -->
+  <div class="cc-path-bar" id="cc-path-bar">
+    <svg class="cc-path-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+    </path></svg>
+    <input class="cc-path-input" id="cc-path-input" type="text" spellcheck="false" value="C:\Windows\System32" />
+  </div>
+
+  <!-- /skill 自动补全（会被 mount() 挪到 chat-input-middle 内） -->
+  <div class="cc-skill-popup" id="cc-skill-popup" style="display:none;"></div>
+</template>

@@ -6,6 +6,21 @@ import {
 } from "./mainUtils.js";
 import { initializePlatformOptions } from "../../popup/main/platformRenderer.js";
 
+import {
+  getActiveCcTab,
+  createCcTab,
+  switchCcTab,
+  closeCcTab,
+  setupCcTabListeners,
+  sendCcQuery,
+  setupNxceEventListener,
+  setServeStatus,
+  refreshServeStatus,
+  setupServeControls,
+  handleCcSend,
+  setupCcSkillAutocomplete,
+} from "./cc/cc.js";
+
 // ==================== 模式状态机 ====================
 
 const MODES = {
@@ -33,445 +48,12 @@ function setMode(mode) {
   }
 }
 
-
 function toggleMode() {
   const next = currentMode === MODES.AICHAT ? MODES.CLAUDE_CODE : MODES.AICHAT;
   setMode(next);
 }
 
-// ==================== CC 多窗口管理 ====================
-
-let ccSessionCounter = 1;
-const CC_DEFAULT_PATH = "C:\\Windows\\System32";
-
-/** 保存当前 tab 的消息和路径到 tab 对象 */
-function saveCcTabState(tab) {
-  if (!tab) return;
-  const rc = document.getElementById("response-content");
-  const pi = document.getElementById("cc-path-input");
-  if (rc) tab._messages = rc.innerHTML;
-  if (pi) tab._path = pi.value;
-}
-
-/** 恢复指定 tab 的消息和路径 */
-function restoreCcTabState(tab) {
-  if (!tab) return;
-  const rc = document.getElementById("response-content");
-  const pi = document.getElementById("cc-path-input");
-  if (rc) rc.innerHTML = tab._messages !== undefined ? tab._messages : "";
-  if (pi) pi.value = tab._path !== undefined ? tab._path : CC_DEFAULT_PATH;
-}
-
-function createCcTab() {
-  ccSessionCounter++;
-  const id = `cc-session-${ccSessionCounter}`;
-  const tabsEl = document.getElementById("cc-tabs");
-  if (!tabsEl) return null;
-
-  const tab = document.createElement("div");
-  tab.className = "cc-tab";
-  tab.dataset.ccSession = id;
-  tab._sessionId = null;
-  tab._messages = "";
-  tab._path = CC_DEFAULT_PATH;
-  tab._skills = [];       // 每个 tab 独立的 skill 缓存
-  tab._skillsCwd = null;   // 缓存来自哪个 cwd；改 path 时一并清掉
-  tab._skillsLoading = false;
-  tab.innerHTML = `
-    <span class="cc-tab-icon">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
-      </svg>
-    </span>
-    <span class="cc-tab-label">会话 ${ccSessionCounter}</span>
-    <span class="cc-tab-close" title="关闭">×</span>
-  `;
-
-  const addBtn = tabsEl.querySelector(".cc-tab-add");
-  if (addBtn) tabsEl.insertBefore(tab, addBtn);
-  else tabsEl.appendChild(tab);
-
-  // 保存当前 tab 状态 → 切换到新 tab → 恢复新 tab 状态
-  const currentActive = getActiveCcTab();
-  saveCcTabState(currentActive);
-  switchCcTab(tab);
-  restoreCcTabState(tab);
-
-  return tab;
-}
-
-/** 获取当前激活的 CC tab */
-function getActiveCcTab() {
-  return document.querySelector(".cc-tab.active");
-}
-
-/**
- * 通过 WebSocket 发送 Claude Code 查询（nx-ce serve 直连模式）。
- * 从当前激活 tab 获取 sessionId（用作 nx-ce session name），流式响应通过
- * onNxceEvent 分发。返回的 Promise 在 'done' 事件到达时 resolve。
- */
-function sendCcQuery(prompt, workDir, skills) {
-  const tab = getActiveCcTab();
-  if (!tab) return Promise.reject(new Error("无激活的 CC 会话"));
-
-  // nx-ce session name 用 tab 的 ccSession id（保证 per-tab 隔离）
-  const session = tab.dataset.ccSession || `tab-${tab._tabId || "default"}`;
-
-  console.log("[CC sendCcQuery] WS query:", {
-    session,
-    sessionId: tab._sessionId,
-    promptLen: prompt.length,
-    workDir,
-    skills,
-  });
-
-  // 缓存 skills 到 query 上下文中（event handler 用）
-  tab._pendingSkills = (skills || "").split(",").filter(Boolean);
-
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    const finish = (err, payload) => {
-      if (settled) return;
-      settled = true;
-      tab._activeQuery = null;
-      if (err) reject(err); else resolve(payload);
-    };
-
-    // 注册本轮 query 的完成回调
-    tab._activeQuery = { resolve: (r) => finish(null, r), reject: (e) => finish(e) };
-
-    chrome.runtime.sendMessage({
-      action: "nxce_ws",
-      cmd: "query",
-      session,
-      cwd: workDir || "",
-      prompt,
-      skills: (skills || "").split(",").filter(Boolean),
-      queryId: `q-${Date.now()}`,
-    }, (resp) => {
-      if (chrome.runtime.lastError) {
-        finish(new Error(chrome.runtime.lastError.message));
-        return;
-      }
-      if (!resp || !resp.ok) {
-        // Fix: 移除 ensureRunning 自动兜底。WS 没连上时直接报错让用户点连接按钮。
-        finish(new Error(resp?.error || "WS query 失败"));
-      }
-      // 不在这里 resolve — 等待 nxce_event 中的 'done' 消息
-    });
-  });
-}
-
-/**
- * 订阅 nxce_event 流式消息。
- * 在 background.js 的 nxce_ws.js dispatch 时按 turnId 路由回当前激活 tab。
- * content_script / sidebar 只能监听自己的 tab（通过 sender.tab.id）。
- *
- * 简化：sidebar 只用 onMessage 一次性收所有 nxce_event；按 event.session 匹配当前 tab。
- */
-function setupNxceEventListener() {
-  chrome.runtime.onMessage.addListener((msg) => {
-    if (!msg || msg.action !== 'nxce_event') return false;
-    const ev = msg.event;
-    const tab = getActiveCcTab();
-    if (!tab) return false;
-
-    switch (ev.type) {
-      case 'turn_start': {
-        tab._streamingText = '';
-        tab._streamingThinking = '';
-        tab._streamingTools = [];
-        break;
-      }
-      case 'text': {
-        // 静默模式：skill-init-* 等内部 query 的 text 不渲染到 UI
-        if (tab._silentTurn) {
-          if (!tab._streamingText) tab._streamingText = '';
-          tab._streamingText += ev.content || '';
-          break;
-        }
-        if (!tab._streamingText) tab._streamingText = '';
-        tab._streamingText += ev.content || '';
-        appendCcStream(tab, ev.content);
-        break;
-      }
-      case 'thinking': {
-        if (!tab._streamingThinking) tab._streamingThinking = '';
-        tab._streamingThinking += ev.content || '';
-        break;
-      }
-      case 'tool_use': {
-        if (!tab._streamingTools) tab._streamingTools = [];
-        tab._streamingTools.push({ name: ev.name, input: ev.input, id: ev.id });
-        break;
-      }
-      case 'done': {
-        if (ev.sessionId) tab._sessionId = ev.sessionId;
-        if (tab._activeQuery) {
-          tab._activeQuery.resolve({ status: 'ok', data: { text: tab._streamingText, sessionId: tab._sessionId } });
-        }
-        // 静默模式：不 finalizeCcStream（不开新 stream bubble）
-        if (tab._silentTurn) {
-          tab._silentTurn = false;
-          break;
-        }
-        finalizeCcStream(tab);
-        break;
-      }
-      case 'init': {
-        if (ev.sessionId) tab._sessionId = ev.sessionId;
-        // 缓存 init 消息里的 skills / slashCommands（nx-ce init 已经带全）
-        const initCwd = ev.cwd || '';
-        const currentCwd = tab._path || '';
-        if (initCwd && currentCwd && initCwd !== currentCwd) {
-          console.log(`[CC Event] 丢弃过期 init: ${initCwd} !== ${currentCwd}`);
-          break;
-        }
-        // init 消息里带的是 skills[]；slashCommands 也在 init 里（v0.2.1+）
-        // 合并两个来源供 /skill 自动补全用
-        const initSkills = Array.isArray(ev.skills) ? ev.skills : [];
-        const initSlash = Array.isArray(ev.slashCommands) ? ev.slashCommands : [];
-        const merged = [...new Set([...initSlash, ...initSkills])];  // 去重
-        if (merged.length > 0) {
-          tab._skills = merged
-            .map((s) => (typeof s === 'string' ? { name: s, desc: '' } : { name: s.name || String(s), desc: s.desc || '' }))
-            .sort((a, b) => a.name.localeCompare(b.name));
-          tab._skillsCwd = currentCwd || initCwd;
-          tab._skillsLoading = false;  // 确保有 skills 了，清 loading
-          console.log(`[CC Skill] init 缓存 ${tab._skills.length} 个 skill`);
-        }
-        break;
-      }
-      case 'error': {
-        if (tab._activeQuery) {
-          tab._activeQuery.reject(new Error(ev.content || 'nxce error'));
-        }
-        break;
-      }
-    }
-    return false;
-  });
-}
-
-/* ============================================================
- *  CC nx-ce serve 状态指示 + 连接按钮
- * ============================================================ */
-
-function setServeStatus(state, text) {
-  const el = document.getElementById('cc-serve-status');
-  const btn = document.getElementById('cc-serve-btn');
-  if (el) {
-    el.dataset.state = state;
-    const txt = el.querySelector('.cc-serve-text');
-    if (txt) txt.textContent = text;
-  }
-  if (btn) {
-    // 用真实状态作为 dataset.state（之前 'connecting' 用 'loading' 是给 CSS 用，
-    // 但 click handler 也读 dataset.state——导致判断错误）
-    btn.dataset.state = state;
-    // CSS 仍然只关心 'connecting' 时禁用 cursor：用专门的 data-loading
-    btn.dataset.loading = state === 'connecting' ? 'true' : 'false';
-    const lbl = btn.querySelector('span:last-child');
-    if (lbl) {
-      lbl.textContent = {
-        disconnected: '连接',
-        connecting: '取消',
-        connected: '断开',
-        error: '重试',
-      }[state] || '连接';
-    }
-  }
-}
-
-async function refreshServeStatus() {
-  setServeStatus('connecting', '探测…');
-  chrome.runtime.sendMessage({ action: 'nxce_ws', cmd: 'ping' }, (resp) => {
-    if (resp?.connected) {
-      setServeStatus('connected', '已连接');
-    } else {
-      setServeStatus('disconnected', '未连接');
-    }
-  });
-}
-
-function setupServeControls() {
-  const btn = document.getElementById('cc-serve-btn');
-  if (!btn) return;
-
-  btn.addEventListener('click', async () => {
-    const state = btn.dataset.state;
-    if (state === 'connecting') {
-      // 启动中 → 取消
-      chrome.runtime.sendMessage({ action: 'nxce_ws', cmd: 'disconnect' }, () => {
-        setServeStatus('disconnected', '已取消');
-      });
-      return;
-    }
-    if (state === 'connected') {
-      // 已连接 → 断开
-      chrome.runtime.sendMessage({ action: 'nxce_ws', cmd: 'disconnect' }, () => {
-        setServeStatus('disconnected', '已断开');
-      });
-      return;
-    }
-    // disconnected / error → 启动 serve
-    // Fix: 直接调 native_host 的 claudeStartServe (native_host/main.go:80)，
-    // 不再走 nxsx 的 ensureRunning（nxsx 那边也会调 native_host，多余一层）。
-    setServeStatus('connecting', '启动中…');
-    chrome.runtime.sendMessage({
-      action: 'nativeMessage',
-      payload: { command: 'claudeStartServe' },
-    }, (resp) => {
-      if (resp?.status === 'ok') {
-        // native_host 启动 nx-ce serve 需要时间，等 2s 后探测 WS
-        setTimeout(() => {
-          chrome.runtime.sendMessage({ action: 'nxce_ws', cmd: 'ping' }, (pingResp) => {
-            if (pingResp?.connected) {
-              setServeStatus('connected', '已连接');
-            } else {
-              setServeStatus('error', '启动后未连上，请重试');
-            }
-          });
-        }, 2000);
-      } else {
-        setServeStatus('error', resp?.message || '启动失败');
-      }
-    });
-  });
-
-  // 模式切到 CC 时主动探测一次
-  const ccToggle = document.getElementById('cc-toggle');
-  if (ccToggle) {
-    ccToggle.addEventListener('click', () => {
-      if (currentMode === MODES.CLAUDE_CODE) refreshServeStatus();
-    });
-  }
-
-  // 初始进入时也探测（如果已在 CC 模式）
-  if (currentMode === MODES.CLAUDE_CODE) refreshServeStatus();
-}
-
-// WS 状态变化时同步按钮（通过监听 connect/dispatch）
-function _onWsConnected() { setServeStatus('connected', '已连接'); }
-function _onWsDisconnected() { setServeStatus('disconnected', '未连接'); }
-function appendCcStream(tab, chunk) {
-  const rc = document.getElementById('response-content');
-  if (!rc) return;
-  let stream = rc.querySelector('.cc-stream-bubble');
-  if (!stream) {
-    stream = document.createElement('div');
-    stream.className = 'notion-chat-message cc-stream-bubble';
-    stream.innerHTML = `
-      <div class="notion-chat-avatar" style="background:#f97316;display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;flex-shrink:0;">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 6"/></svg>
-      </div>
-      <div class="notion-chat-bubble">
-        <div class="notion-chat-bubble-header">
-          <span class="notion-chat-bubble-name" style="color:#ea580c">${tab.querySelector('.cc-tab-label')?.textContent || 'Claude Code'}</span>
-        </div>
-        <div class="notion-chat-bubble-content cc-stream-content"></div>
-      </div>`;
-    rc.appendChild(stream);
-    rc.scrollTop = rc.scrollHeight;
-  }
-  const content = stream.querySelector('.cc-stream-content');
-  if (content) {
-    content.textContent += chunk;
-    rc.scrollTop = rc.scrollHeight;
-  }
-  // 持久化
-  tab._messages = rc.innerHTML;
-}
-
-/** 流结束：去掉 cc-stream-bubble 标记（保留内容） */
-function finalizeCcStream(tab) {
-  const rc = document.getElementById('response-content');
-  if (!rc) return;
-  const stream = rc.querySelector('.cc-stream-bubble');
-  if (stream) {
-    // 渲染最终 HTML（escHtml + 保留换行）
-    const content = stream.querySelector('.cc-stream-content');
-    if (content) {
-      content.innerHTML = escHtml(content.textContent || '').replace(/\n/g, '<br>');
-    }
-    stream.classList.remove('cc-stream-bubble');
-  }
-  tab._messages = rc.innerHTML;
-}
-
-function switchCcTab(tab) {
-  if (!tab) return;
-  const tabsEl = document.getElementById("cc-tabs");
-  if (!tabsEl) return;
-
-  // 保存当前 tab 的状态
-  const current = getActiveCcTab();
-  if (current && current !== tab) {
-    current._path = document.getElementById("cc-path-input")?.value || CC_DEFAULT_PATH;
-    current._messages = document.getElementById("response-content")?.innerHTML || "";
-  }
-
-  tabsEl.querySelectorAll(".cc-tab").forEach(t => t.classList.remove("active"));
-  tab.classList.add("active");
-
-  // 恢复目标 tab 的状态
-  const pi = document.getElementById("cc-path-input");
-  const rc = document.getElementById("response-content");
-  if (pi) pi.value = tab._path !== undefined ? tab._path : CC_DEFAULT_PATH;
-  if (rc) rc.innerHTML = tab._messages !== undefined ? tab._messages : "";
-
-  // Fix: 切到非首次访问的 tab 时清掉 _sessionId 和 _skills，
-  // 与 path 变更的清空策略保持一致 — 避免旧 tab 的 session/skills 串到新 tab。
-  // 但首次切换（current === tab 或 new tab）不清，让初始状态自然。
-  if (current && current !== tab) {
-    tab._sessionId = null;
-    tab._skills = [];
-    tab._skillsCwd = null;
-    tab._skillsLoading = false;
-  }
-}
-
-function closeCcTab(tab) {
-  if (!tab) return;
-  const isActive = tab.classList.contains("active");
-  const prev = tab.previousElementSibling;
-  const next = tab.nextElementSibling;
-  tab.remove();
-
-  // 如果关了的是当前激活的，切换到相邻 tab
-  if (isActive) {
-    const target = prev && prev.classList.contains("cc-tab") ? prev
-                 : next && next.classList.contains("cc-tab") ? next
-                 : null;
-    if (target) {
-      switchCcTab(target);
-    }
-  }
-}
-
-function setupCcTabListeners() {
-  const tabsEl = document.getElementById("cc-tabs");
-  if (!tabsEl) return;
-
-  // 新建
-  const addBtn = document.getElementById("cc-tab-add");
-  if (addBtn) {
-    addBtn.addEventListener("click", createCcTab);
-  }
-
-  // 切换 & 关闭（事件代理）
-  tabsEl.addEventListener("click", (e) => {
-    const tab = e.target.closest(".cc-tab");
-    if (!tab) return;
-
-    if (e.target.classList.contains("cc-tab-close")) {
-      closeCcTab(tab);
-      return;
-    }
-
-    switchCcTab(tab);
-  });
-}
+// ==================== DOMContentLoaded ====================
 
 document.addEventListener("DOMContentLoaded", async function () {
   try {
@@ -499,7 +81,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     if (sendBtn) {
       sendBtn.addEventListener("click", (e) => {
-        if (currentMode !== MODES.CLAUDE_CODE) return; // 仅拦截 CC 模式
+        if (currentMode !== MODES.CLAUDE_CODE) return;
         e.stopImmediatePropagation();
         e.preventDefault();
         handleCcSend();
@@ -529,34 +111,28 @@ document.addEventListener("DOMContentLoaded", async function () {
         const newPath = pathInput.value;
         if (newPath === lastPath) return;
 
-        // cwd 变了 → 关闭旧 session
         if (tab._path && tab._path !== newPath) {
-          const oldCwd = tab._path;
           chrome.runtime.sendMessage({
             action: 'nxce_ws',
             cmd: 'closeSession',
             session: tab.dataset.ccSession || `tab-${tab._tabId || 'default'}`,
-            cwd: oldCwd,
+            cwd: tab._path,
           });
         }
         lastPath = newPath;
 
         tab._path = newPath;
-        // 清空 skill 缓存，下次 / 时重新加载
-        // Fix: 同时让正在飞的占位 query init 事件失效（见 init case 的 cwd 校验）
         tab._skills = [];
         tab._skillsCwd = null;
         tab._skillsLoading = false;
         tab._pendingSkillInitCwd = newPath;
-        // Fix: 切路径时清掉 _sessionId，避免 sendCcQuery 复用旧 session 把消息发到错的 cwd
         tab._sessionId = null;
-        // 同时清掉响应区（不同 cwd 的会话上下文不应混在一起）
+
         const rcEl = document.getElementById("response-content");
         if (rcEl) {
           rcEl.innerHTML = "";
           tab._messages = "";
         }
-        // 也清掉输入框，避免用户以为刚才的 prompt 还在
         const inputEl = document.getElementById("chat-input");
         if (inputEl) {
           inputEl.value = "";
@@ -569,282 +145,19 @@ document.addEventListener("DOMContentLoaded", async function () {
     setupNxceEventListener();
 
     // CC nx-ce serve 状态指示 + 手动连接按钮
-    setupServeControls();
+    setupServeControls(() => currentMode);
 
     // CC /skill 自动补全
-    setupCcSkillAutocomplete();
+    setupCcSkillAutocomplete(() => currentMode);
+
+    // 初始进入时探测（如果已在 CC 模式）
+    if (currentMode === MODES.CLAUDE_CODE) refreshServeStatus();
   } catch (error) {
     console.error("初始化popup失败:", error);
   }
 });
 
-// ==================== CC /skill 自动补全 ====================
-
-function ensureCcTabSkills(tab) {
-  if (!tab) return;
-  if (!tab._skills) tab._skills = [];
-  if (!tab._skillsLoading) tab._skillsLoading = false;
-  // Fix: 如果当前 _skills 是当前 cwd 的，直接复用，避免重复请求
-  if (tab._skillsLoading) return;
-  if (tab._skills.length > 0 && tab._skillsCwd === tab._path) return;
-  tab._skillsLoading = true;
-
-  // 走 WS getSkills 请求-响应 API：nxce_ws.js handler 转发到 nx-ce serve。
-  // nx-ce getSkills 必须 session 已 init（否则 note: "session not yet initialized"），
-  // 所以这里先发占位 query ' ' 触发 init（init 事件里带 skills，会被
-  // setupNxceEventListener 缓存到 tab._skills，并清掉 _skillsLoading）。
-  const session = tab.dataset.ccSession || `tab-${tab._tabId || 'default'}`;
-  // 兜底：HTML 初始 tab（没经 createCcTab）没 _path 属性
-  const cwd = tab._path || (typeof CC_DEFAULT_PATH !== 'undefined' ? CC_DEFAULT_PATH : 'C:\\Windows\\System32');
-
-  console.log(`[CC Skill] tab ${session} 通过 WS 拉取 skills (cwd=${cwd})`);
-
-  // 占位 query 触发 init（init 事件在 setupNxceEventListener 缓存 skills + 清 _skillsLoading）
-  // 静默模式：AI 真回复不会渲染到 UI
-  tab._silentTurn = true;
-  chrome.runtime.sendMessage({
-    action: 'nxce_ws',
-    cmd: 'query',
-    session,
-    cwd,
-    prompt: ' ',  // 单空格：触发 init
-    queryId: `skill-init-${Date.now()}`,
-  }, (resp) => {
-    if (chrome.runtime.lastError) {
-      tab._skillsLoading = false;
-      console.log('[CC Skill] 占位 query 失败:', chrome.runtime.lastError.message);
-      return;
-    }
-    if (!resp?.ok) {
-      tab._skillsLoading = false;
-      console.log('[CC Skill] 占位 query 错误:', resp?.error);
-      return;
-    }
-    // 等 init 事件把 skills 写入 tab._skills（轮询兜底 10s）
-    let waited = 0;
-    const timer = setInterval(() => {
-      waited += 200;
-      if (tab._skills.length > 0) {
-        clearInterval(timer);
-        tab._skillsLoading = false;
-        console.log(`[CC Skill] tab ${session} 加载 ${tab._skills.length} 个 skill`);
-      } else if (waited > 10000) {
-        clearInterval(timer);
-        tab._skillsLoading = false;
-        console.log('[CC Skill] 超时未拿到 skill');
-      }
-    }, 200);
-  });
-}
-
-function setupCcSkillAutocomplete() {
-  const input = document.getElementById('chat-input');
-  const popup = document.getElementById('cc-skill-popup');
-  if (!input || !popup) return;
-
-  let sel = -1;
-
-  function close() { popup.style.display = 'none'; sel = -1; }
-
-  function show(items) {
-    if (items.length === 0) {
-      popup.innerHTML = '<div class="cc-skill-empty">无匹配 Skill</div>';
-    } else {
-      popup.innerHTML = items.map((s, i) =>
-        `<div class="cc-skill-item${i === sel ? ' selected' : ''}" data-i="${i}">
-          <span class="cc-skill-item-icon">S</span>
-          <span class="cc-skill-item-name">${escHtml(s.name)}</span>
-          <span class="cc-skill-item-desc">${escHtml(s.desc || '')}</span>
-        </div>`).join('');
-    }
-    popup.style.display = 'block';
-  }
-
-  function pickSkill(name) {
-    const cur = input.selectionStart || 0;
-    const v = input.value;
-    const sp = v.lastIndexOf('/', cur);
-    if (sp < 0) return;
-    input.value = v.slice(0, sp) + '/' + name + ' ' + v.slice(cur);
-    const np = sp + name.length + 2;
-    input.setSelectionRange(np, np);
-    input.dispatchEvent(new Event('input'));
-    close();
-    input.focus();
-  }
-
-  input.addEventListener('input', () => {
-    if (currentMode !== MODES.CLAUDE_CODE) return close();
-    const cur = input.selectionStart || 0;
-    const v = input.value;
-    const sp = v.lastIndexOf('/', cur);
-    if (sp < 0 || sp >= cur) return close();
-    const word = v.slice(sp + 1, cur);
-    if (word.includes(' ')) return close();
-
-    // 从当前 tab 加载 skill
-    const tab = getActiveCcTab();
-    if (tab) ensureCcTabSkills(tab);
-    const skills = tab?._skills || [];
-
-    const matched = skills.filter(s => s.name.toLowerCase().includes(word.toLowerCase())).slice(0, 20);
-    sel = matched.length > 0 ? 0 : -1;
-    show(matched);
-  });
-
-  input.addEventListener('keydown', (e) => {
-    if (popup.style.display !== 'block') return;
-    const items = popup.querySelectorAll('.cc-skill-item');
-    if (!items.length && e.key !== 'Escape') return;
-
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      const name = items[sel]?.querySelector('.cc-skill-item-name')?.textContent;
-      if (name) pickSkill(name);
-      return;
-    }
-
-    if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(sel + 1, items.length - 1); items.forEach((el, i) => el.classList.toggle('selected', i === sel)); items[sel]?.scrollIntoView({ block: 'nearest' }); return; }
-    if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(sel - 1, 0); items.forEach((el, i) => el.classList.toggle('selected', i === sel)); items[sel]?.scrollIntoView({ block: 'nearest' }); return; }
-    if (e.key === 'Escape') { close(); return; }
-  });
-
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.chat-input-middle')) close();
-  });
-
-  // 点击选中
-  popup.addEventListener('mousedown', (e) => {
-    const item = e.target.closest('.cc-skill-item');
-    if (!item) return;
-    const name = item.querySelector('.cc-skill-item-name')?.textContent;
-    if (name) pickSkill(name);
-  });
-}
-
-/** CC 模式发送处理（流式：发送后等 done 事件填充回复区） */
-async function handleCcSend() {
-  const input = document.getElementById("chat-input");
-  const pathInput = document.getElementById("cc-path-input");
-  if (!input) return;
-
-  const raw = input.value.trim();
-  if (!raw) return;
-
-  const activeTab = getActiveCcTab();
-  if (!activeTab) return;
-
-  // 从 prompt 中提取 /skill xxx 指令
-  const skillRegex = /\/([\w-]+)/g;
-  let match;
-  const skills = [];
-  let prompt = raw;
-  const tabSkills = activeTab._skills || [];
-  while ((match = skillRegex.exec(raw)) !== null) {
-    const skillName = match[1];
-    if (tabSkills.some(s => s.name === skillName)) {
-      skills.push(skillName);
-      prompt = prompt.replace(match[0], '').trim();
-    }
-  }
-
-  // Fix: 如果剥离 skill 之后 prompt 变空（用户其实只输入了 /skill 名），
-  // 但 skills 数组又非空 → 这是占位 query 的"残留"边界情况。
-  // 此时直接 return，不发请求避免 AI 跑一个无意义的空 prompt。
-  if (!prompt && skills.length === 0) {
-    console.log('[CC Send] prompt 为空，跳过发送');
-    return;
-  }
-  if (!prompt && skills.length > 0) {
-    console.log('[CC Send] prompt 仅含 /skill，跳过（待用户补充问题）');
-    alert('请在 /skill 后面补充问题内容');
-    return;
-  }
-
-  const workDir = pathInput ? pathInput.value.trim() : "";
-
-  console.log("[CC Send] 发送请求:", {
-    sessionId: activeTab._sessionId,
-    prompt: prompt.slice(0, 100) + (prompt.length > 100 ? "..." : ""),
-    workDir,
-    skills,
-    tab: activeTab.dataset.ccSession,
-  });
-
-  // 清空输入
-  input.value = "";
-  input.dispatchEvent(new Event("input"));
-
-  // 显示用户消息（带 skill 标签）
-  const responseContent = document.getElementById("response-content");
-  if (responseContent) {
-    const skillsBadge = skills.length > 0
-      ? `<div class="cc-bubble-skills">${skills.map(s => `<span class="cc-skill-tag">${escHtml(s)}</span>`).join('')}</div>`
-      : '';
-    const userMsg = document.createElement("div");
-    userMsg.className = "notion-chat-message notion-chat-message--user";
-    userMsg.innerHTML = `
-      <div class="notion-chat-bubble notion-chat-bubble--user" style="flex:0 1 auto;max-width:88%;">
-        <div class="notion-chat-bubble-header">
-          <span class="notion-chat-bubble-name">You</span>
-        </div>
-        <div class="notion-chat-bubble-content">${escHtml(prompt)}</div>
-        ${skillsBadge}
-      </div>`;
-    responseContent.appendChild(userMsg);
-    responseContent.scrollTop = responseContent.scrollHeight;
-    activeTab._messages = responseContent.innerHTML;
-  }
-
-  // 显示加载动画
-  const loadingEl = document.createElement("div");
-  loadingEl.className = "cc-loading";
-  loadingEl.innerHTML = `
-    <div class="notion-chat-avatar">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-    </div>
-    <div class="cc-loading-dots">
-      <span class="cc-loading-dot"></span>
-      <span class="cc-loading-dot"></span>
-      <span class="cc-loading-dot"></span>
-    </div>`;
-  if (responseContent) {
-    responseContent.appendChild(loadingEl);
-    responseContent.scrollTop = responseContent.scrollHeight;
-  }
-
-  // 发送前：在 prompt 前注入已选 skill 标记（让模型明确知道用户指哪个 skill）
-  const skillPrefix = skills.length > 0
-    ? `[已选择 skill: ${skills.join(', ')}] `
-    : '';
-  const finalPrompt = skillPrefix + prompt;
-
-  // 发送（流式：resolve 在 done 事件时触发，appendCcStream 已逐块填充）
-  try {
-    await sendCcQuery(finalPrompt, workDir, skills.join(","));
-  } catch (err) {
-    console.error("[CC Send] 失败:", err);
-    if (loadingEl.parentNode) loadingEl.remove();
-    if (responseContent) {
-      // 移除可能残留的流式 bubble
-      const stream = responseContent.querySelector('.cc-stream-bubble');
-      if (stream) stream.remove();
-      const errMsg = document.createElement("div");
-      errMsg.className = "notion-chat-message";
-      errMsg.innerHTML = `<div class="notion-chat-bubble" style="border-color:#e53e3e;"><div class="notion-chat-bubble-content" style="color:#e53e3e;">发送失败: ${escHtml(err.message)}</div></div>`;
-      responseContent.appendChild(errMsg);
-    }
-  } finally {
-    if (loadingEl.parentNode) loadingEl.remove();
-  }
-}
-
-function escHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
-}
+// ==================== 拖放 ====================
 
 function setupDragDrop() {
   const messageInput = document.getElementById("chat-input");
