@@ -904,6 +904,9 @@ async function startSending() {
     autoResizeInput(elements.messageInput);
     updateSendButton();
 
+    // 清空提取/划词内容
+    clearExtractedContent();
+
     await new Promise((resolve) => setTimeout(resolve, 1500));
     updateSendButton();
 
@@ -1553,6 +1556,14 @@ function getExtractedContentText() {
   return _extractedTextCache;
 }
 
+function clearExtractedContent() {
+  _extractedTextCache = "";
+  if (extractContent) extractContent.textContent = "";
+  if (extractResult) extractResult.style.display = "none";
+  if (extractTitle) extractTitle.textContent = "";
+  if (extractUrl) extractUrl.textContent = "";
+}
+
 // ==================== 工作区标签 ====================
 
 const WORKSPACE_STORAGE_KEY = "sidebar_workspace_tabs";
@@ -1815,6 +1826,8 @@ async function startDirectSend() {
     elements.messageInput.value = "";
     autoResizeInput(elements.messageInput);
     updateSendButton();
+    // 清空提取/划词内容
+    clearExtractedContent();
 
   } catch (error) {
     console.error("直接发送失败:", error);
