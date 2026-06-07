@@ -52,8 +52,8 @@
         </div>
       </div>
 
-      <!-- ===== 当前提示词指示器 ===== -->
-      <div class="prompt-bar" id="prompt-bar" style="display:none">
+      <!-- ===== 当前提示词指示器（始终可见，点击展开选择） ===== -->
+      <div class="prompt-bar" id="prompt-bar">
         <span class="prompt-bar-label">提示词:</span>
         <span class="prompt-bar-name" id="prompt-bar-name"></span>
         <span class="prompt-bar-alias" id="prompt-bar-alias"></span>
@@ -127,8 +127,8 @@
 
       </div>
 
-      <!-- 隐藏的提示词优化器选择器（仅用于 JS API） -->
-      <div class="prompt-optimizer-selector" id="prompt-optimizer-select" style="display:none">
+      <!-- 提示词选择器（隐藏，点击提示词条时展开） -->
+      <div class="prompt-optimizer-selector" id="prompt-optimizer-select">
         <div class="custom-select">
           <div class="selected-value" data-value="" data-template="">不使用优化</div>
           <div class="custom-select-options"></div>

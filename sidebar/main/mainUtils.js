@@ -375,6 +375,134 @@ export function setupEventListeners() {
   // 清除提示词
   elements.promptBarClear?.addEventListener("click", clearSelectedPrompt);
 
+  // 点击提示词条展开/收起简易模板选择器
+  const promptBar = elements.promptBar || document.getElementById("prompt-bar");
+  let promptPicker = null; // 当前打开的 picker 浮层
+
+  function closePromptPicker() {
+    if (promptPicker) { promptPicker.remove(); promptPicker = null; }
+  }
+
+  function buildPromptPicker() {
+    closePromptPicker();
+    const barRect = promptBar.getBoundingClientRect();
+    const container = document.createElement("div");
+    container.id = "__sidebar_prompt_picker__";
+    container.style.cssText = `
+      position:fixed; z-index:10001;
+      top:${barRect.bottom + 4}px; left:8px; right:8px;
+      background:#fff; border:1px solid #d1d5db; border-radius:8px;
+      box-shadow:0 8px 24px rgba(15,23,42,0.12);
+      max-height:280px; font-size:12px; display:flex; overflow:hidden;
+      font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+    `;
+
+    // 按分组整理
+    const groups = {};
+    const groupNames = [];
+    for (const key in PROMPT_TEMPLATES) {
+      const t = PROMPT_TEMPLATES[key];
+      const g = t.group || "其他";
+      if (!groups[g]) { groups[g] = []; groupNames.push(g); }
+      groups[g].push({ key, label: t.label, template: t.template, alias: t.alias });
+    }
+
+    if (groupNames.length === 0) {
+      const empty = document.createElement("div");
+      empty.textContent = "暂无提示词模板";
+      empty.style.cssText = "padding:32px 10px;color:#9ca3af;text-align:center;font-size:11px;flex:1;";
+      container.appendChild(empty);
+      document.body.appendChild(container);
+      promptPicker = container;
+      registerOutsideClose(container);
+      return;
+    }
+
+    // === 左侧分组列 ===
+    const leftCol = document.createElement("div");
+    leftCol.style.cssText = "width:85px;flex-shrink:0;overflow-y:auto;background:#f9fafb;border-right:1px solid #f0f0f0;";
+
+    // === 右侧模板列 ===
+    const rightCol = document.createElement("div");
+    rightCol.style.cssText = "flex:1;overflow-y:auto;";
+
+    let activeGroup = groupNames[0];
+
+    function renderGroupOptions(groupName) {
+      rightCol.innerHTML = "";
+      const items = groups[groupName] || [];
+      items.forEach((tpl) => {
+        const item = document.createElement("div");
+        const aliasText = tpl.alias ? `  <span style="color:#9ca3af;font-size:10px">/${tpl.alias}</span>` : "";
+        item.innerHTML = `<span>${tpl.label}</span>${aliasText}`;
+        item.style.cssText = "padding:7px 10px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f3f4f6;";
+        item.addEventListener("mouseenter", () => { item.style.background = "#f3f4f6"; });
+        item.addEventListener("mouseleave", () => { item.style.background = ""; });
+        item.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const sel = elements.promptOptimizerSelect?.querySelector(".selected-value");
+          if (sel) {
+            sel.textContent = tpl.label;
+            sel.dataset.value = tpl.key;
+            sel.dataset.template = tpl.template;
+          }
+          chrome.storage.sync.set({ lastPromptTemplate: tpl.key });
+          elements.promptOptimizerSelect?.dispatchEvent(
+            new CustomEvent("change", { detail: { value: tpl.key, template: tpl.template, label: tpl.label } })
+          );
+          syncPromptIndicator();
+          closePromptPicker();
+        });
+        rightCol.appendChild(item);
+      });
+    }
+
+    // 左侧分组列表
+    groupNames.forEach((gName) => {
+      const gItem = document.createElement("div");
+      gItem.textContent = gName;
+      gItem.style.cssText = `padding:7px 8px;cursor:pointer;font-size:11px;transition:background 0.1s;${gName === activeGroup ? "background:#e6f7ff;color:#4361ee;font-weight:600;" : "color:#374151;"}`;
+      gItem.addEventListener("mouseenter", () => {
+        leftCol.querySelectorAll("div").forEach(el => { el.style.background = ""; el.style.color = "#374151"; el.style.fontWeight = ""; });
+        gItem.style.background = "#e6f7ff";
+        gItem.style.color = "#4361ee";
+        gItem.style.fontWeight = "600";
+        activeGroup = gName;
+        renderGroupOptions(gName);
+      });
+      leftCol.appendChild(gItem);
+    });
+
+    container.appendChild(leftCol);
+    container.appendChild(rightCol);
+    renderGroupOptions(activeGroup);
+
+    function registerOutsideClose(el) {
+      const closeFn = (ev) => {
+        if (!el.contains(ev.target) && !promptBar.contains(ev.target)) {
+          closePromptPicker();
+          document.removeEventListener("click", closeFn);
+        }
+      };
+      setTimeout(() => document.addEventListener("click", closeFn), 0);
+    }
+
+    document.body.appendChild(container);
+    promptPicker = container;
+    registerOutsideClose(container);
+  }
+
+  if (promptBar) {
+    promptBar.addEventListener("click", (e) => {
+      if (e.target.closest(".prompt-bar-clear")) return;
+      if (promptPicker) {
+        closePromptPicker();
+      } else {
+        buildPromptPicker();
+      }
+    });
+  }
+
   // 历史按钮切换
   elements.footHistoryBtn?.addEventListener("click", toggleHistoryDropdown);
 
@@ -560,10 +688,8 @@ function syncPromptIndicator() {
   const selectedValue = elements.promptOptimizerSelect?.querySelector('.selected-value');
   const value = selectedValue?.dataset?.value;
   const label = selectedValue?.textContent || '';
-  const template = selectedValue?.dataset?.template;
 
   if (value && value !== '' && label !== '不使用优化') {
-    // 找到对应的模板信息获取 alias
     let alias = '';
     for (const key in PROMPT_TEMPLATES) {
       if (key === value && PROMPT_TEMPLATES[key].alias) {
@@ -572,11 +698,20 @@ function syncPromptIndicator() {
       }
     }
     elements.promptBarName.textContent = label;
+    elements.promptBarName.style.opacity = '1';
     elements.promptBarAlias.textContent = alias || '';
-    elements.promptBar.style.display = '';
+    elements.promptBarAlias.style.display = '';
+    const labelEl = elements.promptBar.querySelector('.prompt-bar-label');
+    if (labelEl) labelEl.textContent = '提示词:';
   } else {
-    elements.promptBar.style.display = 'none';
+    elements.promptBarName.textContent = '选择提示词';
+    elements.promptBarName.style.opacity = '0.5';
+    elements.promptBarAlias.textContent = '';
+    elements.promptBarAlias.style.display = 'none';
+    const labelEl = elements.promptBar.querySelector('.prompt-bar-label');
+    if (labelEl) labelEl.textContent = '';
   }
+  elements.promptBar.style.display = '';
 }
 
 function clearSelectedPrompt() {
