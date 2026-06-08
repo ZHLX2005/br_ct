@@ -60,7 +60,7 @@ export async function mount(container) {
   // 6. 根据初始有无 tab 更新空状态
   _updateEmptyState();
 
-  // 5. 监听 background 转发来的 WS 事件
+  // 7. 监听 background 转发来的 WS 事件
   if (!_runtimeInit) {
     chrome.runtime.onMessage.addListener((msg) => {
       if (!msg || msg.action !== 'nxce_event') return false;
@@ -223,28 +223,8 @@ function _updateEmptyState() {
 }
 
 function _initFirstTab() {
-  const tab = document.querySelector('.cc-tab.active');
-  if (!tab) return;
-  // 等待 dialog 工具函数绑定后再展示
-  setTimeout(() => _showNewSessionDialog().then(({ sessionName, cwd }) => {
-    tab.dataset.ccSession = sessionName;
-    Object.assign(tab, {
-      _sessionId: null, _messages: '', _path: cwd,
-      _sessionName,
-      _skills: [], _skillsCwd: null, _skillsLoading: false,
-      _silentTurn: false,
-    });
-    const label = tab.querySelector('.cc-tab-label');
-    if (label) label.textContent = sessionName;
-    const pi = document.getElementById('cc-path-input');
-    if (pi) pi.value = cwd;
-    _restartStatusPoll();
-    _updateEmptyState();
-  }).catch(() => {
-    // 取消 → 直接移除默认 tab
-    tab.remove();
-    _updateEmptyState();
-  }), 0);
+  // 无默认 tab，直接弹出对话框创建第一个会话
+  setTimeout(() => _createTab(), 0);
 }
 
 /**
