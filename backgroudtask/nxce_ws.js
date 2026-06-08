@@ -410,9 +410,6 @@ const handlers = {
     return await sendNative({ command: 'stopProcess', name: 'nxce-serve-default' }).catch((e) => ({ status: 'error', message: e.message }));
   },
 
-  serveStatus: async () => {
-    return await sendNative({ command: 'claudeServeStatus', name: 'default' });
-  },
 };
 
 export function setupNxceWs() {

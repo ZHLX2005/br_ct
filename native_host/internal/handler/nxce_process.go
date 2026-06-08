@@ -1,23 +1,16 @@
 // Package handler — nx-ce serve 进程管理
 //
-// 两个 handler:
+// handler:
 //   - claudeStartServe:  启动 `npx nx-ce serve`（复用 executor.StartProcess 持 stdin pipe）
-//   - claudeServeStatus: 读 ~/.nx-ce/instances/{name}.json，返回 lifecycle 状态
 //
 // 设计要点：
 //   - nx-ce serve 是长寿命子进程，必须复用 executor 的 pipe writer 持锁机制，
 //     否则 Chrome 断开 stdin → main.go 退出 → OS 关 pipe → nx-ce 误收 EOF 自杀。
 //   - executor.StartProcess 已经会写日志到 ~/.bro_chat_native_host/logs/，
 //     排错时直接看那里。
-//   - 状态文件 ~/.nx-ce/instances/{key}.json 由 nx-ce 自身维护，
-//     浏览器侧可读 lifecycleState 决定是否需要重启。
 package handler
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
-
 	"brochat_native_host/internal/executor"
 	"brochat_native_host/internal/protocol"
 )
@@ -51,43 +44,4 @@ func ClaudeStartServe(req protocol.Request) protocol.Response {
 		WorkDir: req.WorkDir,
 	}
 	return executor.StartProcess(inner)
-}
-
-// ClaudeServeStatus 读 ~/.nx-ce/instances/{name}.json。
-// 浏览器侧依据 lifecycleState 决定是否需要重启。
-// 文件不存在 → { exists: false, lifecycleState: "stopped" }。
-//
-// 入参：req.Name — nx-ce 实例名（默认 "default"）
-func ClaudeServeStatus(req protocol.Request) protocol.Response {
-	name := req.Name
-	if name == "" {
-		name = "default"
-	}
-
-	homeDir, _ := os.UserHomeDir()
-	statePath := filepath.Join(homeDir, ".nx-ce", "instances", name+".json")
-
-	data, err := os.ReadFile(statePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return protocol.Response{
-				Status: "ok",
-				Data: map[string]interface{}{
-					"exists":         false,
-					"name":           name,
-					"lifecycleState": "stopped",
-				},
-			}
-		}
-		return protocol.Response{Status: "error", Message: "read state: " + err.Error()}
-	}
-
-	var state map[string]interface{}
-	if err := json.Unmarshal(data, &state); err != nil {
-		return protocol.Response{Status: "error", Message: "parse state: " + err.Error()}
-	}
-	state["exists"] = true
-	state["name"] = name
-
-	return protocol.Response{Status: "ok", Data: state}
 }
