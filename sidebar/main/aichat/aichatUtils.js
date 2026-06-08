@@ -20,7 +20,6 @@ import {
 import {
   copyToClipboard,
   showTempMessage,
-  populateHistory as populateHistoryUI,
   updateSelectAllText as updateSelectAllTextUI,
   togglePlatformCheckbox,
   setButtonLoadingState,
@@ -96,9 +95,6 @@ let platformTabCache = {};      // platform -> { tabId, title, url }
 // 保存的平台状态（页面加载时从 storage 恢复，供 platform panel 使用）
 let savedPlatformStates = {};
 
-// 历史下拉状态
-let isHistoryOpen = false;
-
 // 划词选择模式
 let isSelectionMode = false;
 
@@ -139,7 +135,6 @@ export async function initializePopup() {
     sendButton: document.getElementById("chat-btn-send"),
     closeTabsButton: document.getElementById("toolbar-close-ai"),
     selectAllButton: document.getElementById("toolbar-select-all"),
-    historySelect: document.getElementById("history-select"),
     promptOptimizerSelect: document.getElementById("prompt-optimizer-select"),
     workspaceTabs: document.getElementById("workspace-tabs"),
     workspaceTabAdd: document.getElementById("workspace-tab-add"),
@@ -153,7 +148,6 @@ export async function initializePopup() {
     promptBarName: document.getElementById("prompt-bar-name"),
     promptBarAlias: document.getElementById("prompt-bar-alias"),
     promptBarClear: document.getElementById("prompt-bar-clear"),
-    historyDropdown: document.getElementById("history-dropdown"),
     footHistoryBtn: document.getElementById("foot-history-btn"),
     modeToggle: document.getElementById("mode-toggle"),
   };
@@ -165,6 +159,10 @@ export async function initializePopup() {
   extractUrl = document.getElementById("extract-url");
   extractContent = document.getElementById("extract-content");
   closeResult = document.getElementById("close-result");
+
+  // 历史消息区元素
+  elements.historySection = document.getElementById("history-section");
+  elements.conversationSection = document.getElementById("conversation-section");
 
   // 划词按钮
   elements.selectionBtn = document.getElementById("toolbar-selection");
@@ -219,9 +217,9 @@ export async function loadStoredData() {
       restorePlatformStates(result[STORAGE_KEYS.PLATFORM_STATES]);
     }
 
-    // 恢复历史记录
+    // 缓存历史记录（点击"历史"按钮时才渲染）
     if (result[STORAGE_KEYS.HISTORY]) {
-      populateHistoryUI(elements.historySelect, result[STORAGE_KEYS.HISTORY]);
+      _historyCache = result[STORAGE_KEYS.HISTORY];
     }
 
     // 恢复优化器选择
@@ -314,15 +312,6 @@ export function setupEventListeners() {
   window.addEventListener("beforeunload", async () => {
     if (saveTimeout) clearTimeout(saveTimeout);
     await debouncedSaveMessage(elements.messageInput.value);
-  });
-
-  // 历史消息选择
-  elements.historySelect.addEventListener("change", () => {
-    if (elements.historySelect.value) {
-      elements.messageInput.value = elements.historySelect.value;
-      elements.messageInput.dispatchEvent(new Event("input"));
-      closeHistoryDropdown();
-    }
   });
 
   // 平台复选框变化（在 platform panel 里）
@@ -504,8 +493,8 @@ export function setupEventListeners() {
     });
   }
 
-  // 历史按钮切换
-  elements.footHistoryBtn?.addEventListener("click", toggleHistoryDropdown);
+  // 历史按钮：切换显示/隐藏历史
+  elements.footHistoryBtn?.addEventListener("click", toggleHistoryView);
 
   // 直发/复制模式切换
   elements.modeToggle?.addEventListener("click", toggleSendMode);
@@ -734,24 +723,119 @@ function clearSelectedPrompt() {
   syncPromptIndicator();
 }
 
-// ==================== 历史消息下拉 ====================
+// ==================== 历史消息（IM 风格，内嵌在聊天流中） ====================
 
-function toggleHistoryDropdown() {
-  if (isHistoryOpen) {
-    closeHistoryDropdown();
-  } else {
-    openHistoryDropdown();
+const HISTORY_PAGE_SIZE = 10;
+let _historyCache = [];           // 全部历史（由 loadStoredData 填充）
+let _historyRendered = 0;         // 已渲染的条数
+
+/**
+ * 渲染历史气泡，顶部有"加载更多"按钮
+ */
+function renderHistorySection() {
+  if (!elements.historySection) return;
+  if (_historyCache.length === 0) {
+    elements.historySection.innerHTML = '<div class="history-empty-tip">暂无历史消息</div>';
+    return;
+  }
+
+  // 从 0 到 _historyRendered + PAGE_SIZE，累加渲染
+  const end = Math.min(_historyRendered + HISTORY_PAGE_SIZE, _historyCache.length);
+  const batch = _historyCache.slice(0, end);
+
+  let html = '';
+
+  // 顶部加载更多按钮
+  const hasMore = _historyRendered + HISTORY_PAGE_SIZE < _historyCache.length;
+  if (hasMore) {
+    const remaining = _historyCache.length - (_historyRendered + HISTORY_PAGE_SIZE);
+    html += `<div class="history-load-more" id="history-load-more">加载更早 ${Math.min(HISTORY_PAGE_SIZE, remaining)} 条</div>`;
+  }
+
+  // 历史气泡：batch=[最新..最旧]，倒序渲染（旧在上，新在下）
+  for (let i = batch.length - 1; i >= 0; i--) {
+    const msg = batch[i];
+    const preview = msg.length > 80 ? msg.slice(0, 80) + '…' : msg;
+    html += `<div class="history-item" data-msg="${escapeAttr(msg)}">
+      <div class="history-bubble">
+        <div class="history-bubble-text">${escapeHtml(preview)}</div>
+      </div>
+    </div>`;
+  }
+
+  // 分隔线
+  if (batch.length > 0) {
+    html += `<div class="history-section-header"><span class="history-section-header-text">历史消息</span></div>`;
+  }
+
+  // 全部加载完了显示标记
+  if (!hasMore && _historyCache.length > 0) {
+    html += `<div class="history-end-marker">—— 共 ${_historyCache.length} 条 ——</div>`;
+  }
+
+  elements.historySection.innerHTML = html;
+
+  // 点击气泡填充到输入框
+  elements.historySection.querySelectorAll('.history-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const msg = el.dataset.msg;
+      if (msg) {
+        elements.messageInput.value = msg;
+        elements.messageInput.dispatchEvent(new Event('input'));
+        focusInputAndSetCursor(elements.messageInput);
+      }
+    });
+  });
+
+  // 加载更多按钮
+  const loadMore = elements.historySection.querySelector('#history-load-more');
+  if (loadMore) {
+    loadMore.addEventListener('click', () => {
+      _historyRendered += HISTORY_PAGE_SIZE;
+      renderHistorySection();
+    });
   }
 }
 
-function openHistoryDropdown() {
-  isHistoryOpen = true;
-  if (elements.historyDropdown) elements.historyDropdown.style.display = 'block';
+/**
+ * "历史"按钮：点击显示最近 10 条 / 再点隐藏
+ */
+function toggleHistoryView() {
+  if (!elements.historySection) return;
+  if (_historyCache.length === 0) { showTempMessage('暂无历史消息'); return; }
+
+  const sec = elements.historySection;
+  const isVisible = sec.classList.contains('visible');
+
+  if (isVisible) {
+    sec.classList.remove('visible');
+    scrollToBottom(true);
+  } else {
+    // 首次显示，渲染最近 10 条
+    if (!sec._loaded) {
+      _historyRendered = 0;
+      renderHistorySection();
+      sec._loaded = true;
+    }
+    sec.classList.add('visible');
+    responseContent?.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 }
 
-function closeHistoryDropdown() {
-  isHistoryOpen = false;
-  if (elements.historyDropdown) elements.historyDropdown.style.display = 'none';
+/**
+ * 发送成功后刷新缓存（如果历史正显示则重绘）
+ */
+export function refreshHistoryCache() {
+  chrome.storage.local.get(STORAGE_KEYS.HISTORY, (result) => {
+    const oldLen = _historyCache.length;
+    _historyCache = result[STORAGE_KEYS.HISTORY] || [];
+    const sec = elements.historySection;
+    if (sec && sec.classList.contains('visible') && _historyCache.length !== oldLen) {
+      _historyRendered = 0;
+      renderHistorySection();
+      fillHistoryIfNeeded();
+    }
+  });
 }
 
 // ==================== 输入框自动调整 ====================
@@ -848,11 +932,12 @@ async function startSending() {
 
   setSidebarSendButtonState("busy", "处理中");
 
+  // 不管发送成功与否，先保存到历史
+  try { await addToHistory(originalMessage); } catch(e) {}
+  refreshHistoryCache();
+
   try {
-    await Promise.all([
-      savePlatformStates(document.querySelectorAll('.platform-icon-option input[type="checkbox"]')),
-      addToHistory(originalMessage)
-    ]);
+    await savePlatformStates(document.querySelectorAll('.platform-icon-option input[type="checkbox"]'));
 
     const actionsQueue = selectedPlatforms.map((platform) => ({
       platform,
@@ -1089,11 +1174,12 @@ function getCheckedPlatforms() {
 }
 
 function renderCurrentPlatform() {
-  if (!responseContent) return;
+  const convContainer = elements.conversationSection;
+  if (!convContainer) return;
 
   if (!activePlatformId) {
-    responseContent.innerHTML = '<div class="response-placeholder">暂无回复内容</div>';
-    responseContent.classList.remove("streaming");
+    convContainer.innerHTML = '<div class="response-placeholder">暂无回复内容</div>';
+    if (responseContent) responseContent.classList.remove("streaming");
     if (responseStatus) responseStatus.style.display = "flex";
     updateResponseStatus(true);
     return;
@@ -1110,16 +1196,17 @@ function renderCurrentPlatform() {
     return;
   }
 
-  responseContent.innerHTML = '<div class="response-placeholder">暂无回复内容</div>';
-  responseContent.classList.remove("streaming");
+  convContainer.innerHTML = '<div class="response-placeholder">暂无回复内容</div>';
+  if (responseContent) responseContent.classList.remove("streaming");
   if (responseStatus) responseStatus.style.display = "flex";
   updateResponseStatus(true);
 }
 
 function renderPlatformMessages(convState) {
-  if (!responseContent) return;
+  const convContainer = elements.conversationSection;
+  if (!convContainer) return;
 
-  responseContent.innerHTML = "";
+  convContainer.innerHTML = "";
 
   const root = document.createElement("div");
   root.className = "notion-chat";
@@ -1208,7 +1295,7 @@ function renderPlatformMessages(convState) {
     root.appendChild(msgRow);
   });
 
-  responseContent.appendChild(root);
+  convContainer.appendChild(root);
 }
 
 /**
@@ -1313,6 +1400,8 @@ export function initializeResponseDisplay() {
     return;
   }
 
+  // 上滑阈值检测：上拉到阈值区松开后加载历史
+  let _pullReady = false;
   responseContent.addEventListener("scroll", () => {
     shouldAutoScroll = isNearBottom(responseContent);
   });
@@ -1805,6 +1894,10 @@ async function startDirectSend() {
 
   setSidebarSendButtonState("busy", "直发");
 
+  // 不管发送成功与否，先保存到历史
+  try { await addToHistory(originalMessage); } catch(e) {}
+  refreshHistoryCache();
+
   let successCount = 0;
   try {
     for (const platform of selectedPlatforms) {
@@ -1921,8 +2014,11 @@ export function hideResponseContainer() {}
 export function resetResponseDisplay() {
   platformStates.clear();
   activePlatformId = null;
+  const convContainer = elements.conversationSection;
+  if (convContainer) {
+    convContainer.innerHTML = '<div class="response-placeholder">暂无回复内容</div>';
+  }
   if (responseContent) {
-    responseContent.innerHTML = '<div class="response-placeholder">暂无回复内容</div>';
     responseContent.classList.remove("streaming");
   }
   if (statusIndicator) {

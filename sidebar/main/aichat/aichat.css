@@ -301,16 +301,76 @@
   word-break: break-word; max-height: 100px; margin: 0;
 }
 
-/* ===== 历史下拉 ===== */
-.history-dropdown { padding: 4px 0 0; }
-.history-select-inline {
-  width: 100%; padding: 5px 8px; border: 1px solid var(--border);
-  border-radius: 4px; font-size: 11px; background: white;
-  appearance: none;
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-  background-repeat: no-repeat; background-position: right 6px center;
-  background-size: 10px; cursor: pointer;
+/* ===== 历史消息区（默认隐藏，点击"历史"按钮后显示） ===== */
+.history-section {
+  display: none; flex-direction: column; gap: 6px;
+  padding: 0 10px 4px; flex-shrink: 0;
 }
+.history-section.visible {
+  display: flex;
+}
+.history-section-header {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 0 2px; user-select: none;
+}
+.history-section-header::before,
+.history-section-header::after {
+  content: ''; flex: 1; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
+}
+.history-section-header-text {
+  font-size: 9px; color: var(--text-muted); white-space: nowrap;
+  letter-spacing: 0.04em;
+}
+.history-load-more {
+  text-align: center; padding: 10px 0; font-size: 11px; color: var(--primary);
+  cursor: pointer; user-select: none; font-weight: 500;
+}
+.history-load-more:hover { opacity: 0.7; }
+.history-empty-tip {
+  text-align: center; padding: 20px 0; font-size: 11px; color: var(--text-muted);
+}
+.history-end-marker {
+  text-align: center; padding: 6px 0 2px; font-size: 9px; color: var(--border);
+  user-select: none;
+}
+
+/* 历史消息气泡（复用 .notion-chat-bubble--user 样式） */
+.history-item {
+  display: flex; gap: 8px; max-width: 100%;
+  cursor: pointer; opacity: 0; animation: historyIn 0.25s ease forwards;
+}
+@keyframes historyIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.history-item .history-bubble {
+  flex: 0 1 auto; max-width: min(88%, 640px);
+  border-radius: 12px 6px 12px 12px;
+  background: #0071da; color: white;
+  border-color: rgba(37,99,235,0.08);
+  box-shadow: 0 8px 20px rgba(37,99,235,0.08);
+  padding: 8px 12px 9px; font-size: 13px; line-height: 1.55;
+  word-break: break-word; white-space: normal;
+  transition: opacity 0.1s ease;
+}
+.history-item:hover .history-bubble { opacity: 0.8; }
+.history-item .history-bubble-text {
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 加载动画 */
+.history-loading {
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  padding: 10px 0;
+}
+.history-loading-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--primary); animation: bounce 1.2s infinite;
+}
+.history-loading-dot:nth-child(2) { animation-delay: -0.4s; }
+.history-loading-dot:nth-child(3) { animation-delay: -0.8s; }
 
 /* ===== 提示词选择器（保留 DOM 用于 JS API，隐藏） ===== */
 #prompt-optimizer-select { display: none !important; }

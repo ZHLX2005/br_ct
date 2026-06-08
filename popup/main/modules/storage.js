@@ -10,7 +10,7 @@ export const STORAGE_KEYS = {
   LAST_PROMPT_TEMPLATE: "lastPromptTemplate"
 };
 
-const MAX_HISTORY = 1000;
+const MAX_HISTORY = 30;
 
 /**
  * 保存消息内容到本地存储

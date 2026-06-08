@@ -44,7 +44,10 @@
 <div class="main-pages">
   <section class="page active" id="page-main">
     <div class="response-content" id="response-content">
-      <div class="response-placeholder">暂无回复内容</div>
+      <div class="history-section" id="history-section"></div>
+      <div class="conversation-section" id="conversation-section">
+        <div class="response-placeholder">暂无回复内容</div>
+      </div>
     </div>
     <div class="response-status" id="response-status">
       <span class="status-indicator"></span>
@@ -71,7 +74,7 @@
     </div>
     <div class="chat-input-foot" id="chat-input-foot">
       <div class="chat-input-foot-left">
-        <button class="foot-btn" id="foot-history-btn" title="历史消息">
+        <button class="foot-btn" id="foot-history-btn" title="查看历史消息">
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/><path d="M6 3.5v3l2 1.2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
           历史
         </button>
@@ -87,9 +90,4 @@
     </div>
   </div>
 
-  <div class="history-dropdown" id="history-dropdown" style="display:none">
-    <select id="history-select" class="history-select-inline">
-      <option value="">选择历史消息</option>
-    </select>
-  </div>
 </div>
