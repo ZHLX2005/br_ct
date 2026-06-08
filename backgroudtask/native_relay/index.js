@@ -19,6 +19,12 @@ function connect() {
     userDisconnected = false;
 
     nativePort.onMessage.addListener((msg) => {
+      console.log('[NativeRelay] 收到 native host 响应:', {
+        status: msg?.status,
+        textLen: msg?.data?.text?.length,
+        sessionId: msg?.data?.sessionId,
+        pending: pendingRequests.length,
+      });
       if (pendingRequests.length > 0) {
         const { sendResponse } = pendingRequests.shift();
         sendResponse(msg);
@@ -93,6 +99,12 @@ export function setupNativeRelay() {
     pendingRequests.push({ sendResponse });
 
     try {
+      console.log('[NativeRelay] 转发到 native host:', {
+        command: message.payload?.command,
+        sessionId: message.payload?.sessionId,
+        promptLen: message.payload?.prompt?.length,
+        pending: pendingRequests.length,
+      });
       nativePort.postMessage(message.payload);
     } catch (err) {
       pendingRequests.pop();

@@ -12,8 +12,8 @@ export const OCR_MENU_ID = 'translationOCR';
  */
 function createContextMenus() {
   // 先删除已存在的菜单（如果存在）
-  chrome.contextMenus.remove(MENU_ID, () => {});
-  chrome.contextMenus.remove(OCR_MENU_ID, () => {});
+  chrome.contextMenus.remove(MENU_ID, () => { const _ = chrome.runtime.lastError; });
+  chrome.contextMenus.remove(OCR_MENU_ID, () => { const _ = chrome.runtime.lastError; });
 
   // 创建新菜单
   chrome.contextMenus.create({

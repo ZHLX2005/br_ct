@@ -19,6 +19,7 @@ type Request struct {
 	Command   string   `json:"command"`
 	Path      string   `json:"path,omitempty"`
 	Content   string   `json:"content,omitempty"`
+	Prompt    string   `json:"prompt,omitempty"`
 	FileName  string   `json:"fileName,omitempty"`
 	WorkDir   string   `json:"workDir,omitempty"`
 	Cmd       string   `json:"cmd,omitempty"`

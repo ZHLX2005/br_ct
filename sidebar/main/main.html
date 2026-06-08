@@ -7,128 +7,28 @@
     <link rel="stylesheet" href="sidebar.css" />
   </head>
   <body>
-    <div class="app-shell">
+    <div class="app-shell" id="app-shell" data-mode="aichat">
 
-      <!-- ===== 顶部工具栏 ===== -->
-      <div class="toolbar">
-        <button class="toolbar-platform-btn" id="platform-selector-btn">
-          <span class="toolbar-platform-label">AI 平台</span>
-          <span class="toolbar-platform-count" id="platform-count">0</span>
-          <svg class="toolbar-chevron" id="selector-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
-            <path d="M2 3.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <header class="app-header">
+        <div class="app-header-left">
+          <span class="app-header-title">AI Assistant</span>
+        </div>
+        <button class="cc-toggle" id="cc-toggle" title="切换到 Claude Code 模式">
+          <svg class="cc-toggle-icon cc-toggle-icon-cc" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
           </svg>
+          <svg class="cc-toggle-icon cc-toggle-icon-chat" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span class="cc-toggle-label cc-toggle-label-cc">Claude Code</span>
+          <span class="cc-toggle-label cc-toggle-label-chat">AI Chat</span>
         </button>
-        <div class="toolbar-actions">
-          <button class="toolbar-action-btn toolbar-sel-btn" id="toolbar-selection" title="划词选择页面文本">划词</button>
-          <button class="toolbar-action-btn" id="toolbar-extract" title="提取页面文本">提取</button>
-          <button class="toolbar-action-btn" id="toolbar-select-all">全选</button>
-          <button class="toolbar-action-btn" id="toolbar-clear-chat" title="清空聊天内容">清空</button>
-          <button class="toolbar-action-btn toolbar-action-close" id="toolbar-close-ai">关闭AI</button>
-        </div>
-      </div>
+      </header>
 
-      <!-- ===== 工作区标签（移到上方） ===== -->
-      <div class="workspace-tabs" id="workspace-tabs">
-        <button class="workspace-tab-add" id="workspace-tab-add" title="添加当前页面到工作区">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-        </button>
-      </div>
+      <div id="app-view" class="app-view"></div>
 
-      <!-- 右键菜单 -->
-      <div class="tab-context-menu" id="tab-context-menu" style="display:none">
-        <div class="context-menu-item" data-action="close">关闭标签页</div>
-        <div class="context-menu-item danger" data-action="remove">移除工作区</div>
-      </div>
-
-      <!-- ===== 已勾选平台快捷按钮 ===== -->
-      <div class="platform-pills" id="platform-pills">
-        <!-- 由 JS 动态生成已勾选平台的快捷按钮 -->
-      </div>
-
-      <!-- ===== 平台选择面板（可折叠） ===== -->
-      <div class="platform-panel" id="platform-panel">
-        <div class="platform-options-row" id="platform-options-row">
-          <!-- 由 JS 动态生成 -->
-        </div>
-      </div>
-
-      <!-- ===== 当前提示词指示器（始终可见，点击展开选择） ===== -->
-      <div class="prompt-bar" id="prompt-bar">
-        <span class="prompt-bar-label">提示词:</span>
-        <span class="prompt-bar-name" id="prompt-bar-name"></span>
-        <span class="prompt-bar-alias" id="prompt-bar-alias"></span>
-        <button class="prompt-bar-clear" id="prompt-bar-clear" title="清除提示词">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-        </button>
-      </div>
-
-      <!-- ===== 回复/聊天内容区 ===== -->
-      <div class="main-pages">
-        <section class="page active" id="page-main">
-          <div class="response-content" id="response-content">
-            <div class="response-placeholder">暂无回复内容</div>
-          </div>
-          <div class="response-status" id="response-status">
-            <span class="status-indicator"></span>
-            <span class="status-text">等待回复...</span>
-          </div>
-        </section>
-      </div>
-
-      <!-- ===== 底部输入区 ===== -->
-      <div class="input-area">
-
-        <!-- 提取结果展示（浮层） -->
-        <div class="extract-result" id="extract-result" style="display: none;">
-          <div class="extract-result-header">
-            <span class="extract-title" id="extract-title"></span>
-            <button class="close-result" id="close-result" type="button">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-            </button>
-          </div>
-          <div class="extract-url" id="extract-url"></div>
-          <pre class="extract-content" id="extract-content"></pre>
-        </div>
-
-        <!-- 输入栏 -->
-        <div class="chat-input-bar" id="chat-input-bar">
-          <div class="chat-input-inner">
-            <textarea
-              class="chat-input"
-              id="chat-input"
-              placeholder="输入消息，输入 / 选择提示词模板..."
-              rows="2"
-            ></textarea>
-          </div>
-          <div class="chat-input-foot">
-            <div class="chat-input-foot-left">
-              <button class="foot-btn" id="foot-history-btn" title="历史消息">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/><path d="M6 3.5v3l2 1.2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-                历史
-              </button>
-            </div>
-            <div class="chat-input-foot-right">
-              <button class="mode-toggle" id="mode-toggle" title="切换直发/复制模式">直发</button>
-              <button class="send-btn" id="chat-btn-send" disabled>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path d="M2 8l12-6-6 12-2-4-4-2z" fill="currentColor" stroke="currentColor" stroke-width="0.5" stroke-linejoin="round"/>
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- 历史消息下拉（隐藏，通过 #foot-history-btn 切换） -->
-        <div class="history-dropdown" id="history-dropdown" style="display:none">
-          <select id="history-select" class="history-select-inline">
-            <option value="">选择历史消息</option>
-          </select>
-        </div>
-
-      </div>
-
-      <!-- 提示词选择器（隐藏，点击提示词条时展开） -->
-      <div class="prompt-optimizer-selector" id="prompt-optimizer-select">
+      <!-- 隐藏的提示词选择器（aichat JS 需要） -->
+      <div class="prompt-optimizer-selector" id="prompt-optimizer-select" style="display:none">
         <div class="custom-select">
           <div class="selected-value" data-value="" data-template="">不使用优化</div>
           <div class="custom-select-options"></div>

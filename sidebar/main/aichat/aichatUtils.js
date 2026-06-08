@@ -1,6 +1,7 @@
-// mainUtils.js - 核心popup功能模块（单页全屏版）
-import { populateOptimizer, initAliasShortcut } from "../../popup/main/prompts/promptsUI.js";
-import { PROMPT_TEMPLATES } from "../../popup/main/prompts/prompts.js";
+// aichatUtils.js - AI Chat 核心功能模块（原 mainUtils.js）
+// 100% AI Chat 代码，无任何 Claude Code 逻辑
+import { populateOptimizer, initAliasShortcut } from "../../../popup/main/prompts/promptsUI.js";
+import { PROMPT_TEMPLATES } from "../../../popup/main/prompts/prompts.js";
 import {
   STORAGE_KEYS,
   saveMessageContent,
@@ -8,14 +9,14 @@ import {
   saveOptimizerSetting,
   loadStoredData as loadData,
   addToHistory
-} from "../../popup/main/modules/storage.js";
+} from "../../../popup/main/modules/storage.js";
 import {
   loadPlatformVisibilitySettings,
   applyPlatformVisibilitySettings,
   getVisiblePlatformCheckboxes,
   areAllVisiblePlatformsChecked,
   setupPlatformVisibilityMessageListener
-} from "../../popup/main/modules/platformVisibility.js";
+} from "../../../popup/main/modules/platformVisibility.js";
 import {
   copyToClipboard,
   showTempMessage,
@@ -27,9 +28,9 @@ import {
   focusInputAndSetCursor,
   validateMessageInput,
   validatePlatformSelection
-} from "../../popup/main/modules/uiHelpers.js";
+} from "../../../popup/main/modules/uiHelpers.js";
 
-import { PLATFORM_CONFIG } from "../../config/platformConfig.js";
+import { PLATFORM_CONFIG } from "../../../config/platformConfig.js";
 
 // DOM 元素缓存
 let elements = {};
@@ -674,6 +675,12 @@ function renderPlatformPills() {
 
     pill.addEventListener('click', (e) => {
       e.stopPropagation();
+      // 先切换侧边栏显示（更新 activePlatformId + 渲染消息）
+      activePlatformId = platformId;
+      renderCurrentPlatform();
+      renderPlatformTabs();
+      scrollToBottom(true);
+      // 再切浏览器标签页
       switchToPlatformTab(platformId);
     });
 
@@ -1548,12 +1555,13 @@ function applyPromptTemplate(template, userMessage, extractedText) {
  * 没有可见的提取结果时返回空串。
  */
 function getExtractedContentText() {
-  // 优先用 DOM 内容（划词/提取展示），兜底用缓存
-  if (extractContent) {
-    const domText = (extractContent.textContent || "").trim();
-    if (domText && domText !== "未获取到内容") return domText;
+  if (!extractResult || extractResult.style.display === "none" || !extractContent) {
+    return "";
   }
-  return _extractedTextCache;
+  const text = (extractContent.textContent || "").trim();
+  if (!text || text === "未获取到内容") return "";
+  const url = (extractUrl?.textContent || "").trim();
+  return url ? `[来自: ${url}]\n${text}` : text;
 }
 
 function clearExtractedContent() {

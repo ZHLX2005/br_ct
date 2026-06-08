@@ -1,0 +1,68 @@
+<div id="cc-tabs-wrapper" style="position:relative;">
+<div class="cc-tabs" id="cc-tabs">
+  <div class="cc-tab active" data-cc-session="0">
+    <span class="cc-tab-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>
+    <span class="cc-tab-label">会话 1</span>
+    <span class="cc-tab-close" title="关闭">×</span>
+  </div>
+  <button class="cc-tab-add" id="cc-tab-add" title="新建对话">
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1.5v9M1.5 6h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+  </button>
+  <span class="cc-serve-spacer"></span>
+  <button class="cc-history-btn" id="cc-history-btn" title="历史会话">
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/>
+      <path d="M6 3v3l2 1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </button>
+  <span class="cc-serve-status" id="cc-serve-status" data-state="disconnected" title="nx-ce serve 状态">
+    <span class="cc-serve-dot"></span>
+    <span class="cc-serve-text">未连接</span>
+  </span>
+  <button class="cc-serve-btn" id="cc-serve-btn" title="启动 nx-ce serve">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+    <span>连接</span>
+  </button>
+</div>
+
+<div class="cc-history-popup" id="cc-history-popup" style="display:none">
+  <div class="cc-history-header">历史会话</div>
+  <div class="cc-history-list" id="cc-history-list"></div>
+</div>
+</div>
+
+<section class="cc-page" id="page-main">
+  <div class="response-content" id="response-content">
+    <div class="cc-status-badge" id="cc-status-badge" style="display:none">
+      <span class="cc-status-dot"></span>
+      <span class="cc-status-text"></span>
+    </div>
+    <div class="response-placeholder response-placeholder--cc">
+      <svg class="rp-cc-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      <span class="rp-cc-label">Claude Code</span>
+      <span class="rp-cc-sub">与 Claude Code 开始对话</span>
+    </div>
+  </div>
+</section>
+
+<div class="cc-path-bar" id="cc-path-bar">
+  <svg class="cc-path-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+  <input class="cc-path-input" id="cc-path-input" type="text" spellcheck="false" value="C:\Windows\System32" />
+</div>
+
+<div class="input-area" style="position:relative;">
+  <div class="cc-skill-popup" id="cc-skill-popup" style="display:none;"></div>
+  <div class="chat-input-bar" id="chat-input-bar">
+    <div class="chat-input-inner">
+      <textarea class="chat-input" id="chat-input" placeholder="输入消息..." rows="2"></textarea>
+    </div>
+    <div class="chat-input-foot">
+      <div class="chat-input-foot-left"></div>
+      <div class="chat-input-foot-right">
+        <button class="send-btn" id="chat-btn-send" disabled>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8l12-6-6 12-2-4-4-2z" fill="currentColor"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

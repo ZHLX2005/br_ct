@@ -72,6 +72,9 @@ func main() {
 	registry.Register("setSystemEnvVar", envvars.SetSystemEnvVar)
 	registry.Register("removeSystemEnvVar", envvars.RemoveSystemEnvVar)
 
+	// nx-ce serve 进程管理（业务消息由 sidebar 直连 WS）
+	registry.Register("claudeStartServe", handler.ClaudeStartServe)
+
 	// 消息循环：放在 goroutine 里，让 main 在 stdin EOF 后还能继续做 children
 	// 的 pipe writer 持有者，避免 Chrome SW 断开时连坐杀死长寿命 child（如 nx-sx happy）。
 	stdin := os.Stdin
