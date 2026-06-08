@@ -323,3 +323,190 @@
 .cc-skill-item-name { flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cc-skill-item-desc { color: #9ca3af; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px; }
 .cc-skill-empty { padding: 12px; text-align: center; color: #9ca3af; font-size: 12px; }
+
+/* ===== Thinking Section ===== */
+
+.cc-thought-section {
+  border-bottom: 1px solid rgba(107, 114, 128, 0.12);
+  margin-bottom: 6px;
+}
+
+.cc-thought-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px;
+  cursor: pointer;
+  user-select: none;
+  color: #6b7280;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 4px;
+  transition: background 0.1s;
+  margin: 0 -4px;
+}
+.cc-thought-header:hover {
+  background: rgba(107, 114, 128, 0.06);
+}
+
+.cc-thought-header-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: #9ca3af;
+}
+
+.cc-thought-header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.cc-thought-header-end {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.cc-thought-arrow {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  color: #9ca3af;
+  transition: transform 0.2s ease;
+}
+.cc-thought-arrow.collapsed {
+  transform: rotate(-90deg);
+}
+
+.cc-thought-content {
+  font-size: 11px;
+  color: #6b7280;
+  font-style: normal;
+  line-height: 1.6;
+  padding: 4px 4px 8px 4px;
+  max-height: 2000px;
+  opacity: 1;
+  overflow: hidden;
+  transition: max-height 0.3s ease, opacity 0.2s ease, padding 0.2s ease;
+}
+.cc-thought-content.collapsed {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* ===== Tools Section ===== */
+
+.cc-tools-section {
+  border-top: 1px solid rgba(59, 130, 246, 0.1);
+  margin-top: 8px;
+  padding-top: 6px;
+}
+
+.cc-tools-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 6px;
+}
+.cc-tools-header svg {
+  width: 11px;
+  height: 11px;
+  color: #9ca3af;
+}
+
+.cc-tool-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.cc-tool-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  background: rgba(59, 130, 246, 0.04);
+  border: 1px solid rgba(59, 130, 246, 0.1);
+  transition: all 0.15s;
+}
+.cc-tool-card:hover {
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.cc-tool-card-icon {
+  display: flex;
+  align-items: center;
+  color: #6b7280;
+  flex-shrink: 0;
+}
+.cc-tool-card-icon svg {
+  width: 10px;
+  height: 10px;
+}
+
+.cc-tool-card-name {
+  font-weight: 500;
+  color: #374151;
+}
+
+.cc-tool-card-detail {
+  color: #9ca3af;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cc-tool-card-status {
+  display: flex;
+  align-items: center;
+  margin-left: 2px;
+  flex-shrink: 0;
+}
+
+/* Tool status: running spinner */
+.cc-tool-status-spinner {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid rgba(59, 130, 246, 0.2);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: cc-spin 0.6s linear infinite;
+}
+@keyframes cc-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Tool status: done checkmark */
+.cc-tool-status-done {
+  color: #22c55e;
+  width: 10px;
+  height: 10px;
+}
+
+/* Tool status: error */
+.cc-tool-status-error {
+  color: #ef4444;
+  width: 10px;
+  height: 10px;
+}
+
+/* Thinking inline loading dots (smaller variant) */
+.cc-thought-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.cc-thought-loading .cc-loading-dot {
+  width: 4px;
+  height: 4px;
+}

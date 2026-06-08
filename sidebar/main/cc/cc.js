@@ -55,7 +55,10 @@ export async function mount(container) {
   _initSkillAutocomplete();
   _initStatusPolling();
 
-  // 5. 空状态按钮
+  // 5. 思考区域折叠/展开事件代理
+  _initThoughtToggle();
+
+  // 6. 空状态按钮
   const emptyBtn = document.getElementById('cc-empty-state-btn');
   if (emptyBtn) emptyBtn.addEventListener('click', () => _createTab());
 
@@ -156,22 +159,30 @@ function _dispatch(msg) {
       tab._streamingText = '';
       tab._streamingThinking = '';
       tab._streamingTools = [];
+      tab._streamingToolIds = new Set();
       break;
 
     case 'text':
       if (tab._silentTurn) { tab._streamingText = (tab._streamingText || '') + (msg.content || ''); break; }
       tab._streamingText = (tab._streamingText || '') + (msg.content || '');
-      _appendStream(tab, msg.content);
+      _appendStreamText(tab, msg.content);
       break;
 
     case 'thinking':
       tab._streamingThinking = (tab._streamingThinking || '') + (msg.content || '');
+      if (!tab._silentTurn) _appendThinking(tab, msg.content);
       break;
 
-    case 'tool_use':
-      if (!tab._streamingTools) tab._streamingTools = [];
-      tab._streamingTools.push({ name: msg.name, input: msg.input, id: msg.id });
+    case 'tool_use': {
+      if (tab._silentTurn) break;
+      if (!tab._streamingTools) { tab._streamingTools = []; tab._streamingToolIds = new Set(); }
+      const tool = { name: msg.name, input: msg.input, id: msg.id || 't_' + Date.now() + '_' + tab._streamingTools.length };
+      if (tab._streamingToolIds.has(tool.id)) break; // dedup
+      tab._streamingToolIds.add(tool.id);
+      tab._streamingTools.push(tool);
+      _addToolCard(tab, tool);
       break;
+    }
 
     case 'done':
       if (msg.sessionId) tab._sessionId = msg.sessionId;
@@ -181,11 +192,11 @@ function _dispatch(msg) {
       }
       if (tab._silentTurn) { tab._silentTurn = false; break; }
       _finalizeStream(tab);
-      _fetchStatus(); // 完成后刷新状态
+      _finalizeTools(tab);
+      _fetchStatus();
       break;
 
     case 'error':
-      // probe/getSkills 等后台操作的 error 不应中断当前 query
       if (msg.content && (msg.content.includes('getSkills') || msg.content.includes('probe'))) {
         console.warn('[cc] background probe error:', msg.content);
         break;
@@ -194,6 +205,8 @@ function _dispatch(msg) {
         _pendingQuery.reject(new Error(msg.content || 'error'));
         _pendingQuery = null;
       }
+      // also finalize tools on error
+      if (!tab._silentTurn) _finalizeTools(tab);
       break;
   }
 }
@@ -798,9 +811,10 @@ async function _handleSend() {
 
 // ==================== Streaming ====================
 
-function _appendStream(tab, chunk) {
+/** 获取或创建当前 turn 的助手气泡（含 thinking 区域、分割线、text 区域、tools 区域结构） */
+function _getOrCreateBubble(tab) {
   const rc = document.getElementById('response-content');
-  if (!rc) return;
+  if (!rc) return null;
   let s = rc.querySelector('.cc-stream-bubble');
   if (!s) {
     s = document.createElement('div');
@@ -809,16 +823,123 @@ function _appendStream(tab, chunk) {
     s.innerHTML =
       '<div class="notion-chat-avatar" style="background:#f97316;display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;flex-shrink:0;">' +
       '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 6"/></svg></div>' +
-      '<div class="notion-chat-bubble"><div class="notion-chat-bubble-header">' +
+      '<div class="notion-chat-bubble" style="flex:1;min-width:0;">' +
+      '<div class="notion-chat-bubble-header">' +
       `<span class="notion-chat-bubble-name" style="color:#ea580c">${_escHtml(label)}</span></div>` +
-      '<div class="notion-chat-bubble-content cc-stream-content"></div></div>';
+      '<div class="cc-thought-section">' +
+      '<div class="cc-thought-header">' +
+      '<svg class="cc-thought-header-icon" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2" y="2.5" width="10" height="8" rx="2.5"/><polygon points="5.5,10 5.5,13 8.5,10" stroke-linejoin="round"/></svg>' +
+      '<span class="cc-thought-header-text">思考中…</span>' +
+      '<span class="cc-thought-header-end">' +
+      '<svg class="cc-thought-arrow" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="2.5,3.5 5,6.5 7.5,3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+      '</span></div>' +
+      '<div class="cc-thought-content"></div></div>' +
+      '<div class="cc-stream-content"></div>' +
+      '<div class="cc-tools-section" style="display:none">' +
+      '<div class="cc-tools-header">' +
+      '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="2" width="4" height="4" rx="0.5"/><rect x="8" y="2" width="4" height="4" rx="0.5"/><rect x="2" y="8" width="4" height="4" rx="0.5"/><rect x="8" y="8" width="4" height="4" rx="0.5"/></svg>' +
+      '工具调用</div>' +
+      '<div class="cc-tool-grid"></div></div>' +
+      '</div></div>';
     rc.appendChild(s);
     rc.scrollTop = rc.scrollHeight;
   }
+  return s;
+}
+
+function _appendStreamText(tab, chunk) {
+  const s = _getOrCreateBubble(tab);
+  if (!s) return;
   const c = s.querySelector('.cc-stream-content');
   if (c) c.textContent += chunk;
-  rc.scrollTop = rc.scrollHeight;
-  tab._messages = rc.innerHTML;
+  _scrollToBottom(s);
+  _saveBubbleMessages(tab, s);
+}
+
+function _appendThinking(tab, chunk) {
+  const s = _getOrCreateBubble(tab);
+  if (!s) return;
+  const contentEl = s.querySelector('.cc-thought-content');
+  if (!contentEl) return;
+  // 确保 thinking 区域展开（流式进行中强制展开）
+  contentEl.classList.remove('collapsed');
+  const arrow = s.querySelector('.cc-thought-arrow');
+  if (arrow) arrow.classList.remove('collapsed');
+  contentEl.textContent += chunk;
+  _scrollToBottom(s);
+  _saveBubbleMessages(tab, s);
+}
+
+function _addToolCard(tab, tool) {
+  const s = _getOrCreateBubble(tab);
+  if (!s) return;
+  const grid = s.querySelector('.cc-tool-grid');
+  const section = s.querySelector('.cc-tools-section');
+  if (!grid || !section) return;
+  section.style.display = '';
+  // 检查是否已存在同 id 的卡片
+  if (grid.querySelector(`[data-tool-id="${_escHtml(tool.id)}"]`)) return;
+  const card = document.createElement('div');
+  card.className = 'cc-tool-card';
+  card.dataset.toolId = tool.id;
+  card.dataset.toolName = tool.name;
+  card.innerHTML =
+    '<span class="cc-tool-card-icon">' + _getToolIcon(tool.name) + '</span>' +
+    '<span class="cc-tool-card-name">' + _escHtml(tool.name) + '</span>' +
+    '<span class="cc-tool-card-detail">' + _escHtml(_getToolDetail(tool)) + '</span>' +
+    '<span class="cc-tool-card-status"><div class="cc-tool-status-spinner"></div></span>';
+  grid.appendChild(card);
+  _scrollToBottom(s);
+  _saveBubbleMessages(tab, s);
+}
+
+function _finalizeTools(tab) {
+  const rc = document.getElementById('response-content');
+  if (!rc) return;
+  rc.querySelectorAll('.cc-tool-card').forEach(card => {
+    const statusEl = card.querySelector('.cc-tool-card-status');
+    if (!statusEl) return;
+    // 替换 spinner 为勾选
+    statusEl.innerHTML =
+      '<svg class="cc-tool-status-done" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2"><polyline points="2,5 4.5,7.5 8,2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  });
+  // 保存最终状态
+  const activeTab = _getActiveTab();
+  if (activeTab) {
+    const s = rc.querySelector('.cc-stream-bubble');
+    if (s) _saveBubbleMessages(activeTab, s);
+  }
+}
+
+function _getToolIcon(toolName) {
+  const name = (toolName || '').toLowerCase();
+  // SVG icons: 10x10 inline, same stroke style
+  if (name === 'read' || name === 'glob' || name === 'grep' || name === 'search' || name === 'find') {
+    return '<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="4" cy="4" r="2.5"/><path d="M6 6l3 3" stroke-linecap="round"/></svg>';
+  }
+  if (name === 'write' || name === 'edit') {
+    return '<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1.5 7.5l-0.5 2 2-0.5 5.5-5.5-1.5-1.5-5.5 5.5z" stroke-linejoin="round"/></svg>';
+  }
+  if (name === 'bash' || name === 'run' || name === 'execute' || name === 'command') {
+    return '<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3"><polygon points="2,1.5 8,5 2,8.5" stroke-linejoin="round"/></svg>';
+  }
+  if (name === 'agent') {
+    return '<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="3" y="1.5" width="4" height="4" rx="1"/><path d="M2 8c0-1.5 1.5-2 3-2s3 0.5 3 2" stroke-linecap="round"/></svg>';
+  }
+  // default: wrench/gear
+  return '<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="5" cy="5" r="2"/><path d="M6.5 1.5A4 4 0 0 0 5 1a4 4 0 0 0-2 0.5l1 1.5-1 1-1.5-1A4 4 0 0 0 1 5a4 4 0 0 0 0.5 2l1.5-1 1 1-1 1.5A4 4 0 0 0 5 9a4 4 0 0 0 2-0.5l-1-1.5 1-1 1.5 1A4 4 0 0 0 9 5a4 4 0 0 0-0.5-2l-1.5 1-1-1 1-1.5z"/></svg>';
+}
+
+function _getToolDetail(tool) {
+  const input = tool.input;
+  if (!input) return '';
+  if (typeof input === 'string') return input.slice(0, 30);
+  if (typeof input === 'object') {
+    // 提取合适长度的摘要
+    const str = input.file_path || input.command || input.path || input.pattern || JSON.stringify(input);
+    return String(str).slice(0, 35);
+  }
+  return '';
 }
 
 function _finalizeStream(tab) {
@@ -826,7 +947,17 @@ function _finalizeStream(tab) {
   if (!rc) return;
   const s = rc.querySelector('.cc-stream-bubble');
   if (s) {
+    // finalize thinking: 收起+改标签
+    const thoughtHeader = s.querySelector('.cc-thought-header-text');
+    const thoughtContent = s.querySelector('.cc-thought-content');
+    const arrow = s.querySelector('.cc-thought-arrow');
+    if (thoughtHeader) thoughtHeader.textContent = '思考过程';
+    if (thoughtContent) thoughtContent.classList.add('collapsed');
+    if (arrow) arrow.classList.add('collapsed');
+
+    // finalize text: markdown render
     const c = s.querySelector('.cc-stream-content');
+    const thoughtSection = s.querySelector('.cc-thought-section');
     if (c) {
       try {
         c.innerHTML = renderMarkdownSafe(c.textContent || '');
@@ -834,11 +965,48 @@ function _finalizeStream(tab) {
         c.innerHTML = _escHtml(c.textContent || '').replace(/\n/g, '<br>');
       }
     }
+    // 如果 thinking 没有内容，隐藏 thinking 区域
+    if (thoughtContent && !thoughtContent.textContent.trim()) {
+      if (thoughtSection) thoughtSection.style.display = 'none';
+    }
     s.classList.remove('cc-stream-bubble');
   }
   const ld = rc.querySelector('.cc-loading');
   if (ld) ld.remove();
   tab._messages = rc.innerHTML;
+}
+
+/** 保存气泡当前 HTML 到 tab._messages，考虑 stream 中可能尚未渲染完 */
+function _saveBubbleMessages(tab, bubbleEl) {
+  const rc = document.getElementById('response-content');
+  if (rc && tab) tab._messages = rc.innerHTML;
+}
+
+function _scrollToBottom(bubbleEl) {
+  const rc = document.getElementById('response-content');
+  if (rc) rc.scrollTop = rc.scrollHeight;
+}
+
+/** 事件代理：点击 cc-stream-bubble 内的 .cc-thought-header 触发折叠/展开 */
+function _initThoughtToggle() {
+  const rc = document.getElementById('response-content');
+  if (!rc) return;
+  rc.addEventListener('click', (e) => {
+    const header = e.target.closest('.cc-thought-header');
+    if (!header) return;
+    const bubble = header.closest('.cc-stream-bubble, .notion-chat-message');
+    if (!bubble) return;
+    // 如果气泡还处于 streaming 状态（有 cc-stream-bubble 类），正在输出 thinking 时不允许折叠
+    if (bubble.classList.contains('cc-stream-bubble')) {
+      // 只有完成后的气泡才允许折叠
+      return;
+    }
+    const content = bubble.querySelector('.cc-thought-content');
+    const arrow = header.querySelector('.cc-thought-arrow');
+    if (!content || !arrow) return;
+    content.classList.toggle('collapsed');
+    arrow.classList.toggle('collapsed');
+  });
 }
 
 // ==================== Utils ====================
