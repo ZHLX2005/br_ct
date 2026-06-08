@@ -305,48 +305,6 @@
   background: #ea580c;
 }
 
-/* ---- 模型切换按钮 ---- */
-.cc-model-btn {
-  font-size: 10px; font-weight: 600;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  letter-spacing: 0.02em;
-  padding: 3px 6px;
-  border-radius: 4px;
-  transition: all 0.12s ease;
-}
-.cc-model-btn:hover {
-  color: var(--accent, #f97316);
-  background: rgba(249, 115, 22, 0.08);
-}
-
-/* ---- 模型选择浮层 ---- */
-.cc-model-popup {
-  position: fixed; z-index: 999;
-  bottom: 48px; left: 50%; transform: translateX(-50%);
-  width: 240px;
-  background: rgba(255,255,255,0.98);
-  border: 1px solid rgba(15,23,42,0.08);
-  border-radius: 10px;
-  box-shadow: 0 12px 30px rgba(15,23,42,0.12);
-  backdrop-filter: blur(10px);
-  overflow: hidden;
-}
-.cc-model-popup-header {
-  padding: 8px 12px;
-  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;
-  color: var(--text-muted);
-  border-bottom: 1px solid rgba(0,0,0,0.04);
-}
-.cc-model-item {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 12px; cursor: pointer; font-size: 12px;
-  transition: background 0.1s;
-}
-.cc-model-item:hover { background: rgba(249,115,22,0.05); }
-.cc-model-item.selected { background: rgba(249,115,22,0.08); font-weight: 600; color: #ea580c; }
-.cc-model-item-id { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; color: var(--text); }
-.cc-model-item-label { font-size: 10px; color: var(--text-muted); }
-
 /* ---- CC /skill 自动补全 ---- */
 .cc-skill-popup {
   position: absolute; bottom: 100%; left: 0; right: 0; margin-bottom: 4px;
