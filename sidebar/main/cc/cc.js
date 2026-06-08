@@ -53,6 +53,13 @@ export async function mount(container) {
   _initSkillAutocomplete();
   _initStatusPolling();
 
+  // 5. 空状态按钮
+  const emptyBtn = document.getElementById('cc-empty-state-btn');
+  if (emptyBtn) emptyBtn.addEventListener('click', () => _createTab());
+
+  // 6. 根据初始有无 tab 更新空状态
+  _updateEmptyState();
+
   // 5. 监听 background 转发来的 WS 事件
   if (!_runtimeInit) {
     chrome.runtime.onMessage.addListener((msg) => {

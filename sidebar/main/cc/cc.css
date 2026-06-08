@@ -185,7 +185,8 @@
 /* ---- 空状态 ---- */
 .cc-empty-state {
   display: flex; align-items: center; justify-content: center;
-  flex: 1; min-height: 0; padding: 40px 20px;
+  height: 100%; padding: 40px 20px;
+  box-sizing: border-box;
 }
 .cc-empty-state-inner {
   display: flex; flex-direction: column; align-items: center; gap: 8px;
