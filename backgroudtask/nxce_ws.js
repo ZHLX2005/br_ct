@@ -360,7 +360,6 @@ const handlers = {
       session: msg.session,
       cwd: msg.cwd,
       prompt: msg.prompt,
-      model: msg.model,
       skills: msg.skills,
       id: msg.queryId,
     });

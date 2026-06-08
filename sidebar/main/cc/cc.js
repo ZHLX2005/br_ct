@@ -21,15 +21,6 @@ import { renderMarkdownSafe } from '../markdownRender.js';
 const CC_DEFAULT_PATH = 'C:\\Windows\\System32';
 const QUERY_TIMEOUT_MS = 0;          // 无超时：长任务（编辑文件等）可能执行数小时，靠 WS done 事件自然结束
 const STATUS_POLL_INTERVAL = 30000;
-const STORAGE_KEY_MODEL = 'cc_default_model';
-
-// 模型列表
-const CC_MODELS = [
-  { id: '',        label: 'auto' },
-  { id: 'claude-sonnet-4-6',  label: 'sonnet' },
-  { id: 'claude-opus-4-8',    label: 'opus' },
-  { id: 'claude-haiku-4-5-20251001', label: 'haiku' },
-];
 
 // ==================== 状态 ====================
 
@@ -37,7 +28,6 @@ let _statusTimer = null;
 let _sessionCounter = 1;
 let _pendingQuery = null;            // 当前活跃 query 的 { resolve, reject, timer }
 let _runtimeInit = false;
-let _savedModel = 0;                 // 持久化的全局默认模型索引
 
 // ==================== mount / unmount ====================
 
@@ -54,17 +44,13 @@ export async function mount(container) {
   const resp = await fetch('./cc/cc.html');
   container.innerHTML = await resp.text();
 
-  // 3. 加载持久化模型（同步，必须先于 _initFirstTab）
-  await _loadSavedModel();
-
-  // 4. 初始化第一个 tab
+  // 3. 初始化第一个 tab
   _initFirstTab();
 
-  // 5. 初始化子系统
+  // 4. 初始化子系统
   _initTabListeners();
   _initHistoryPopup();
   _initSendButton();
-  _initModelSwitcher();
   _initServeControls();
   _initSkillAutocomplete();
   _initStatusPolling();
@@ -292,7 +278,6 @@ function _buildTabDom(sessionName, cwd) {
   Object.assign(tab, {
     _sessionId: null, _messages: '', _path: cwd,
     _sessionName: sessionName,
-    _model: _savedModel,
     _skills: [], _skillsCwd: null, _skillsLoading: false,
     _silentTurn: false,
   });
@@ -316,7 +301,6 @@ function _switchTab(tab) {
   const rc = document.getElementById('response-content');
   if (pi) pi.value = tab._path ?? CC_DEFAULT_PATH;
   if (rc) rc.innerHTML = tab._messages ?? '';
-  _updateModelBtn();
   // 刷新 skills 和 session 状态
   _loadTabSkills(tab);
   _restartStatusPoll();
@@ -620,96 +604,6 @@ function _restoreSession(sessionName, cwd) {
   _restartStatusPoll();
 }
 
-// ==================== Model Switcher ====================
-
-function _updateModelBtn() {
-  const label = document.getElementById('cc-model-label');
-  if (!label) return;
-  const tab = _getActiveTab();
-  const idx = tab ? tab._model : _savedModel;
-  label.textContent = CC_MODELS[idx]?.label || 'auto';
-  label.title = CC_MODELS[idx]?.id || '服务端默认';
-}
-
-/** 加载持久化模型 */
-async function _loadSavedModel() {
-  try {
-    const result = await chrome.storage.local.get(STORAGE_KEY_MODEL);
-    if (typeof result[STORAGE_KEY_MODEL] === 'number') {
-      _savedModel = result[STORAGE_KEY_MODEL];
-    }
-  } catch {}
-}
-
-/** 保存模型到 storage */
-function _saveModel(idx) {
-  _savedModel = idx;
-  try {
-    chrome.storage.local.set({ [STORAGE_KEY_MODEL]: idx }).catch(() => {});
-  } catch {}
-}
-
-/** 弹出模型选择浮层 */
-function _showModelPopup() {
-  // 已存在则关闭
-  const existing = document.querySelector('.cc-model-popup');
-  if (existing) { existing.remove(); return; }
-
-  const tab = _getActiveTab();
-  const cur = tab ? tab._model : _savedModel;
-
-  const popup = document.createElement('div');
-  popup.className = 'cc-model-popup';
-  popup.innerHTML = '<div class="cc-model-popup-header">选择模型</div>' +
-    CC_MODELS.map((m, i) =>
-      `<div class="cc-model-item${i === cur ? ' selected' : ''}" data-idx="${i}">` +
-      `<span class="cc-model-item-id">${_escHtml(m.id || 'auto')}</span>` +
-      `<span class="cc-model-item-label">${_escHtml(m.label)}</span></div>`
-    ).join('');
-
-  const closePopup = () => {
-    if (popup.parentNode) popup.remove();
-    document.removeEventListener('click', popup._docHandler);
-  };
-
-  popup.addEventListener('click', (e) => {
-    const item = e.target.closest('.cc-model-item');
-    if (!item) return;
-    const idx = parseInt(item.dataset.idx, 10);
-    const t = _getActiveTab();
-    if (t) t._model = idx;
-    _saveModel(idx);
-    _updateModelBtn();
-    closePopup();
-  });
-
-  popup._docHandler = (e) => {
-    if (popup.parentNode && !popup.contains(e.target)) {
-      closePopup();
-    }
-  };
-  // 延迟绑定，避免捕获当前单击
-  setTimeout(() => document.addEventListener('click', popup._docHandler), 0);
-
-  document.body.appendChild(popup);
-}
-
-function _initModelSwitcher() {
-  const btn = document.getElementById('cc-model-btn');
-  if (!btn) return;
-
-  // 加载持久化模型
-  _loadSavedModel().then(() => {
-    _updateModelBtn();
-  });
-
-  btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    _showModelPopup();
-  });
-  _updateModelBtn();
-}
-
 // ==================== Serve Controls ====================
 
 function _updateServeStatus(state, text) {
@@ -778,14 +672,6 @@ async function _handleSend() {
   if (!tab) return;
 
   console.log('[cc] _handleSend raw:', raw);
-
-  // /model 单独回车 → 弹出模型选择
-  if (raw === '/model') {
-    _showModelPopup();
-    input.value = '';
-    input.dispatchEvent(new Event('input'));
-    return;
-  }
 
   // 解析 /skill 指令（安全解析，无 while+g 陷阱）
   const tabSkills = tab._skills || [];
@@ -887,9 +773,6 @@ async function _handleSend() {
 
       const queryMsg = { action: 'nxce_ws', cmd: 'query', session, cwd: workDir, prompt, queryId: 'q-' + Date.now() };
       if (skills.length > 0) queryMsg.skills = skills;
-      // 模型注入（空值不传，服务端用默认模型）
-      const modelId = CC_MODELS[tab._model]?.id || '';
-      if (modelId) queryMsg.model = modelId;
       console.log('[cc] sendMessage queryMsg:', JSON.stringify(queryMsg));
       chrome.runtime.sendMessage(queryMsg, (resp) => {
         console.log('[cc] query response:', resp);
