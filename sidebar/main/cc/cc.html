@@ -31,16 +31,32 @@
 </div>
 </div>
 
+<!-- 新建会话对话框 -->
+<div class="cc-session-dialog-overlay" id="cc-session-dialog" style="display:none">
+  <div class="cc-session-dialog">
+    <div class="cc-session-dialog-header">新建会话</div>
+    <div class="cc-session-dialog-body">
+      <label class="cc-session-dialog-label">
+        会话名称
+        <input class="cc-session-dialog-input" id="cc-dlg-session-name" type="text" placeholder="例如：my-project">
+      </label>
+      <label class="cc-session-dialog-label">
+        工作目录 (cwd)
+        <input class="cc-session-dialog-input" id="cc-dlg-cwd" type="text" placeholder="例如：D:\Projects\my-app">
+      </label>
+    </div>
+    <div class="cc-session-dialog-footer">
+      <button class="cc-session-dialog-btn cc-session-dialog-btn-cancel" id="cc-dlg-cancel">取消</button>
+      <button class="cc-session-dialog-btn cc-session-dialog-btn-ok" id="cc-dlg-ok">创建</button>
+    </div>
+  </div>
+</div>
+
 <section class="cc-page" id="page-main">
   <div class="response-content" id="response-content">
     <div class="cc-status-badge" id="cc-status-badge" style="display:none">
       <span class="cc-status-dot"></span>
       <span class="cc-status-text"></span>
-    </div>
-    <div class="response-placeholder response-placeholder--cc">
-      <svg class="rp-cc-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-      <span class="rp-cc-label">Claude Code</span>
-      <span class="rp-cc-sub">与 Claude Code 开始对话</span>
     </div>
   </div>
 </section>

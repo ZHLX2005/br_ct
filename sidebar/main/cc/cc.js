@@ -206,34 +206,76 @@ function _restoreTabState(tab) {
 function _initFirstTab() {
   const tab = document.querySelector('.cc-tab.active');
   if (!tab) return;
-  tab.dataset.ccSession = crypto.randomUUID();
-  Object.assign(tab, {
-    _sessionId: null, _messages: '', _path: CC_DEFAULT_PATH,
-    _skills: [], _skillsCwd: null, _skillsLoading: false,
-    _silentTurn: false,
-  });
+  // 等待 dialog 工具函数绑定后再展示
+  setTimeout(() => _showNewSessionDialog().then(({ sessionName, cwd }) => {
+    tab.dataset.ccSession = sessionName;
+    Object.assign(tab, {
+      _sessionId: null, _messages: '', _path: cwd,
+      _sessionName,
+      _skills: [], _skillsCwd: null, _skillsLoading: false,
+      _silentTurn: false,
+    });
+    const label = tab.querySelector('.cc-tab-label');
+    if (label) label.textContent = sessionName;
+    const pi = document.getElementById('cc-path-input');
+    if (pi) pi.value = cwd;
+    _restartStatusPoll();
+  }).catch(() => {
+    // 取消 → 直接移除默认 tab
+    tab.remove();
+  }), 0);
 }
 
-function _createTab() {
+/**
+ * 创建新 tab。
+ * - 无参数 → 弹出对话框让用户输入 sessionName 和 cwd
+ * - 有参数 → 直接用（用于 _restoreSession 等）
+ */
+function _createTab(opts) {
   _sessionCounter++;
   const tabsEl = document.getElementById('cc-tabs');
   if (!tabsEl) return null;
+
+  // 如果传了 opts，直接创建（不弹对话框）
+  if (opts) {
+    const { sessionName, cwd } = opts;
+    const tab = _buildTabDom(sessionName, cwd);
+    tab.dataset.ccSession = sessionName;
+    tabsEl.insertBefore(tab, tabsEl.querySelector('.cc-tab-add'));
+    _saveTabState(_getActiveTab());
+    _switchTab(tab);
+    _restoreTabState(tab);
+    return tab;
+  }
+
+  // 无参数 → 弹出对话框
+  _showNewSessionDialog().then(({ sessionName, cwd }) => {
+    const tab = _buildTabDom(sessionName, cwd);
+    tab.dataset.ccSession = sessionName;
+    tabsEl.insertBefore(tab, tabsEl.querySelector('.cc-tab-add'));
+    _saveTabState(_getActiveTab());
+    _switchTab(tab);
+    _restoreTabState(tab);
+  }).catch(() => {
+    // 取消 → 不创建
+  });
+  return null;
+}
+
+/** 构建 tab DOM 元素（不插入） */
+function _buildTabDom(sessionName, cwd) {
   const tab = document.createElement('div');
   tab.className = 'cc-tab';
-  tab.dataset.ccSession = crypto.randomUUID();
   Object.assign(tab, {
-    _sessionId: null, _messages: '', _path: CC_DEFAULT_PATH,
+    _sessionId: null, _messages: '', _path: cwd,
+    _sessionName: sessionName,
     _skills: [], _skillsCwd: null, _skillsLoading: false,
     _silentTurn: false,
   });
   tab.innerHTML =
     `<span class="cc-tab-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>` +
-    `<span class="cc-tab-label">会话 ${_sessionCounter}</span>` +
+    `<span class="cc-tab-label">${_escHtml(sessionName)}</span>` +
     `<span class="cc-tab-close" title="关闭">×</span>`;
-  tabsEl.insertBefore(tab, tabsEl.querySelector('.cc-tab-add'));
-  _saveTabState(_getActiveTab());
-  _switchTab(tab);
-  _restoreTabState(tab);
   return tab;
 }
 
@@ -272,10 +314,69 @@ function _closeTab(tab) {
   }
 }
 
+/**
+ * 弹出新建会话对话框，返回用户填写的 { sessionName, cwd }。
+ * 取消 → Promise rejected。
+ */
+function _showNewSessionDialog() {
+  return new Promise((resolve, reject) => {
+    const overlay = document.getElementById('cc-session-dialog');
+    const nameInput = document.getElementById('cc-dlg-session-name');
+    const cwdInput = document.getElementById('cc-dlg-cwd');
+    const okBtn = document.getElementById('cc-dlg-ok');
+    const cancelBtn = document.getElementById('cc-dlg-cancel');
+    if (!overlay || !nameInput || !cwdInput || !okBtn || !cancelBtn) {
+      reject(new Error('dialog elements missing'));
+      return;
+    }
+    // 预填默认值
+    nameInput.value = '';
+    cwdInput.value = CC_DEFAULT_PATH;
+    overlay.style.display = 'flex';
+    nameInput.focus();
+
+    let settled = false;
+    function finish(err, val) {
+      if (settled) return;
+      settled = true;
+      overlay.style.display = 'none';
+      cleanup();
+      if (err) reject(err);
+      else resolve(val);
+    }
+
+    const onOk = () => {
+      const sessionName = nameInput.value.trim();
+      const cwd = cwdInput.value.trim();
+      if (!sessionName) { nameInput.focus(); return; }
+      if (!cwd) { cwdInput.focus(); return; }
+      finish(null, { sessionName, cwd });
+    };
+    const onCancel = () => finish(new Error('canceled'));
+    const onKeydown = (e) => {
+      if (e.key === 'Enter') onOk();
+      else if (e.key === 'Escape') onCancel();
+    };
+    const onOverlayClick = (e) => { if (e.target === overlay) onCancel(); };
+
+    okBtn.addEventListener('click', onOk);
+    cancelBtn.addEventListener('click', onCancel);
+    overlay.addEventListener('keydown', onKeydown);
+    overlay.addEventListener('click', onOverlayClick);
+
+    const cleanup = () => {
+      okBtn.removeEventListener('click', onOk);
+      cancelBtn.removeEventListener('click', onCancel);
+      overlay.removeEventListener('keydown', onKeydown);
+      overlay.removeEventListener('click', onOverlayClick);
+    };
+  });
+}
+
 function _initTabListeners() {
   const tabsEl = document.getElementById('cc-tabs');
   if (!tabsEl) return;
-  document.getElementById('cc-tab-add')?.addEventListener('click', _createTab);
+  document.getElementById('cc-tab-add')?.addEventListener('click', () => _createTab());
   tabsEl.addEventListener('click', e => {
     const tab = e.target.closest('.cc-tab');
     if (!tab) return;
@@ -480,12 +581,12 @@ function _initHistoryPopup() {
   });
 }
 
-function _restoreSession(sessionId, cwd) {
-  console.log('[cc] _restoreSession:', { sessionId, cwd });
-  const tab = _createTab();
+function _restoreSession(sessionName, cwd) {
+  console.log('[cc] _restoreSession:', { sessionName, cwd });
+  const tab = _createTab({ sessionName, cwd });
   if (!tab) { console.warn('[cc] _restoreSession: _createTab returned null'); return; }
   // 同名 + 同 cwd = nx-ce 自动恢复 session
-  tab.dataset.ccSession = sessionId;
+  tab.dataset.ccSession = sessionName;
   if (cwd) { tab._path = cwd; tab._skills = []; tab._skillsCwd = null; }
   console.log('[cc] _restoreSession tab:', { ds: tab.dataset.ccSession, path: tab._path });
   _loadTabSkills(tab);
