@@ -1,10 +1,5 @@
 <div id="cc-tabs-wrapper" style="position:relative;">
 <div class="cc-tabs" id="cc-tabs">
-  <div class="cc-tab active" data-cc-session="0">
-    <span class="cc-tab-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>
-    <span class="cc-tab-label">会话 1</span>
-    <span class="cc-tab-close" title="关闭">×</span>
-  </div>
   <button class="cc-tab-add" id="cc-tab-add" title="新建对话">
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1.5v9M1.5 6h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
   </button>
@@ -31,16 +26,42 @@
 </div>
 </div>
 
+<!-- 新建会话对话框 -->
+<div class="cc-session-dialog-overlay" id="cc-session-dialog" style="display:none">
+  <div class="cc-session-dialog">
+    <div class="cc-session-dialog-header">新建会话</div>
+    <div class="cc-session-dialog-body">
+      <label class="cc-session-dialog-label">
+        会话名称
+        <input class="cc-session-dialog-input" id="cc-dlg-session-name" type="text" placeholder="例如：my-project">
+      </label>
+      <label class="cc-session-dialog-label">
+        工作目录 (cwd)
+        <input class="cc-session-dialog-input" id="cc-dlg-cwd" type="text" placeholder="例如：D:\Projects\my-app">
+      </label>
+    </div>
+    <div class="cc-session-dialog-footer">
+      <button class="cc-session-dialog-btn cc-session-dialog-btn-cancel" id="cc-dlg-cancel">取消</button>
+      <button class="cc-session-dialog-btn cc-session-dialog-btn-ok" id="cc-dlg-ok">创建</button>
+    </div>
+  </div>
+</div>
+
 <section class="cc-page" id="page-main">
   <div class="response-content" id="response-content">
     <div class="cc-status-badge" id="cc-status-badge" style="display:none">
       <span class="cc-status-dot"></span>
       <span class="cc-status-text"></span>
     </div>
-    <div class="response-placeholder response-placeholder--cc">
-      <svg class="rp-cc-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-      <span class="rp-cc-label">Claude Code</span>
-      <span class="rp-cc-sub">与 Claude Code 开始对话</span>
+    <!-- 无 tab 空状态 -->
+    <div class="cc-empty-state" id="cc-empty-state" style="display:none">
+      <div class="cc-empty-state-inner">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+        </svg>
+        <span class="cc-empty-state-title">没有会话</span>
+        <span class="cc-empty-state-sub">点击上方按钮新建 Claude Code 会话</span>
+      </div>
     </div>
   </div>
 </section>
@@ -57,7 +78,11 @@
       <textarea class="chat-input" id="chat-input" placeholder="输入消息..." rows="2"></textarea>
     </div>
     <div class="chat-input-foot">
-      <div class="chat-input-foot-left"></div>
+      <div class="chat-input-foot-left">
+        <button class="foot-btn cc-model-btn" id="cc-model-btn" title="点击切换模型">
+          <span id="cc-model-label">auto</span>
+        </button>
+      </div>
       <div class="chat-input-foot-right">
         <button class="send-btn" id="chat-btn-send" disabled>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8l12-6-6 12-2-4-4-2z" fill="currentColor"/></svg>

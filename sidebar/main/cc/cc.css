@@ -171,17 +171,6 @@
 }
 .app-shell[data-mode="claude-code"] .chat-input::placeholder { color: rgba(249, 115, 22, 0.4); }
 
-/* ---- CC placeholder ---- */
-.response-placeholder--cc {
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
-  border: 1px dashed rgba(249, 115, 22, 0.2);
-  background: linear-gradient(180deg, rgba(255, 247, 237, 0.6), rgba(255, 255, 255, 0.98));
-  border-radius: 18px; padding: 72px 20px; color: #9ca3af; font-size: 14px; text-align: center; user-select: none;
-}
-.rp-cc-icon { color: #f97316; margin-bottom: 4px; }
-.rp-cc-label { font-size: 16px; font-weight: 600; color: #ea580c; }
-.rp-cc-sub { font-size: 13px; color: #9ca3af; }
-
 /* ---- CC 加载动画 ---- */
 .cc-bubble-skills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.08); }
 .cc-skill-tag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; background: rgba(249,115,22,0.12); color: #f97316; border: 1px solid rgba(249,115,22,0.2); white-space: nowrap; }
@@ -192,6 +181,171 @@
 .cc-loading-dot:nth-child(2) { animation-delay: 0.2s; }
 .cc-loading-dot:nth-child(3) { animation-delay: 0.4s; }
 @keyframes cc-bounce { 0%,80%,100% { transform: scale(0.6); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
+
+/* ---- 空状态 ---- */
+.cc-empty-state {
+  display: flex; align-items: center; justify-content: center;
+  height: 100%; padding: 40px 20px;
+  box-sizing: border-box;
+}
+.cc-empty-state-inner {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 48px 32px;
+  border: 1.5px dashed rgba(249, 115, 22, 0.25);
+  border-radius: 16px;
+  background: rgba(249, 115, 22, 0.03);
+  color: #9ca3af; text-align: center; user-select: none;
+  transition: background 0.15s;
+}
+.cc-empty-state-inner:hover { background: rgba(249, 115, 22, 0.06); border-color: rgba(249, 115, 22, 0.35); }
+.cc-empty-state-inner svg { color: rgba(249, 115, 22, 0.3); }
+.cc-empty-state-title { font-size: 15px; font-weight: 600; color: #ea580c; }
+.cc-empty-state-sub { font-size: 12px; color: #94a3b8; }
+.cc-empty-state-btn {
+  margin-top: 6px; padding: 7px 20px;
+  border-radius: 8px; font-size: 13px; font-weight: 500;
+  background: #f97316; color: #fff; border: none; cursor: pointer;
+  transition: background 0.15s;
+}
+.cc-empty-state-btn:hover { background: #ea580c; }
+
+/* ---- 新建会话对话框 ---- */
+.cc-session-dialog-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  animation: cc-dlg-fadein 0.15s ease;
+}
+@keyframes cc-dlg-fadein { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cc-dlg-slidein { from { opacity: 0; transform: translateY(-12px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+.cc-session-dialog {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.2);
+  width: 380px; max-width: 90vw;
+  overflow: hidden;
+  animation: cc-dlg-slidein 0.2s ease;
+}
+
+.cc-session-dialog-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 18px 22px 0;
+  font-size: 15px; font-weight: 600; color: #1e293b;
+}
+
+.cc-session-dialog-header::before {
+  content: '';
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #f97316;
+  flex-shrink: 0;
+}
+
+.cc-session-dialog-body {
+  padding: 16px 22px 10px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+
+.cc-session-dialog-label {
+  display: flex; flex-direction: column; gap: 5px;
+  font-size: 12px; font-weight: 500; color: #64748b;
+  letter-spacing: 0.02em;
+}
+
+.cc-session-dialog-input {
+  padding: 9px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background: #f8fafc;
+  color: #0f172a;
+}
+.cc-session-dialog-input:focus {
+  border-color: #f97316;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
+  background: #fff;
+}
+.cc-session-dialog-input::placeholder {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.cc-session-dialog-footer {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 6px 22px 18px;
+}
+
+.cc-session-dialog-btn {
+  padding: 7px 18px;
+  border-radius: 8px;
+  font-size: 13px; font-weight: 500;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: all 0.15s;
+}
+.cc-session-dialog-btn-cancel {
+  background: transparent;
+  color: #64748b;
+  border-color: #e2e8f0;
+}
+.cc-session-dialog-btn-cancel:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+.cc-session-dialog-btn-ok {
+  background: #f97316;
+  color: #fff;
+}
+.cc-session-dialog-btn-ok:hover {
+  background: #ea580c;
+}
+
+/* ---- 模型切换按钮 ---- */
+.cc-model-btn {
+  font-size: 10px; font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  letter-spacing: 0.02em;
+  padding: 3px 6px;
+  border-radius: 4px;
+  transition: all 0.12s ease;
+}
+.cc-model-btn:hover {
+  color: var(--accent, #f97316);
+  background: rgba(249, 115, 22, 0.08);
+}
+
+/* ---- 模型选择浮层 ---- */
+.cc-model-popup {
+  position: fixed; z-index: 999;
+  bottom: 48px; left: 50%; transform: translateX(-50%);
+  width: 240px;
+  background: rgba(255,255,255,0.98);
+  border: 1px solid rgba(15,23,42,0.08);
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(15,23,42,0.12);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+.cc-model-popup-header {
+  padding: 8px 12px;
+  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;
+  color: var(--text-muted);
+  border-bottom: 1px solid rgba(0,0,0,0.04);
+}
+.cc-model-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px; cursor: pointer; font-size: 12px;
+  transition: background 0.1s;
+}
+.cc-model-item:hover { background: rgba(249,115,22,0.05); }
+.cc-model-item.selected { background: rgba(249,115,22,0.08); font-weight: 600; color: #ea580c; }
+.cc-model-item-id { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; color: var(--text); }
+.cc-model-item-label { font-size: 10px; color: var(--text-muted); }
 
 /* ---- CC /skill 自动补全 ---- */
 .cc-skill-popup {

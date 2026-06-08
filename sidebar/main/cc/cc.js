@@ -16,9 +16,20 @@
 
 // ==================== 常量 ====================
 
+import { renderMarkdownSafe } from '../markdownRender.js';
+
 const CC_DEFAULT_PATH = 'C:\\Windows\\System32';
-const QUERY_TIMEOUT_MS = 120000;     // SDK 首次初始化可能较慢
+const QUERY_TIMEOUT_MS = 0;          // 无超时：长任务（编辑文件等）可能执行数小时，靠 WS done 事件自然结束
 const STATUS_POLL_INTERVAL = 30000;
+const STORAGE_KEY_MODEL = 'cc_default_model';
+
+// 模型列表
+const CC_MODELS = [
+  { id: '',        label: 'auto' },
+  { id: 'claude-sonnet-4-6',  label: 'sonnet' },
+  { id: 'claude-opus-4-8',    label: 'opus' },
+  { id: 'claude-haiku-4-5-20251001', label: 'haiku' },
+];
 
 // ==================== 状态 ====================
 
@@ -26,6 +37,7 @@ let _statusTimer = null;
 let _sessionCounter = 1;
 let _pendingQuery = null;            // 当前活跃 query 的 { resolve, reject, timer }
 let _runtimeInit = false;
+let _savedModel = 0;                 // 持久化的全局默认模型索引
 
 // ==================== mount / unmount ====================
 
@@ -42,18 +54,29 @@ export async function mount(container) {
   const resp = await fetch('./cc/cc.html');
   container.innerHTML = await resp.text();
 
-  // 3. 初始化第一个 tab
+  // 3. 加载持久化模型（同步，必须先于 _initFirstTab）
+  await _loadSavedModel();
+
+  // 4. 初始化第一个 tab
   _initFirstTab();
 
-  // 4. 初始化子系统
+  // 5. 初始化子系统
   _initTabListeners();
   _initHistoryPopup();
   _initSendButton();
+  _initModelSwitcher();
   _initServeControls();
   _initSkillAutocomplete();
   _initStatusPolling();
 
-  // 5. 监听 background 转发来的 WS 事件
+  // 5. 空状态按钮
+  const emptyBtn = document.getElementById('cc-empty-state-btn');
+  if (emptyBtn) emptyBtn.addEventListener('click', () => _createTab());
+
+  // 6. 根据初始有无 tab 更新空状态
+  _updateEmptyState();
+
+  // 7. 监听 background 转发来的 WS 事件
   if (!_runtimeInit) {
     chrome.runtime.onMessage.addListener((msg) => {
       if (!msg || msg.action !== 'nxce_event') return false;
@@ -68,8 +91,8 @@ export function unmount(container) {
   if (_statusTimer) { clearInterval(_statusTimer); _statusTimer = null; }
   // 关闭所有 tab 的 session
   document.querySelectorAll('.cc-tab').forEach(tab => {
-    if (tab.dataset.ccSession) {
-      _sendBg({ action: 'nxce_ws', cmd: 'closeSession', session: tab.dataset.ccSession, cwd: tab._path }).catch(() => {});
+    if (tab._sessionName) {
+      _sendBg({ action: 'nxce_ws', cmd: 'closeSession', session: tab._sessionName, cwd: tab._path }).catch(() => {});
     }
   });
   container.innerHTML = '';
@@ -122,8 +145,9 @@ function _sendBgRequest(msg, timeout = 5000) {
 // ==================== WS 事件分发（来自 background） ====================
 
 function _dispatch(msg) {
+  console.log('[cc] _dispatch type=' + msg.type + (msg.content ? ' content=' + msg.content.slice(0, 50) : ''));
   const tab = _getActiveTab();
-  if (!tab) return;
+  if (!tab) { console.warn('[cc] _dispatch: no active tab'); return; }
 
   switch (msg.type) {
     case 'init':
@@ -175,6 +199,11 @@ function _dispatch(msg) {
       break;
 
     case 'error':
+      // probe/getSkills 等后台操作的 error 不应中断当前 query
+      if (msg.content && (msg.content.includes('getSkills') || msg.content.includes('probe'))) {
+        console.warn('[cc] background probe error:', msg.content);
+        break;
+      }
       if (_pendingQuery) {
         _pendingQuery.reject(new Error(msg.content || 'error'));
         _pendingQuery = null;
@@ -203,37 +232,74 @@ function _restoreTabState(tab) {
   if (pi) pi.value = tab._path ?? CC_DEFAULT_PATH;
 }
 
-function _initFirstTab() {
-  const tab = document.querySelector('.cc-tab.active');
-  if (!tab) return;
-  tab.dataset.ccSession = crypto.randomUUID();
-  Object.assign(tab, {
-    _sessionId: null, _messages: '', _path: CC_DEFAULT_PATH,
-    _skills: [], _skillsCwd: null, _skillsLoading: false,
-    _silentTurn: false,
-  });
+/** 根据是否有 tab 切换空状态显示 */
+function _updateEmptyState() {
+  const emptyEl = document.getElementById('cc-empty-state');
+  const rc = document.getElementById('response-content');
+  const pathBar = document.getElementById('cc-path-bar');
+  const inputArea = document.querySelector('.input-area');
+  const hasTab = document.querySelector('.cc-tab.active');
+  if (emptyEl) emptyEl.style.display = hasTab ? 'none' : 'flex';
+  if (pathBar) pathBar.style.display = hasTab ? 'flex' : 'none';
+  if (inputArea) inputArea.style.display = hasTab ? '' : 'none';
 }
 
-function _createTab() {
+function _initFirstTab() {
+  // 无默认 tab，直接弹出对话框创建第一个会话
+  setTimeout(() => _createTab(), 0);
+}
+
+/**
+ * 创建新 tab。
+ * - 无参数 → 弹出对话框让用户输入 sessionName 和 cwd
+ * - 有参数 → 直接用（用于 _restoreSession 等）
+ */
+function _createTab(opts) {
   _sessionCounter++;
   const tabsEl = document.getElementById('cc-tabs');
   if (!tabsEl) return null;
+
+  // 如果传了 opts，直接创建（不弹对话框）
+  if (opts) {
+    const { sessionName, cwd } = opts;
+    const tab = _buildTabDom(sessionName, cwd);
+    tabsEl.insertBefore(tab, tabsEl.querySelector('.cc-tab-add'));
+    _saveTabState(_getActiveTab());
+    _switchTab(tab);
+    _restoreTabState(tab);
+    _updateEmptyState();
+    return tab;
+  }
+
+  // 无参数 → 弹出对话框
+  _showNewSessionDialog().then(({ sessionName, cwd }) => {
+    const tab = _buildTabDom(sessionName, cwd);
+    tabsEl.insertBefore(tab, tabsEl.querySelector('.cc-tab-add'));
+    _saveTabState(_getActiveTab());
+    _switchTab(tab);
+    _restoreTabState(tab);
+    _updateEmptyState();
+  }).catch(() => {
+    // 取消 → 不创建
+  });
+  return null;
+}
+
+/** 构建 tab DOM 元素（不插入） */
+function _buildTabDom(sessionName, cwd) {
   const tab = document.createElement('div');
   tab.className = 'cc-tab';
-  tab.dataset.ccSession = crypto.randomUUID();
   Object.assign(tab, {
-    _sessionId: null, _messages: '', _path: CC_DEFAULT_PATH,
+    _sessionId: null, _messages: '', _path: cwd,
+    _sessionName: sessionName,
+    _model: _savedModel,
     _skills: [], _skillsCwd: null, _skillsLoading: false,
     _silentTurn: false,
   });
   tab.innerHTML =
     `<span class="cc-tab-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>` +
-    `<span class="cc-tab-label">会话 ${_sessionCounter}</span>` +
+    `<span class="cc-tab-label">${_escHtml(sessionName)}</span>` +
     `<span class="cc-tab-close" title="关闭">×</span>`;
-  tabsEl.insertBefore(tab, tabsEl.querySelector('.cc-tab-add'));
-  _saveTabState(_getActiveTab());
-  _switchTab(tab);
-  _restoreTabState(tab);
   return tab;
 }
 
@@ -250,6 +316,7 @@ function _switchTab(tab) {
   const rc = document.getElementById('response-content');
   if (pi) pi.value = tab._path ?? CC_DEFAULT_PATH;
   if (rc) rc.innerHTML = tab._messages ?? '';
+  _updateModelBtn();
   // 刷新 skills 和 session 状态
   _loadTabSkills(tab);
   _restartStatusPoll();
@@ -257,7 +324,7 @@ function _switchTab(tab) {
 
 function _closeTab(tab) {
   if (!tab) return;
-  const session = tab.dataset.ccSession;
+  const session = tab._sessionName;
   const cwd = tab._path;
   if (session && cwd) {
     _sendBg({ action: 'nxce_ws', cmd: 'closeSession', session, cwd }).catch(() => {});
@@ -270,12 +337,72 @@ function _closeTab(tab) {
     const t = prev?.classList.contains('cc-tab') ? prev : next?.classList.contains('cc-tab') ? next : null;
     if (t) _switchTab(t);
   }
+  _updateEmptyState();
+}
+
+/**
+ * 弹出新建会话对话框，返回用户填写的 { sessionName, cwd }。
+ * 取消 → Promise rejected。
+ */
+function _showNewSessionDialog() {
+  return new Promise((resolve, reject) => {
+    const overlay = document.getElementById('cc-session-dialog');
+    const nameInput = document.getElementById('cc-dlg-session-name');
+    const cwdInput = document.getElementById('cc-dlg-cwd');
+    const okBtn = document.getElementById('cc-dlg-ok');
+    const cancelBtn = document.getElementById('cc-dlg-cancel');
+    if (!overlay || !nameInput || !cwdInput || !okBtn || !cancelBtn) {
+      reject(new Error('dialog elements missing'));
+      return;
+    }
+    // 预填默认值
+    nameInput.value = '';
+    cwdInput.value = CC_DEFAULT_PATH;
+    overlay.style.display = 'flex';
+    nameInput.focus();
+
+    let settled = false;
+    function finish(err, val) {
+      if (settled) return;
+      settled = true;
+      overlay.style.display = 'none';
+      cleanup();
+      if (err) reject(err);
+      else resolve(val);
+    }
+
+    const onOk = () => {
+      const sessionName = nameInput.value.trim();
+      const cwd = cwdInput.value.trim();
+      if (!sessionName) { nameInput.focus(); return; }
+      if (!cwd) { cwdInput.focus(); return; }
+      finish(null, { sessionName, cwd });
+    };
+    const onCancel = () => finish(new Error('canceled'));
+    const onKeydown = (e) => {
+      if (e.key === 'Enter') onOk();
+      else if (e.key === 'Escape') onCancel();
+    };
+    const onOverlayClick = (e) => { if (e.target === overlay) onCancel(); };
+
+    okBtn.addEventListener('click', onOk);
+    cancelBtn.addEventListener('click', onCancel);
+    overlay.addEventListener('keydown', onKeydown);
+    overlay.addEventListener('click', onOverlayClick);
+
+    const cleanup = () => {
+      okBtn.removeEventListener('click', onOk);
+      cancelBtn.removeEventListener('click', onCancel);
+      overlay.removeEventListener('keydown', onKeydown);
+      overlay.removeEventListener('click', onOverlayClick);
+    };
+  });
 }
 
 function _initTabListeners() {
   const tabsEl = document.getElementById('cc-tabs');
   if (!tabsEl) return;
-  document.getElementById('cc-tab-add')?.addEventListener('click', _createTab);
+  document.getElementById('cc-tab-add')?.addEventListener('click', () => _createTab());
   tabsEl.addEventListener('click', e => {
     const tab = e.target.closest('.cc-tab');
     if (!tab) return;
@@ -292,7 +419,7 @@ function _initTabListeners() {
       const nv = pathInput.value;
       if (nv === last) return;
       if (tab._path && tab._path !== nv) {
-        _sendBg({ action: 'nxce_ws', cmd: 'closeSession', session: tab.dataset.ccSession, cwd: tab._path }).catch(() => {});
+        _sendBg({ action: 'nxce_ws', cmd: 'closeSession', session: tab._sessionName, cwd: tab._path }).catch(() => {});
       }
       last = nv;
       tab._path = nv;
@@ -310,9 +437,9 @@ function _loadTabSkills(tab) {
   if (!tab || tab._skillsLoading) return;
   if (tab._skills.length > 0 && tab._skillsCwd === tab._path) return;
   tab._skillsLoading = true;
-  const session = tab.dataset.ccSession || 'default';
   const cwd = tab._path || CC_DEFAULT_PATH;
-  _sendBgRequest({ action: 'nxce_ws', cmd: 'getSkills', session, cwd }).then(resp => {
+  // 用 __probe__ 会话探测技能，避免干扰真实会话
+  _sendBgRequest({ action: 'nxce_ws', cmd: 'getSkills', session: '__probe__', cwd }).then(resp => {
     tab._skillsLoading = false;
     if (!resp?.ok || !resp.data?.skills) return;
     tab._skills = resp.data.skills
@@ -399,7 +526,7 @@ function _fetchStatus() {
   if (!tab || !badge) return;
   const cwd = tab._path;
   if (!cwd) return;
-  _sendBgRequest({ action: 'nxce_ws', cmd: 'getStatus', session: tab.dataset.ccSession, cwd }).then(resp => {
+  _sendBgRequest({ action: 'nxce_ws', cmd: 'getStatus', session: tab._sessionName, cwd }).then(resp => {
     if (!resp?.ok || !resp.data) {
       badge.style.display = 'none';
       return;
@@ -443,12 +570,12 @@ function _initHistoryPopup() {
     // 每个 item 创建时直接绑定点击（不用委托，不依赖内联）
     const itemsHtml = resp.data.sessions.map((s, i) => {
       const state = s.lifecycleState || 'stopped';
-      const sessionName = _escHtml(s.name || s.key || '');
+      const sessionName = _escHtml(_pureSessionName(s));
       const cwd = _escHtml(s.cwd || '');
       const model = s.model ? _escHtml(s.model) : '';
       return `<div class="cc-history-item" data-session="${sessionName}" data-cwd="${cwd}">` +
         `<span class="cc-session-dot" data-state="${_escHtml(state)}"></span>` +
-        `<span class="cc-session-name">${_escHtml(s.name || 'unknown')}</span>` +
+        `<span class="cc-session-name">${_escHtml(_pureSessionName(s))}</span>` +
         `<span class="cc-session-meta">${cwd}${model ? ' · ' + model : ''}</span>` +
         `</div>`;
     }).join('');
@@ -480,17 +607,107 @@ function _initHistoryPopup() {
   });
 }
 
-function _restoreSession(sessionId, cwd) {
-  console.log('[cc] _restoreSession:', { sessionId, cwd });
-  const tab = _createTab();
+function _restoreSession(sessionName, cwd) {
+  console.log('[cc] _restoreSession:', { sessionName, cwd });
+  const tab = _createTab({ sessionName, cwd });
   if (!tab) { console.warn('[cc] _restoreSession: _createTab returned null'); return; }
   // 同名 + 同 cwd = nx-ce 自动恢复 session
-  tab.dataset.ccSession = sessionId;
+  tab._sessionName = sessionName;
   if (cwd) { tab._path = cwd; tab._skills = []; tab._skillsCwd = null; }
-  console.log('[cc] _restoreSession tab:', { ds: tab.dataset.ccSession, path: tab._path });
+  console.log('[cc] _restoreSession tab:', { ds: tab._sessionName, path: tab._path });
   _loadTabSkills(tab);
   _restoreTabState(tab);
   _restartStatusPoll();
+}
+
+// ==================== Model Switcher ====================
+
+function _updateModelBtn() {
+  const label = document.getElementById('cc-model-label');
+  if (!label) return;
+  const tab = _getActiveTab();
+  const idx = tab ? tab._model : _savedModel;
+  label.textContent = CC_MODELS[idx]?.label || 'auto';
+  label.title = CC_MODELS[idx]?.id || '服务端默认';
+}
+
+/** 加载持久化模型 */
+async function _loadSavedModel() {
+  try {
+    const result = await chrome.storage.local.get(STORAGE_KEY_MODEL);
+    if (typeof result[STORAGE_KEY_MODEL] === 'number') {
+      _savedModel = result[STORAGE_KEY_MODEL];
+    }
+  } catch {}
+}
+
+/** 保存模型到 storage */
+function _saveModel(idx) {
+  _savedModel = idx;
+  try {
+    chrome.storage.local.set({ [STORAGE_KEY_MODEL]: idx }).catch(() => {});
+  } catch {}
+}
+
+/** 弹出模型选择浮层 */
+function _showModelPopup() {
+  // 已存在则关闭
+  const existing = document.querySelector('.cc-model-popup');
+  if (existing) { existing.remove(); return; }
+
+  const tab = _getActiveTab();
+  const cur = tab ? tab._model : _savedModel;
+
+  const popup = document.createElement('div');
+  popup.className = 'cc-model-popup';
+  popup.innerHTML = '<div class="cc-model-popup-header">选择模型</div>' +
+    CC_MODELS.map((m, i) =>
+      `<div class="cc-model-item${i === cur ? ' selected' : ''}" data-idx="${i}">` +
+      `<span class="cc-model-item-id">${_escHtml(m.id || 'auto')}</span>` +
+      `<span class="cc-model-item-label">${_escHtml(m.label)}</span></div>`
+    ).join('');
+
+  const closePopup = () => {
+    if (popup.parentNode) popup.remove();
+    document.removeEventListener('click', popup._docHandler);
+  };
+
+  popup.addEventListener('click', (e) => {
+    const item = e.target.closest('.cc-model-item');
+    if (!item) return;
+    const idx = parseInt(item.dataset.idx, 10);
+    const t = _getActiveTab();
+    if (t) t._model = idx;
+    _saveModel(idx);
+    _updateModelBtn();
+    closePopup();
+  });
+
+  popup._docHandler = (e) => {
+    if (popup.parentNode && !popup.contains(e.target)) {
+      closePopup();
+    }
+  };
+  // 延迟绑定，避免捕获当前单击
+  setTimeout(() => document.addEventListener('click', popup._docHandler), 0);
+
+  document.body.appendChild(popup);
+}
+
+function _initModelSwitcher() {
+  const btn = document.getElementById('cc-model-btn');
+  if (!btn) return;
+
+  // 加载持久化模型
+  _loadSavedModel().then(() => {
+    _updateModelBtn();
+  });
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    _showModelPopup();
+  });
+  _updateModelBtn();
 }
 
 // ==================== Serve Controls ====================
@@ -562,6 +779,14 @@ async function _handleSend() {
 
   console.log('[cc] _handleSend raw:', raw);
 
+  // /model 单独回车 → 弹出模型选择
+  if (raw === '/model') {
+    _showModelPopup();
+    input.value = '';
+    input.dispatchEvent(new Event('input'));
+    return;
+  }
+
   // 解析 /skill 指令（安全解析，无 while+g 陷阱）
   const tabSkills = tab._skills || [];
   const skills = [];
@@ -622,9 +847,23 @@ async function _handleSend() {
     '<div class="cc-loading-dots"><span class="cc-loading-dot"></span><span class="cc-loading-dot"></span><span class="cc-loading-dot"></span></div>';
   if (rc) { rc.appendChild(ld); rc.scrollTop = rc.scrollHeight; }
 
+  // 发送前检查 WS 连通性
+  const ping = await _sendBgRequest({ action: 'nxce_ws', cmd: 'ping' }, 3000);
+  if (!ping?.ok || !ping?.connected) {
+    if (ld.parentNode) ld.remove();
+    if (rc) {
+      rc.querySelector('.cc-stream-bubble')?.remove();
+      const e = document.createElement('div');
+      e.className = 'notion-chat-message';
+      e.innerHTML = '<div class="notion-chat-bubble" style="border-color:#e53e3e;"><div class="notion-chat-bubble-content" style="color:#e53e3e;">nx-ce serve 未连接，请先点击右上角「连接」按钮启动服务</div></div>';
+      rc.appendChild(e); rc.scrollTop = rc.scrollHeight;
+    }
+    return;
+  }
+
   // 发送 query（通过 background）
   try {
-    const session = tab.dataset.ccSession || 'default';
+    const session = tab._sessionName || 'default';
     await new Promise((resolve, reject) => {
       let settled = false;
       const finish = (err, v) => {
@@ -637,14 +876,20 @@ async function _handleSend() {
       _pendingQuery = { resolve: r => finish(null, r), reject: e => finish(e) };
       tab._silentTurn = false;
 
-      // 超时兜底
-      const timer = setTimeout(() => finish(new Error('查询超时（确认 Claude CLI 是否已安装且在 PATH 中）')), QUERY_TIMEOUT_MS);
+      // 超时兜底（0=不超时，靠 WS done 事件自然结束）
+      let timer = null;
+      if (QUERY_TIMEOUT_MS > 0) {
+        timer = setTimeout(() => finish(new Error('查询超时（确认 Claude CLI 是否已安装且在 PATH 中）')), QUERY_TIMEOUT_MS);
+      }
       const origReject = _pendingQuery.reject;
-      _pendingQuery.reject = (e) => { clearTimeout(timer); origReject(e); };
-      _pendingQuery.resolve = (v) => { clearTimeout(timer); finish(null, v); };
+      _pendingQuery.reject = (e) => { if (timer) clearTimeout(timer); origReject(e); };
+      _pendingQuery.resolve = (v) => { if (timer) clearTimeout(timer); finish(null, v); };
 
       const queryMsg = { action: 'nxce_ws', cmd: 'query', session, cwd: workDir, prompt, queryId: 'q-' + Date.now() };
       if (skills.length > 0) queryMsg.skills = skills;
+      // 模型注入（空值不传，服务端用默认模型）
+      const modelId = CC_MODELS[tab._model]?.id || '';
+      if (modelId) queryMsg.model = modelId;
       console.log('[cc] sendMessage queryMsg:', JSON.stringify(queryMsg));
       chrome.runtime.sendMessage(queryMsg, (resp) => {
         console.log('[cc] query response:', resp);
@@ -699,7 +944,13 @@ function _finalizeStream(tab) {
   const s = rc.querySelector('.cc-stream-bubble');
   if (s) {
     const c = s.querySelector('.cc-stream-content');
-    if (c) c.innerHTML = _escHtml(c.textContent || '').replace(/\n/g, '<br>');
+    if (c) {
+      try {
+        c.innerHTML = renderMarkdownSafe(c.textContent || '');
+      } catch {
+        c.innerHTML = _escHtml(c.textContent || '').replace(/\n/g, '<br>');
+      }
+    }
     s.classList.remove('cc-stream-bubble');
   }
   const ld = rc.querySelector('.cc-loading');
@@ -708,6 +959,40 @@ function _finalizeStream(tab) {
 }
 
 // ==================== Utils ====================
+
+/**
+ * 从 session 记录中提取纯会话名称（不含 cwd 后缀）。
+ * nx-ce 的 s.key 格式为 "name:cwd"（活跃）或 sanitize 后的 "name~sanitizedCwd"（历史）。
+ * 新版 nx-ce 服务端 listStates 已返回 { name, cwd }，此函数为兜底。
+ *
+ * 此外处理 legacy 脏数据（旧 bug 产生的 compound name + sanitized cwd 后缀）。
+ */
+function _pureSessionName(s) {
+  // 1. 从 key 提取：优先 : 再 ~
+  if (s.key && typeof s.key === 'string') {
+    let sep = s.key.indexOf(':');
+    if (sep === -1) sep = s.key.indexOf('~');
+    if (sep > 0) {
+      const pure = s.key.slice(0, sep);
+      // 如果本身就是 compound（例如 test-123_D__qq），还有 cwd 需要二次剥离
+      if (s.cwd) {
+        const sanitizedSuffix = '_' + String(s.cwd).replace(/[^a-zA-Z0-9._~-]/g, '_');
+        if (pure.endsWith(sanitizedSuffix)) {
+          return pure.slice(0, -sanitizedSuffix.length);
+        }
+      }
+      return pure;
+    }
+  }
+  // 2. fallback: 从 s.name 去掉 sanitized cwd 后缀（旧 bug 数据恢复）
+  if (s.name && s.cwd) {
+    const sanitizedSuffix = '_' + String(s.cwd).replace(/[^a-zA-Z0-9._~-]/g, '_');
+    if (s.name.endsWith(sanitizedSuffix)) {
+      return s.name.slice(0, -sanitizedSuffix.length);
+    }
+  }
+  return s.name || 'default';
+}
 
 function _escHtml(str) {
   const d = document.createElement('div');

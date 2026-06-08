@@ -261,6 +261,7 @@ function dispatch(msg) {
  */
 function broadcastEvent(msg) {
   try {
+    console.log('[NxceWS] broadcastEvent type=' + msg.type + ' content=' + (typeof msg.content === 'string' ? msg.content.slice(0, 40) : ''));
     chrome.runtime.sendMessage({ action: 'nxce_event', event: msg }).catch(() => {
       // 没有监听者时不报错
     });
@@ -359,6 +360,7 @@ const handlers = {
       session: msg.session,
       cwd: msg.cwd,
       prompt: msg.prompt,
+      model: msg.model,
       skills: msg.skills,
       id: msg.queryId,
     });
