@@ -17,7 +17,7 @@
 // ==================== 常量 ====================
 
 const CC_DEFAULT_PATH = 'C:\\Windows\\System32';
-const QUERY_TIMEOUT_MS = 120000;     // SDK 首次初始化可能较慢
+const QUERY_TIMEOUT_MS = 0;          // 无超时：长任务（编辑文件等）可能执行数小时，靠 WS done 事件自然结束
 const STATUS_POLL_INTERVAL = 30000;
 
 // ==================== 状态 ====================
@@ -203,6 +203,18 @@ function _restoreTabState(tab) {
   if (pi) pi.value = tab._path ?? CC_DEFAULT_PATH;
 }
 
+/** 根据是否有 tab 切换空状态显示 */
+function _updateEmptyState() {
+  const emptyEl = document.getElementById('cc-empty-state');
+  const rc = document.getElementById('response-content');
+  const pathBar = document.getElementById('cc-path-bar');
+  const inputArea = document.querySelector('.input-area');
+  const hasTab = document.querySelector('.cc-tab.active');
+  if (emptyEl) emptyEl.style.display = hasTab ? 'none' : 'flex';
+  if (pathBar) pathBar.style.display = hasTab ? 'flex' : 'none';
+  if (inputArea) inputArea.style.display = hasTab ? '' : 'none';
+}
+
 function _initFirstTab() {
   const tab = document.querySelector('.cc-tab.active');
   if (!tab) return;
@@ -220,9 +232,11 @@ function _initFirstTab() {
     const pi = document.getElementById('cc-path-input');
     if (pi) pi.value = cwd;
     _restartStatusPoll();
+    _updateEmptyState();
   }).catch(() => {
     // 取消 → 直接移除默认 tab
     tab.remove();
+    _updateEmptyState();
   }), 0);
 }
 
@@ -245,6 +259,7 @@ function _createTab(opts) {
     _saveTabState(_getActiveTab());
     _switchTab(tab);
     _restoreTabState(tab);
+    _updateEmptyState();
     return tab;
   }
 
@@ -256,6 +271,7 @@ function _createTab(opts) {
     _saveTabState(_getActiveTab());
     _switchTab(tab);
     _restoreTabState(tab);
+    _updateEmptyState();
   }).catch(() => {
     // 取消 → 不创建
   });
@@ -312,6 +328,7 @@ function _closeTab(tab) {
     const t = prev?.classList.contains('cc-tab') ? prev : next?.classList.contains('cc-tab') ? next : null;
     if (t) _switchTab(t);
   }
+  _updateEmptyState();
 }
 
 /**
@@ -738,11 +755,14 @@ async function _handleSend() {
       _pendingQuery = { resolve: r => finish(null, r), reject: e => finish(e) };
       tab._silentTurn = false;
 
-      // 超时兜底
-      const timer = setTimeout(() => finish(new Error('查询超时（确认 Claude CLI 是否已安装且在 PATH 中）')), QUERY_TIMEOUT_MS);
+      // 超时兜底（0=不超时，靠 WS done 事件自然结束）
+      let timer = null;
+      if (QUERY_TIMEOUT_MS > 0) {
+        timer = setTimeout(() => finish(new Error('查询超时（确认 Claude CLI 是否已安装且在 PATH 中）')), QUERY_TIMEOUT_MS);
+      }
       const origReject = _pendingQuery.reject;
-      _pendingQuery.reject = (e) => { clearTimeout(timer); origReject(e); };
-      _pendingQuery.resolve = (v) => { clearTimeout(timer); finish(null, v); };
+      _pendingQuery.reject = (e) => { if (timer) clearTimeout(timer); origReject(e); };
+      _pendingQuery.resolve = (v) => { if (timer) clearTimeout(timer); finish(null, v); };
 
       const queryMsg = { action: 'nxce_ws', cmd: 'query', session, cwd: workDir, prompt, queryId: 'q-' + Date.now() };
       if (skills.length > 0) queryMsg.skills = skills;

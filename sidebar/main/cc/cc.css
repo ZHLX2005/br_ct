@@ -182,6 +182,32 @@
 .cc-loading-dot:nth-child(3) { animation-delay: 0.4s; }
 @keyframes cc-bounce { 0%,80%,100% { transform: scale(0.6); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
 
+/* ---- 空状态 ---- */
+.cc-empty-state {
+  display: flex; align-items: center; justify-content: center;
+  flex: 1; min-height: 0; padding: 40px 20px;
+}
+.cc-empty-state-inner {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 48px 32px;
+  border: 1.5px dashed rgba(249, 115, 22, 0.25);
+  border-radius: 16px;
+  background: rgba(249, 115, 22, 0.03);
+  color: #9ca3af; text-align: center; user-select: none;
+  transition: background 0.15s;
+}
+.cc-empty-state-inner:hover { background: rgba(249, 115, 22, 0.06); border-color: rgba(249, 115, 22, 0.35); }
+.cc-empty-state-inner svg { color: rgba(249, 115, 22, 0.3); }
+.cc-empty-state-title { font-size: 15px; font-weight: 600; color: #ea580c; }
+.cc-empty-state-sub { font-size: 12px; color: #94a3b8; }
+.cc-empty-state-btn {
+  margin-top: 6px; padding: 7px 20px;
+  border-radius: 8px; font-size: 13px; font-weight: 500;
+  background: #f97316; color: #fff; border: none; cursor: pointer;
+  transition: background 0.15s;
+}
+.cc-empty-state-btn:hover { background: #ea580c; }
+
 /* ---- 新建会话对话框 ---- */
 .cc-session-dialog-overlay {
   position: fixed; inset: 0; z-index: 1000;
