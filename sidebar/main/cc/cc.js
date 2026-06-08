@@ -16,6 +16,8 @@
 
 // ==================== 常量 ====================
 
+import { renderMarkdownSafe } from '../markdownRender.js';
+
 const CC_DEFAULT_PATH = 'C:\\Windows\\System32';
 const QUERY_TIMEOUT_MS = 0;          // 无超时：长任务（编辑文件等）可能执行数小时，靠 WS done 事件自然结束
 const STATUS_POLL_INTERVAL = 30000;
@@ -807,7 +809,13 @@ function _finalizeStream(tab) {
   const s = rc.querySelector('.cc-stream-bubble');
   if (s) {
     const c = s.querySelector('.cc-stream-content');
-    if (c) c.innerHTML = _escHtml(c.textContent || '').replace(/\n/g, '<br>');
+    if (c) {
+      try {
+        c.innerHTML = renderMarkdownSafe(c.textContent || '');
+      } catch {
+        c.innerHTML = _escHtml(c.textContent || '').replace(/\n/g, '<br>');
+      }
+    }
     s.classList.remove('cc-stream-bubble');
   }
   const ld = rc.querySelector('.cc-loading');
