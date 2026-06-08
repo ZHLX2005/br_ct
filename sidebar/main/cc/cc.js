@@ -91,8 +91,8 @@ export function unmount(container) {
   if (_statusTimer) { clearInterval(_statusTimer); _statusTimer = null; }
   // 关闭所有 tab 的 session
   document.querySelectorAll('.cc-tab').forEach(tab => {
-    if (tab.dataset.ccSession) {
-      _sendBg({ action: 'nxce_ws', cmd: 'closeSession', session: tab.dataset.ccSession, cwd: tab._path }).catch(() => {});
+    if (tab._sessionName) {
+      _sendBg({ action: 'nxce_ws', cmd: 'closeSession', session: tab._sessionName, cwd: tab._path }).catch(() => {});
     }
   });
   container.innerHTML = '';
@@ -263,7 +263,6 @@ function _createTab(opts) {
   if (opts) {
     const { sessionName, cwd } = opts;
     const tab = _buildTabDom(sessionName, cwd);
-    tab.dataset.ccSession = sessionName;
     tabsEl.insertBefore(tab, tabsEl.querySelector('.cc-tab-add'));
     _saveTabState(_getActiveTab());
     _switchTab(tab);
@@ -275,7 +274,6 @@ function _createTab(opts) {
   // 无参数 → 弹出对话框
   _showNewSessionDialog().then(({ sessionName, cwd }) => {
     const tab = _buildTabDom(sessionName, cwd);
-    tab.dataset.ccSession = sessionName;
     tabsEl.insertBefore(tab, tabsEl.querySelector('.cc-tab-add'));
     _saveTabState(_getActiveTab());
     _switchTab(tab);
@@ -294,7 +292,7 @@ function _buildTabDom(sessionName, cwd) {
   Object.assign(tab, {
     _sessionId: null, _messages: '', _path: cwd,
     _sessionName: sessionName,
-    _model: _savedModel,  // CC_MODELS 索引，默认用持久化的值
+    _model: _savedModel,
     _skills: [], _skillsCwd: null, _skillsLoading: false,
     _silentTurn: false,
   });
@@ -326,7 +324,7 @@ function _switchTab(tab) {
 
 function _closeTab(tab) {
   if (!tab) return;
-  const session = tab.dataset.ccSession;
+  const session = tab._sessionName;
   const cwd = tab._path;
   if (session && cwd) {
     _sendBg({ action: 'nxce_ws', cmd: 'closeSession', session, cwd }).catch(() => {});
@@ -421,7 +419,7 @@ function _initTabListeners() {
       const nv = pathInput.value;
       if (nv === last) return;
       if (tab._path && tab._path !== nv) {
-        _sendBg({ action: 'nxce_ws', cmd: 'closeSession', session: tab.dataset.ccSession, cwd: tab._path }).catch(() => {});
+        _sendBg({ action: 'nxce_ws', cmd: 'closeSession', session: tab._sessionName, cwd: tab._path }).catch(() => {});
       }
       last = nv;
       tab._path = nv;
@@ -528,7 +526,7 @@ function _fetchStatus() {
   if (!tab || !badge) return;
   const cwd = tab._path;
   if (!cwd) return;
-  _sendBgRequest({ action: 'nxce_ws', cmd: 'getStatus', session: tab.dataset.ccSession, cwd }).then(resp => {
+  _sendBgRequest({ action: 'nxce_ws', cmd: 'getStatus', session: tab._sessionName, cwd }).then(resp => {
     if (!resp?.ok || !resp.data) {
       badge.style.display = 'none';
       return;
@@ -614,9 +612,9 @@ function _restoreSession(sessionName, cwd) {
   const tab = _createTab({ sessionName, cwd });
   if (!tab) { console.warn('[cc] _restoreSession: _createTab returned null'); return; }
   // 同名 + 同 cwd = nx-ce 自动恢复 session
-  tab.dataset.ccSession = sessionName;
+  tab._sessionName = sessionName;
   if (cwd) { tab._path = cwd; tab._skills = []; tab._skillsCwd = null; }
-  console.log('[cc] _restoreSession tab:', { ds: tab.dataset.ccSession, path: tab._path });
+  console.log('[cc] _restoreSession tab:', { ds: tab._sessionName, path: tab._path });
   _loadTabSkills(tab);
   _restoreTabState(tab);
   _restartStatusPoll();
@@ -865,7 +863,7 @@ async function _handleSend() {
 
   // 发送 query（通过 background）
   try {
-    const session = tab.dataset.ccSession || 'default';
+    const session = tab._sessionName || 'default';
     await new Promise((resolve, reject) => {
       let settled = false;
       const finish = (err, v) => {
@@ -964,19 +962,36 @@ function _finalizeStream(tab) {
 
 /**
  * 从 session 记录中提取纯会话名称（不含 cwd 后缀）。
- * nx-ce 的 s.key 格式为 "name:cwd"，s.name 可能是 compound key。
+ * nx-ce 的 s.key 格式为 "name:cwd"（活跃）或 sanitize 后的 "name~sanitizedCwd"（历史）。
+ * 新版 nx-ce 服务端 listStates 已返回 { name, cwd }，此函数为兜底。
+ *
+ * 此外处理 legacy 脏数据（旧 bug 产生的 compound name + sanitized cwd 后缀）。
  */
 function _pureSessionName(s) {
-  // 方案 1: 从 key="name:cwd" 提取 name
+  // 1. 从 key 提取：优先 : 再 ~
   if (s.key && typeof s.key === 'string') {
-    const colonIdx = s.key.indexOf(':');
-    if (colonIdx > 0) return s.key.slice(0, colonIdx);
+    let sep = s.key.indexOf(':');
+    if (sep === -1) sep = s.key.indexOf('~');
+    if (sep > 0) {
+      const pure = s.key.slice(0, sep);
+      // 如果本身就是 compound（例如 test-123_D__qq），还有 cwd 需要二次剥离
+      if (s.cwd) {
+        const sanitizedSuffix = '_' + String(s.cwd).replace(/[^a-zA-Z0-9._~-]/g, '_');
+        if (pure.endsWith(sanitizedSuffix)) {
+          return pure.slice(0, -sanitizedSuffix.length);
+        }
+      }
+      return pure;
+    }
   }
-  // 方案 2: 从 s.name 去掉 cwd 后缀（如 "cc-123_D_qq" → "cc-123"）
-  if (s.name && s.cwd && s.name.endsWith(s.cwd)) {
-    return s.name.slice(0, -s.cwd.length).replace(/[_\-.]+$/, '');
+  // 2. fallback: 从 s.name 去掉 sanitized cwd 后缀（旧 bug 数据恢复）
+  if (s.name && s.cwd) {
+    const sanitizedSuffix = '_' + String(s.cwd).replace(/[^a-zA-Z0-9._~-]/g, '_');
+    if (s.name.endsWith(sanitizedSuffix)) {
+      return s.name.slice(0, -sanitizedSuffix.length);
+    }
   }
-  return s.name || s.key || 'default';
+  return s.name || 'default';
 }
 
 function _escHtml(str) {
