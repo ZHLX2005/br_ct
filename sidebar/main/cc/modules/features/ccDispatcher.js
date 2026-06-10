@@ -10,6 +10,7 @@ import { getActiveTab } from './ccTabs.js';
 import { state } from '../common/ccConstants.js';
 import { escHtml, getToolIcon, getToolDetail } from '../common/ccUtils.js';
 import { fetchStatus } from './ccUI.js';
+import { updateSendButtonMode } from './ccSend.js';
 
 // ==================== 事件分发 ====================
 
@@ -36,6 +37,8 @@ export function dispatch(msg) {
       break;
 
     case 'turn_start':
+      state.isStreaming = true;
+      updateSendButtonMode();
       tab._streamingText = '';
       tab._streamingThinking = '';
       tab._streamingTools = [];
@@ -65,6 +68,8 @@ export function dispatch(msg) {
     }
 
     case 'done':
+      state.isStreaming = false;
+      updateSendButtonMode();
       if (msg.sessionId) tab._sessionId = msg.sessionId;
       if (state.pendingQuery) {
         state.pendingQuery.resolve({ status: 'ok', data: { text: tab._streamingText, sessionId: tab._sessionId } });
@@ -76,7 +81,46 @@ export function dispatch(msg) {
       fetchStatus();
       break;
 
+    case 'cancelled':
+      state.isStreaming = false;
+      updateSendButtonMode();
+      if (state.pendingQuery) {
+        state.pendingQuery.resolve({ status: 'cancelled', data: { text: tab._streamingText } });
+        state.pendingQuery = null;
+      }
+      // 移除 loading 动画，保留已流式输出的内容
+      tab._silentTurn = false;
+      finalizeStream(tab);
+      finalizeTools(tab);
+      fetchStatus();
+      // 追加一条取消提示
+      const rc2 = document.getElementById('response-content');
+      if (rc2) {
+        const e = document.createElement('div');
+        e.className = 'notion-chat-message';
+        e.innerHTML = '<div class="notion-chat-bubble" style="border-color:#f59e0b;"><div class="notion-chat-bubble-content" style="color:#92400e;">已取消</div></div>';
+        rc2.appendChild(e);
+        rc2.scrollTop = rc2.scrollHeight;
+        tab._messages = rc2.innerHTML;
+      }
+      break;
+
+    case 'cancel_failed':
+      if (state.pendingQuery) {
+        // cancel_failed（如无活跃 turn）仍把 pendingQuery 清掉，防止界面卡死
+        state.pendingQuery.resolve({ status: 'cancelled', data: {} });
+        state.pendingQuery = null;
+      }
+      state.isStreaming = false;
+      updateSendButtonMode();
+      tab._silentTurn = false;
+      finalizeStream(tab);
+      finalizeTools(tab);
+      break;
+
     case 'error':
+      state.isStreaming = false;
+      updateSendButtonMode();
       if (msg.content && (msg.content.includes('getSkills') || msg.content.includes('probe'))) {
         console.warn('[cc] background probe error:', msg.content);
         break;

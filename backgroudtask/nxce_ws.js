@@ -219,13 +219,15 @@ function dispatch(msg) {
     case 'text':
     case 'thinking':
     case 'tool_use':
-    case 'done': {
+    case 'done':
+    case 'cancelled':
+    case 'cancel_failed': {
       const tabId = turnOwner.get(recentTab.turnId) ?? recentTab.tabId;
       if (tabId != null) {
         sendToTab(tabId, { action: 'nxce_event', event: msg });
       }
       broadcastEvent(msg);
-      if (msg.type === 'done') {
+      if (msg.type === 'done' || msg.type === 'cancelled' || msg.type === 'cancel_failed') {
         turnOwner.delete(recentTab.turnId);
         recentTab.turnId = null;
       }
@@ -385,6 +387,11 @@ const handlers = {
 
   listSessions: async () => {
     return await sendRequest({ type: 'listSessions' });
+  },
+
+  cancel: async (msg) => {
+    await send({ type: 'cancel', session: msg.session, cwd: msg.cwd });
+    return { ok: true };
   },
 
   // === WS 状态控制 ===

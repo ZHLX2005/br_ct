@@ -60,7 +60,7 @@ export async function mount(container) {
   // 4. 初始化子系统
   initTabListeners({
     onSwitch: t => { loadTabSkills(t); restartStatusPoll(); },
-    onPathChange: () => restartStatusPoll(),
+    onPathChange: () => { loadTabSkills(getActiveTab()); restartStatusPoll(); },
   });
   initHistoryPopup();
   initSendButton();

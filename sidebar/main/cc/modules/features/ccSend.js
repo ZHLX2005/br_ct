@@ -6,28 +6,82 @@
  */
 
 import { getActiveTab } from './ccTabs.js';
+import { loadTabSkills } from './ccSkills.js';
 import { sendBg, sendBgRequest } from '../common/ccBgComms.js';
 import { state, QUERY_TIMEOUT_MS } from '../common/ccConstants.js';
 import { escHtml } from '../common/ccUtils.js';
 
 // ==================== 初始化发送按钮 ====================
 
+export function updateSendButtonMode() {
+  const sendBtn = document.getElementById('chat-btn-send');
+  if (!sendBtn) return;
+  if (state.isStreaming) {
+    sendBtn.classList.add('mode-stop');
+    sendBtn.disabled = false;
+    // ■ 停止图标
+    sendBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="2" y="2" width="10" height="10" rx="2"/></svg>';
+  } else {
+    sendBtn.classList.remove('mode-stop');
+    const input = document.getElementById('chat-input');
+    sendBtn.disabled = input ? !input.value.trim() : true;
+    // ▶ 发送图标
+    sendBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8l12-6-6 12-2-4-4-2z" fill="currentColor"/></svg>';
+  }
+}
+
 export function initSendButton() {
   const sendBtn = document.getElementById('chat-btn-send');
   const input = document.getElementById('chat-input');
-  if (sendBtn) sendBtn.addEventListener('click', handleSend);
+  if (sendBtn) {
+    sendBtn.addEventListener('click', () => {
+      if (state.isStreaming) {
+        handleStop();
+      } else {
+        handleSend();
+      }
+    });
+  }
   if (input) {
     input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (state.isStreaming) {
+          handleStop();
+        } else {
+          handleSend();
+        }
+      }
     });
     const autoResize = () => {
-      if (sendBtn) sendBtn.disabled = !input.value.trim();
+      if (!state.isStreaming) sendBtn.disabled = !input.value.trim();
       input.style.height = 'auto';
       input.style.height = Math.min(input.scrollHeight, 120) + 'px';
     };
     input.addEventListener('input', autoResize);
     autoResize();
   }
+}
+
+/** 停止当前流式任务 */
+function handleStop() {
+  const tab = getActiveTab();
+  if (!tab) return;
+  // 乐观重置按钮状态：立即切回发送模式
+  state.isStreaming = false;
+  updateSendButtonMode();
+  // 一并终结 pendingQuery，防止 handleSend 的 try/catch 永远挂起
+  if (state.pendingQuery) {
+    state.pendingQuery.resolve({ status: 'cancelled', data: { text: tab._streamingText || '' } });
+    state.pendingQuery = null;
+  }
+  const workDir = tab._path || document.getElementById('cc-path-input')?.value.trim() || '';
+  console.log('[cc] cancelling turn for session=' + tab._sessionName + ' cwd=' + workDir);
+  sendBg({ action: 'nxce_ws', cmd: 'cancel', session: tab._sessionName, cwd: workDir }).catch(err => {
+    console.error('[cc] cancel error:', err);
+  });
+  // 即使 cancel 消息未到达，也立即恢复按钮状态
+  // 等 server 返回 cancelled / cancel_failed / done 事件时 dispatcher 会再次同步（幂等）
 }
 
 // ==================== 发送主流程 ====================
@@ -43,7 +97,10 @@ export async function handleSend() {
 
   console.log('[cc] handleSend raw:', raw);
 
-  // 解析 /skill 指令（安全解析，无 while+g 陷阱）
+  // 先等 skills 加载完成再解析 /skill 指令，避免 __probe__ 未返回时匹配丢失
+  await loadTabSkills(tab);
+
+  // 解析 /skill 指令
   const tabSkills = tab._skills || [];
   const skills = [];
   let prompt = raw;

@@ -7,6 +7,7 @@
  */
 
 import { sendBg } from '../common/ccBgComms.js';
+import { loadTabSkills } from './ccSkills.js';
 import { escHtml } from '../common/ccUtils.js';
 import { CC_DEFAULT_PATH } from '../common/ccConstants.js';
 

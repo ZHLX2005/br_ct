@@ -22,4 +22,6 @@ export const state = {
   /** @type {{ resolve: Function, reject: Function } | null} */
   pendingQuery: null,
   runtimeInit: false,
+  /** 当前是否有正在执行的 query（控制发送↔停止按钮切换） */
+  isStreaming: false,
 };

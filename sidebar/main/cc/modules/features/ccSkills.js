@@ -11,13 +11,17 @@ import { CC_DEFAULT_PATH } from '../common/ccConstants.js';
 
 // ==================== Skills 加载 ====================
 
+/**
+ * 加载指定 tab 的 skills。
+ * 返回 Promise<void>，调用方可 await 确保技能列表已就绪。
+ * 如果已有缓存的 skills 且 cwd 未变，不重复加载。
+ */
 export function loadTabSkills(tab) {
-  if (!tab || tab._skillsLoading) return;
-  if (tab._skills.length > 0 && tab._skillsCwd === tab._path) return;
+  if (!tab || tab._skillsLoading) return Promise.resolve();
+  if (tab._skills.length > 0 && tab._skillsCwd === tab._path) return Promise.resolve();
   tab._skillsLoading = true;
   const cwd = tab._path || CC_DEFAULT_PATH;
-  // 用 __probe__ 会话探测技能，避免干扰真实会话
-  sendBgRequest({ action: 'nxce_ws', cmd: 'getSkills', session: '__probe__', cwd }).then(resp => {
+  return sendBgRequest({ action: 'nxce_ws', cmd: 'getSkills', session: '__probe__', cwd }).then(resp => {
     tab._skillsLoading = false;
     if (!resp?.ok || !resp.data?.skills) return;
     tab._skills = resp.data.skills
