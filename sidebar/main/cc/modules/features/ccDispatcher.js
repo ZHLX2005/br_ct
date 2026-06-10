@@ -165,8 +165,7 @@ function addToolCard(tab, tool) {
   card.innerHTML =
     '<span class="cc-tool-card-icon">' + getToolIcon(tool.name) + '</span>' +
     '<span class="cc-tool-card-name">' + escHtml(tool.name) + '</span>' +
-    '<span class="cc-tool-card-detail">' + escHtml(getToolDetail(tool)) + '</span>' +
-    '<span class="cc-tool-card-status"><div class="cc-tool-status-spinner"></div></span>';
+    '<span class="cc-tool-card-detail">' + escHtml(getToolDetail(tool)) + '</span>';
   grid.appendChild(card);
   scrollToBottom(s);
   saveBubbleMessages(tab, s);
@@ -175,12 +174,7 @@ function addToolCard(tab, tool) {
 export function finalizeTools(tab) {
   const rc = document.getElementById('response-content');
   if (!rc) return;
-  rc.querySelectorAll('.cc-tool-card').forEach(card => {
-    const statusEl = card.querySelector('.cc-tool-card-status');
-    if (!statusEl) return;
-    statusEl.innerHTML =
-      '<svg class="cc-tool-status-done" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2"><polyline points="2,5 4.5,7.5 8,2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  });
+  // tool card 不再有状态指示器，仅需要保存气泡消息
   const activeTab = getActiveTab();
   if (activeTab) {
     const s = rc.querySelector('.cc-stream-bubble');
@@ -239,9 +233,6 @@ export function initThoughtToggle() {
     if (!header) return;
     const bubble = header.closest('.cc-stream-bubble, .notion-chat-message');
     if (!bubble) return;
-    if (bubble.classList.contains('cc-stream-bubble')) {
-      return; // streaming 进行中不允许折叠
-    }
     const content = bubble.querySelector('.cc-thought-content');
     const arrow = header.querySelector('.cc-thought-arrow');
     if (!content || !arrow) return;
