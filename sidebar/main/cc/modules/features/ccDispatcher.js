@@ -5,7 +5,7 @@
  * 是 cc 模块的核心中枢。
  */
 
-import { renderMarkdownSafe } from '../../markdownRender.js';
+import { renderMarkdownSafe } from '../../../markdownRender.js';
 import { getActiveTab } from './ccTabs.js';
 import { state } from '../common/ccConstants.js';
 import { escHtml, getToolIcon, getToolDetail } from '../common/ccUtils.js';
