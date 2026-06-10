@@ -6,9 +6,9 @@
  */
 
 import { getActiveTab } from './ccTabs.js';
-import { sendBg, sendBgRequest } from './ccBgComms.js';
-import { state, QUERY_TIMEOUT_MS } from './ccConstants.js';
-import { escHtml } from './ccUtils.js';
+import { sendBg, sendBgRequest } from '../common/ccBgComms.js';
+import { state, QUERY_TIMEOUT_MS } from '../common/ccConstants.js';
+import { escHtml } from '../common/ccUtils.js';
 
 // ==================== 初始化发送按钮 ====================
 

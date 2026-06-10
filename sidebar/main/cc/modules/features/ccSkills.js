@@ -5,9 +5,9 @@
  */
 
 import { getActiveTab } from './ccTabs.js';
-import { sendBgRequest } from './ccBgComms.js';
-import { escHtml } from './ccUtils.js';
-import { CC_DEFAULT_PATH } from './ccConstants.js';
+import { sendBgRequest } from '../common/ccBgComms.js';
+import { escHtml } from '../common/ccUtils.js';
+import { CC_DEFAULT_PATH } from '../common/ccConstants.js';
 
 // ==================== Skills 加载 ====================
 

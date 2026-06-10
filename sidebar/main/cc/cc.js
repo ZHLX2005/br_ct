@@ -13,29 +13,31 @@
  *   cc.js → chrome.runtime.sendMessage → background (native_relay)
  *     → native_host (claudeStartServe)
  *
- * 子模块位于 cc/modules/ 下：
- *   ccConstants.js       — 配置常量 + 共享状态
- *   ccUtils.js           — 纯工具函数
- *   ccBgComms.js         — Background 通信层
- *   ccTabs.js            — 多 Tab 管理
- *   ccSkills.js          — Skills 加载 + 自动补全
- *   ccUI.js              — 状态指示器 / 历史弹窗 / 连接控制
- *   ccDispatcher.js      — WS 事件分发 + 流式渲染
- *   ccSend.js            — 消息发送
+ * 子模块位于 cc/modules/ 下（按依赖层次分两层）：
+ *   common/：
+ *     ccConstants.js       — 配置常量 + 共享状态
+ *     ccUtils.js           — 纯工具函数
+ *     ccBgComms.js         — Background 通信层
+ *   features/：
+ *     ccTabs.js            — 多 Tab 管理
+ *     ccSkills.js          — Skills 加载 + 自动补全
+ *     ccUI.js              — 状态指示器 / 历史弹窗 / 连接控制
+ *     ccDispatcher.js      — WS 事件分发 + 流式渲染
+ *     ccSend.js            — 消息发送
  */
 
-import { state } from './modules/ccConstants.js';
-import { sendBg } from './modules/ccBgComms.js';
+import { state } from './modules/common/ccConstants.js';
+import { sendBg } from './modules/common/ccBgComms.js';
 import {
   createTab, initFirstTab, initTabListeners, updateEmptyState,
-} from './modules/ccTabs.js';
-import { loadTabSkills, initSkillAutocomplete } from './modules/ccSkills.js';
+} from './modules/features/ccTabs.js';
+import { loadTabSkills, initSkillAutocomplete } from './modules/features/ccSkills.js';
 import {
   initStatusPolling, restartStatusPoll,
   initHistoryPopup, initServeControls,
-} from './modules/ccUI.js';
-import { dispatch, initThoughtToggle } from './modules/ccDispatcher.js';
-import { initSendButton } from './modules/ccSend.js';
+} from './modules/features/ccUI.js';
+import { dispatch, initThoughtToggle } from './modules/features/ccDispatcher.js';
+import { initSendButton } from './modules/features/ccSend.js';
 
 // ==================== mount / unmount ====================
 

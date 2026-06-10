@@ -6,9 +6,9 @@
  * 外部模块通过 onSwitch / onCreated 回调注入 side effect。
  */
 
-import { sendBg } from './ccBgComms.js';
-import { escHtml } from './ccUtils.js';
-import { CC_DEFAULT_PATH } from './ccConstants.js';
+import { sendBg } from '../common/ccBgComms.js';
+import { escHtml } from '../common/ccUtils.js';
+import { CC_DEFAULT_PATH } from '../common/ccConstants.js';
 
 // ==================== 查询 ====================
 

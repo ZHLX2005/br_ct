@@ -7,8 +7,8 @@
 
 import { renderMarkdownSafe } from '../../markdownRender.js';
 import { getActiveTab } from './ccTabs.js';
-import { state } from './ccConstants.js';
-import { escHtml, getToolIcon, getToolDetail } from './ccUtils.js';
+import { state } from '../common/ccConstants.js';
+import { escHtml, getToolIcon, getToolDetail } from '../common/ccUtils.js';
 import { fetchStatus } from './ccUI.js';
 
 // ==================== 事件分发 ====================
