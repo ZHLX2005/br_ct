@@ -171,6 +171,20 @@
 }
 .app-shell[data-mode="claude-code"] .chat-input::placeholder { color: rgba(249, 115, 22, 0.4); }
 
+/* ---- CC 发送/停止按钮切换 ---- */
+.app-shell[data-mode="claude-code"] .send-btn.mode-stop {
+  background: #f97316;
+  color: #fff;
+  box-shadow: none;
+}
+.app-shell[data-mode="claude-code"] .send-btn.mode-stop:hover {
+  background: #ea580c;
+}
+.app-shell[data-mode="claude-code"] .send-btn.mode-stop svg {
+  width: 14px;
+  height: 14px;
+}
+
 /* ---- CC 加载动画 ---- */
 .cc-bubble-skills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.08); }
 .cc-skill-tag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; background: rgba(249,115,22,0.12); color: #f97316; border: 1px solid rgba(249,115,22,0.2); white-space: nowrap; }

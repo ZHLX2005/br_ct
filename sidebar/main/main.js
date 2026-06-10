@@ -1,5 +1,5 @@
 import { mount as mountAichat, unmount as unmountAichat } from "./aichat/aichat.js";
-import { mount as mountCc, unmount as unmountCc, handleCcSend } from "./cc/cc.js";
+import { mount as mountCc, unmount as unmountCc } from "./cc/cc.js";
 
 const MODES = { AICHAT: "aichat", CLAUDE_CODE: "claude-code" };
 let currentMode = MODES.AICHAT;
