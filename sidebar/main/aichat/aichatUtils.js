@@ -64,6 +64,43 @@ let contextMenuTarget = null;   // 当前右键点击的目标索引
 let isDirectMode = true;
 const MODE_STORAGE_KEY = "sidebar_send_mode";
 
+// AI Chat 设置（存储在 chrome.storage.sync，支持跨会话同步）
+const AICHAT_SETTINGS_KEY = "aichat_settings";
+let aichatSettings = { captureOnSend: false, addTabToWorkspaceOnSend: false };
+
+async function loadAichatSettings() {
+  try {
+    const result = await chrome.storage.sync?.get(AICHAT_SETTINGS_KEY);
+    if (result?.[AICHAT_SETTINGS_KEY]) {
+      aichatSettings = { ...aichatSettings, ...result[AICHAT_SETTINGS_KEY] };
+    }
+  } catch (e) { /* ignore */ }
+  updateSettingsUI();
+}
+
+async function saveAichatSettings() {
+  try {
+    await chrome.storage.sync?.set({ [AICHAT_SETTINGS_KEY]: aichatSettings });
+  } catch (e) { /* ignore */ }
+}
+
+function updateSettingsUI() {
+  const captureCb = document.getElementById("setting-capture-on-send");
+  if (captureCb) captureCb.checked = !!aichatSettings.captureOnSend;
+  const addTabCb = document.getElementById("setting-add-tab-on-send");
+  if (addTabCb) addTabCb.checked = !!aichatSettings.addTabToWorkspaceOnSend;
+}
+
+function openSettingsModal() {
+  const modal = document.getElementById("aichat-settings-modal");
+  if (modal) modal.style.display = "flex";
+}
+
+function closeSettingsModal() {
+  const modal = document.getElementById("aichat-settings-modal");
+  if (modal) modal.style.display = "none";
+}
+
 async function loadSendMode() {
   try {
     const result = await chrome.storage.session?.get(MODE_STORAGE_KEY);
@@ -188,6 +225,9 @@ export async function initializePopup() {
 
   // 恢复发送模式
   loadSendMode();
+
+  // 加载 AI Chat 设置
+  await loadAichatSettings();
 
   // 同步当前提示词指示器
   syncPromptIndicator();
@@ -342,6 +382,22 @@ export function setupEventListeners() {
   elements.clearChatBtn?.addEventListener("click", () => {
     resetResponseDisplay();
     showTempMessage("聊天内容已清空");
+  });
+
+  // 设置按钮与设置弹窗
+  document.getElementById("toolbar-settings")?.addEventListener("click", openSettingsModal);
+  document.getElementById("aichat-settings-close")?.addEventListener("click", closeSettingsModal);
+  document.querySelector(".aichat-settings-backdrop")?.addEventListener("click", closeSettingsModal);
+  document.getElementById("setting-capture-on-send")?.addEventListener("change", (e) => {
+    aichatSettings.captureOnSend = e.target.checked;
+    saveAichatSettings();
+  });
+  document.getElementById("setting-add-tab-on-send")?.addEventListener("change", (e) => {
+    aichatSettings.addTabToWorkspaceOnSend = e.target.checked;
+    saveAichatSettings();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeSettingsModal();
   });
 
   // 提取页面文本按钮
@@ -865,7 +921,22 @@ function renderPlatformTabs() {
 
 // ==================== 发送逻辑 ====================
 
+/**
+ * 发送前钩子：根据设置自动执行页面捕获 / 添加到工作区。
+ * 这些操作会复用现有逻辑，并把结果落入后续发送流程。
+ */
+async function runPreSendHooks() {
+  if (aichatSettings.captureOnSend) {
+    await extractPageText();
+  }
+  if (aichatSettings.addTabToWorkspaceOnSend) {
+    await addCurrentPageToWorkspace();
+  }
+}
+
 async function startSending() {
+  await runPreSendHooks();
+
   // 直接发送模式：不捕获回复，发送后跳转到 AI 页面
   if (isDirectMode) {
     await startDirectSend();
@@ -1700,8 +1771,6 @@ async function saveWorkspaceTabs() {
 function renderWorkspaceTabs() {
   if (!elements.workspaceTabs) return;
 
-  // 保留 "+" 按钮
-  const addBtn = elements.workspaceTabAdd;
   elements.workspaceTabs.innerHTML = "";
 
   workspaceTabs.forEach((tab, i) => {
@@ -1734,9 +1803,6 @@ function renderWorkspaceTabs() {
 
     elements.workspaceTabs.appendChild(el);
   });
-
-  // 重新添加 "+" 按钮
-  if (addBtn) elements.workspaceTabs.appendChild(addBtn);
 }
 
 async function addCurrentPageToWorkspace() {
