@@ -20,6 +20,9 @@ import (
 func main() {
 	register.EnsureRegistered()
 
+	// 清理上次残留的 git import 临时目录
+	gitimporter.CleanupOrphanTempDirs()
+
 	registry := handler.NewRegistry()
 
 	// 文件操作

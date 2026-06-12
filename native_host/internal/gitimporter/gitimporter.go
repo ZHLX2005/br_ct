@@ -19,6 +19,26 @@ import (
 
 const maxDiscoverDepth = 5
 
+// CleanupOrphanTempDirs 启动时清理上一次残留的临时 clone 目录
+func CleanupOrphanTempDirs() {
+	tmpDir := os.TempDir()
+	entries, err := os.ReadDir(tmpDir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if strings.HasPrefix(entry.Name(), "brochat-git-import-") {
+			fullPath := filepath.Join(tmpDir, entry.Name())
+			if err := os.RemoveAll(fullPath); err == nil {
+				fmt.Fprintf(os.Stderr, "[GitImporter] 清理残留临时目录: %s\n", fullPath)
+			}
+		}
+	}
+}
+
 var skipDirs = map[string]bool{
 	"node_modules": true,
 	".git":         true,
