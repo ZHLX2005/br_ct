@@ -32,6 +32,14 @@ type Request struct {
 	Message   string   `json:"message,omitempty"`
 	Groups    []SkillGroup `json:"groups,omitempty"`
 	IsCentral bool     `json:"isCentral,omitempty"`
+	// Git Import 专用字段
+	Url       string   `json:"url,omitempty"`       // git 仓库地址
+	Ref       string   `json:"ref,omitempty"`        // 分支/tag
+	Subpath   string   `json:"subpath,omitempty"`    // 子路径
+	TempDir   string   `json:"tempDir,omitempty"`    // 临时克隆目录（clone 模式）
+	Names     []string `json:"names,omitempty"`      // skill SkillDir 列表（用于导入）
+	OwnerRepo string   `json:"ownerRepo,omitempty"`  // GitHub owner/repo（API 模式）
+	Branch    string   `json:"branch,omitempty"`     // 分支名（API 模式）
 }
 
 type Response struct {

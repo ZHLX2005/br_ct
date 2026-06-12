@@ -9,6 +9,7 @@ import (
 	"brochat_native_host/internal/envvars"
 	"brochat_native_host/internal/executor"
 	"brochat_native_host/internal/fileops"
+	"brochat_native_host/internal/gitimporter"
 	"brochat_native_host/internal/gitmon"
 	"brochat_native_host/internal/handler"
 	"brochat_native_host/internal/protocol"
@@ -30,6 +31,11 @@ func main() {
 	registry.Register("deleteSkill", fileops.DeleteSkill)
 	registry.Register("saveSkillGroups", fileops.SaveSkillGroups)
 	registry.Register("readSetting", fileops.ReadSetting)
+
+	// Git Skill 导入
+	registry.Register("gitCloneAndDiscover", gitimporter.CloneAndDiscoverSkills)
+	registry.Register("gitImportSkills", gitimporter.ImportGitSkills)
+	registry.Register("gitCleanupTemp", gitimporter.CleanupTempDir)
 
 	// 提示词
 	registry.Register("parsePrompts", prompts.ParsePromptsFile)

@@ -879,6 +879,62 @@
       background: rgba(90, 126, 160, 0.15);
       color: #3a5f7a;
     }
+
+    /* Git Import 样式 */
+    .import-progress {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: rgba(255,255,255,0.5);
+      border-radius: 8px;
+      margin-top: 12px;
+    }
+    .import-progress .progress-text {
+      color: var(--text);
+    }
+    .result-success {
+      padding: 10px;
+      background: rgba(76, 175, 80, 0.15);
+      border-radius: 8px;
+      color: #2e7d32;
+      margin-top: 8px;
+    }
+    .result-error {
+      padding: 10px;
+      background: rgba(244, 67, 54, 0.15);
+      border-radius: 8px;
+      color: #c62828;
+      margin-top: 8px;
+    }
+    .git-import-skill-item {
+      padding: 8px;
+      border-bottom: 1px solid rgba(128,128,128,0.15);
+    }
+    .git-import-skill-item:last-child {
+      border-bottom: none;
+    }
+    .git-import-skill-item .skill-checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .git-import-skill-item .skill-name {
+      font-weight: 600;
+      color: var(--text);
+    }
+    .git-import-skill-item .skill-desc {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+      margin-left: 24px;
+    }
+    .modal .form-hint {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
   </style>
 </head>
 <body>
@@ -937,6 +993,7 @@
             </div>
             <span class="muted" id="centralCount">0 个 Skill</span>
             <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" data-action="skill-manage-groups">管理分组</button>
+            <button class="btn btn-primary" style="padding: 4px 10px; font-size: 12px;" data-action="git-import-open">从 Git 导入</button>
           </div>
           <div class="skill-panel-body" id="centralSkillList">
             <div class="skill-loading"><div class="spinner"></div></div>
@@ -1197,6 +1254,49 @@
     </div>
   </div>
 
+  <!-- Git 导入弹窗 -->
+  <div class="modal-overlay" id="gitImportModal">
+    <div class="modal" style="min-width: 600px; max-width: 700px;">
+      <h3 class="modal-title">从 Git 仓库导入 Skill</h3>
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div class="form-group">
+          <label>Git 仓库地址</label>
+          <input type="text" id="gitImportUrl" placeholder="例如：https://github.com/vercel-labs/skills 或 owner/repo">
+          <div class="form-hint">支持 GitHub/GitLab URL、owner/repo 简写格式</div>
+        </div>
+        <div style="display: flex; gap: 12px;">
+          <div class="form-group" style="flex: 1;">
+            <label>分支/Tag（可选）</label>
+            <input type="text" id="gitImportRef" placeholder="例如：main、v1.0">
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label>子路径（可选）</label>
+            <input type="text" id="gitImportSubpath" placeholder="例如：skills/my-plugin">
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-primary" id="gitImportDiscoverBtn">发现 Skills</button>
+          <button class="btn btn-secondary" data-action="git-import-cancel">取消</button>
+        </div>
+      </div>
+      <div id="gitImportProgress" class="import-progress" style="display: none;">
+        <div class="spinner"></div>
+        <span class="progress-text">处理中...</span>
+      </div>
+      <div id="gitImportResult"></div>
+      <div id="gitImportList" style="margin-top: 12px; max-height: 350px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: rgba(255,255,255,0.5);"></div>
+      <div style="display: flex; align-items: center; gap: 12px; margin-top: 12px;">
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <input type="checkbox" id="gitImportSelectAll" checked> 全选
+        </label>
+      </div>
+      <div class="modal-actions" style="margin-top: 16px;">
+        <button class="btn btn-secondary" data-action="git-import-cancel">取消</button>
+        <button class="btn btn-success" id="gitImportConfirmBtn">导入选中</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast 容器 -->
   <div class="toast-container" id="toastContainer"></div>
 
@@ -1204,6 +1304,7 @@
   <script src="command.js"></script>
   <script src="git.js"></script>
   <script src="skill.js"></script>
+  <script src="git_import.js"></script>
   <script src="envvar.js"></script>
   <script src="local_cmd.js"></script>
   <script type="module" src="../focusScroll/init.js"></script>

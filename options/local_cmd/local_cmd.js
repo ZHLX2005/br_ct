@@ -121,6 +121,10 @@ function setupDelegation() {
       case 'skill-create-group-in-manage': closeSkillGroupManageModal(); openSkillGroupModal(); break;
       case 'skill-select-group': selectManageTargetGroup(btn.dataset.groupId); break;
 
+      // Git 导入 (git_import.js)
+      case 'git-import-open': openGitImportModal(); break;
+      case 'git-import-cancel': closeGitImportModal(); break;
+
       // 环境变量 (envvar.js)
       case 'envvar-save-snapshot': saveEnvSnapshot(); break;
       case 'envvar-refresh': initEnvvarPanel(); break;
@@ -143,8 +147,16 @@ function setupDelegation() {
       case 'cmd-save': saveCmd(); break;
       case 'gitdir-cancel': closeGitDirModal(); break;
       case 'gitdir-save': saveGitDir(); break;
+
+      // Git 导入 (git_import.js)
+      case 'git-import-open': openGitImportModal(); break;
+      case 'git-import-cancel': closeGitImportModal(); break;
     }
   });
+
+  // Git Import 专用按钮事件
+  document.getElementById('gitImportDiscoverBtn')?.addEventListener('click', discoverGitSkills);
+  document.getElementById('gitImportConfirmBtn')?.addEventListener('click', importGitSkills);
 
   // 弹窗背景点击关闭
   document.querySelectorAll('.modal-overlay').forEach(overlay => {

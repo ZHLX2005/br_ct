@@ -1271,13 +1271,24 @@ function renderMessageBody(message) {
 /**
  * 计算当前平台下所有被阻塞的消息总数
  */
+function getSelectedPlatformIds() {
+  return Array.from(document.querySelectorAll('.platform-icon-option input[type="checkbox"]'))
+    .filter((checkbox) => {
+      const option = checkbox.closest('.platform-icon-option');
+      return option && option.style.display !== 'none' && checkbox.checked;
+    })
+    .map((checkbox) => checkbox.dataset.platform);
+}
+
 function countBlockedMessages() {
-  if (!activePlatformId) return 0;
-  const ps = getPlatformState(activePlatformId);
+  const selectedPlatforms = new Set(getSelectedPlatformIds());
   let count = 0;
-  ps.conversationStates.forEach((convState) => {
-    convState.messages.forEach((m) => {
-      if (m.role === "user" && m.blocked) count++;
+  platformStates.forEach((ps, platformId) => {
+    if (!selectedPlatforms.has(platformId)) return;
+    ps.conversationStates.forEach((convState) => {
+      convState.messages.forEach((m) => {
+        if (m.role === "user" && m.blocked) count++;
+      });
     });
   });
   return count;
@@ -2135,17 +2146,16 @@ function renderPendingMessages() {
 async function sendBlockedMessage(message) {
   if (!message || !message.blocked) return;
 
-  // 找到该消息所属的平台和会话
+  // 在所有平台中查找该消息所属的平台
   let targetPlatformId = null;
-  let targetConversationId = null;
-  const ps = getPlatformState(activePlatformId);
-  for (const [convId, convState] of ps.conversationStates) {
-    const found = convState.messages.find((m) => m.messageId === message.messageId && m.blocked);
-    if (found) {
-      targetPlatformId = activePlatformId;
-      targetConversationId = convId;
-      break;
+  for (const [platformId, ps] of platformStates) {
+    for (const [, convState] of ps.conversationStates) {
+      if (convState.messages.find((m) => m.messageId === message.messageId && m.blocked)) {
+        targetPlatformId = platformId;
+        break;
+      }
     }
+    if (targetPlatformId) break;
   }
   if (!targetPlatformId) return;
 
@@ -2162,14 +2172,19 @@ async function sendBlockedMessage(message) {
  * 统一发送当前所有被阻塞的消息
  */
 async function flushPendingMessages() {
-  if (!activePlatformId) return;
-  const ps = getPlatformState(activePlatformId);
+  const selectedPlatforms = getSelectedPlatformIds();
+  if (selectedPlatforms.length === 0) return;
+
+  const selectedSet = new Set(selectedPlatforms);
   const blocked = [];
-  ps.conversationStates.forEach((convState, convId) => {
-    convState.messages.forEach((m) => {
-      if (m.role === "user" && m.blocked) {
-        blocked.push({ message: m, convId });
-      }
+  platformStates.forEach((ps, platformId) => {
+    if (!selectedSet.has(platformId)) return;
+    ps.conversationStates.forEach((convState) => {
+      convState.messages.forEach((m) => {
+        if (m.role === "user" && m.blocked) {
+          blocked.push({ message: m, platformId });
+        }
+      });
     });
   });
 
@@ -2180,9 +2195,9 @@ async function flushPendingMessages() {
   renderCurrentPlatform();
   updatePendingSendBar();
 
-  // 按时间顺序逐个发送
-  for (const { message } of blocked.sort((a, b) => a.message.timestamp - b.message.timestamp)) {
-    await dispatchMessageToPlatforms(message.content, [activePlatformId]);
+  // 按时间顺序逐个发送到各自所属的平台
+  for (const { message, platformId } of blocked.sort((a, b) => a.message.timestamp - b.message.timestamp)) {
+    await dispatchMessageToPlatforms(message.content, [platformId]);
   }
 
   showTempMessage(`已发送 ${blocked.length} 条消息`);
