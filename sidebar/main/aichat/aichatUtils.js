@@ -66,7 +66,11 @@ const MODE_STORAGE_KEY = "sidebar_send_mode";
 
 // AI Chat 设置（存储在 chrome.storage.sync，支持跨会话同步）
 const AICHAT_SETTINGS_KEY = "aichat_settings";
-let aichatSettings = { captureOnSend: false, addTabToWorkspaceOnSend: false };
+let aichatSettings = { captureOnSend: false, addTabToWorkspaceOnSend: false, blockOnSend: false };
+
+// 待发送消息队列（问题阻塞模式）
+let pendingMessages = [];
+const PENDING_STORAGE_KEY = "aichat_pending_messages";
 
 async function loadAichatSettings() {
   try {
@@ -89,6 +93,8 @@ function updateSettingsUI() {
   if (captureCb) captureCb.checked = !!aichatSettings.captureOnSend;
   const addTabCb = document.getElementById("setting-add-tab-on-send");
   if (addTabCb) addTabCb.checked = !!aichatSettings.addTabToWorkspaceOnSend;
+  const blockCb = document.getElementById("setting-block-on-send");
+  if (blockCb) blockCb.checked = !!aichatSettings.blockOnSend;
 }
 
 function openSettingsModal() {
@@ -187,6 +193,9 @@ export async function initializePopup() {
     promptBarClear: document.getElementById("prompt-bar-clear"),
     footHistoryBtn: document.getElementById("foot-history-btn"),
     modeToggle: document.getElementById("mode-toggle"),
+    pendingSendBar: document.getElementById("pending-send-bar"),
+    pendingSendCount: document.getElementById("pending-send-count"),
+    pendingSendBtn: document.getElementById("pending-send-btn"),
   };
 
   // 提取页面文本相关元素
@@ -228,6 +237,9 @@ export async function initializePopup() {
 
   // 加载 AI Chat 设置
   await loadAichatSettings();
+
+  // 恢复待发送队列
+  await loadPendingMessages();
 
   // 同步当前提示词指示器
   syncPromptIndicator();
@@ -396,6 +408,11 @@ export function setupEventListeners() {
     aichatSettings.addTabToWorkspaceOnSend = e.target.checked;
     saveAichatSettings();
   });
+  document.getElementById("setting-block-on-send")?.addEventListener("change", (e) => {
+    aichatSettings.blockOnSend = e.target.checked;
+    saveAichatSettings();
+    updatePendingSendBar();
+  });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeSettingsModal();
   });
@@ -551,6 +568,9 @@ export function setupEventListeners() {
 
   // 历史按钮：切换显示/隐藏历史
   elements.footHistoryBtn?.addEventListener("click", toggleHistoryView);
+
+  // 统一发送按钮
+  elements.pendingSendBtn?.addEventListener("click", flushPendingMessages);
 
   // 直发/复制模式切换
   elements.modeToggle?.addEventListener("click", toggleSendMode);
@@ -976,18 +996,31 @@ async function startSending() {
   if (!validatePlatformSelection(selectedPlatforms)) return;
 
   const sendTimestamp = Date.now();
+  const isBlocked = aichatSettings.blockOnSend;
   selectedPlatforms.forEach((platformId) => {
     const ps = getPlatformState(platformId);
     const conversationId = ps.activeConvId || DEFAULT_CONVERSATION_ID;
-    appendUserMessage(platformId, conversationId, originalMessage, sendTimestamp);
+    appendUserMessage(platformId, conversationId, originalMessage, sendTimestamp, isBlocked);
   });
 
   if (!activePlatformId || !selectedPlatforms.includes(activePlatformId)) {
     activePlatformId = selectedPlatforms[0];
   }
   renderCurrentPlatform();
+  updatePendingSendBar();
   renderPlatformTabs();
   scrollToBottom(true);
+
+  // 清空输入框
+  elements.messageInput.value = "";
+  autoResizeInput(elements.messageInput);
+  updateSendButton();
+
+  // 问题阻塞模式：仅展示，不真正发送
+  if (isBlocked) {
+    showTempMessage(`已阻塞 ${selectedPlatforms.length} 个平台的消息，点击消息发送`);
+    return;
+  }
 
   // 长文本复制到剪贴板
   if (finalMessage.length > 400) {
@@ -1165,7 +1198,7 @@ function buildMessageKey(role, id) {
   return `${role}::${id}`;
 }
 
-function appendUserMessage(platformId, conversationId, content, timestamp = Date.now()) {
+function appendUserMessage(platformId, conversationId, content, timestamp = Date.now(), blocked = false) {
   const convState = getConvState(platformId, conversationId);
   const messageId = `user-${timestamp}-${Math.random().toString(36).slice(2, 8)}`;
   const messageKey = buildMessageKey("user", messageId);
@@ -1176,6 +1209,7 @@ function appendUserMessage(platformId, conversationId, content, timestamp = Date
     content: String(content || ""),
     timestamp,
     collapsed: false,
+    blocked: !!blocked,
   });
   convState.messageIndex.set(messageKey, convState.messages.length - 1);
   return messageId;
@@ -1222,7 +1256,7 @@ function upsertAssistantMessage(platformId, conversationId, payload) {
 }
 
 function renderMessageBody(message) {
-  if (message.role === "user") {
+  if (message.role === "user" || message.role === "pending") {
     return renderMarkdownText(message.content || "");
   }
 
@@ -1232,6 +1266,21 @@ function renderMessageBody(message) {
     return html;
   }
   return renderMarkdownText(text);
+}
+
+/**
+ * 计算当前平台下所有被阻塞的消息总数
+ */
+function countBlockedMessages() {
+  if (!activePlatformId) return 0;
+  const ps = getPlatformState(activePlatformId);
+  let count = 0;
+  ps.conversationStates.forEach((convState) => {
+    convState.messages.forEach((m) => {
+      if (m.role === "user" && m.blocked) count++;
+    });
+  });
+  return count;
 }
 
 function isNearBottom(el, threshold = 72) {
@@ -1288,12 +1337,14 @@ function renderPlatformMessages(convState) {
     const platformColor = config?.color || "#666";
     const platformIcon = config?.shortIcon || config?.icon || activePlatformId[0]?.toUpperCase() || "?";
     const isUser = message.role === "user";
+    const isPending = message.role === "pending";
+    const isBlocked = isUser && message.blocked;
 
     const msgRow = document.createElement("div");
-    msgRow.className = `notion-chat-message ${isUser ? "notion-chat-message--user" : "notion-chat-message--ai"}`;
+    msgRow.className = `notion-chat-message ${isUser || isPending ? "notion-chat-message--user" : "notion-chat-message--ai"}`;
 
     let avatar = null;
-    if (!isUser) {
+    if (!isUser && !isPending) {
       avatar = document.createElement("div");
       avatar.className = "notion-chat-avatar";
       avatar.style.background = platformColor;
@@ -1301,14 +1352,14 @@ function renderPlatformMessages(convState) {
     }
 
     const bubble = document.createElement("div");
-    bubble.className = `notion-chat-bubble ${isUser ? "notion-chat-bubble--user" : "notion-chat-bubble--ai"}`;
+    bubble.className = `notion-chat-bubble ${isBlocked ? "notion-chat-bubble--pending" : isUser ? "notion-chat-bubble--user" : "notion-chat-bubble--ai"}`;
 
     const header = document.createElement("div");
     header.className = "notion-chat-bubble-header";
 
     const nameEl = document.createElement("span");
     nameEl.className = "notion-chat-bubble-name";
-    nameEl.style.color = isUser ? "#475569" : platformColor;
+    nameEl.style.color = isBlocked ? "#b45309" : isUser ? "#475569" : platformColor;
     nameEl.textContent = isUser ? "You" : platformName;
 
     const timeEl = document.createElement("span");
@@ -1334,22 +1385,32 @@ function renderPlatformMessages(convState) {
       }
     });
 
-    const toggleBtn = document.createElement("button");
-    toggleBtn.className = "notion-chat-btn";
-    toggleBtn.title = message.collapsed ? "展开" : "折叠";
-    toggleBtn.textContent = message.collapsed ? "▸" : "▾";
-    toggleBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      message.collapsed = !message.collapsed;
-      contentEl.style.display = message.collapsed ? "none" : "block";
-      toggleBtn.textContent = message.collapsed ? "▸" : "▾";
-      toggleBtn.title = message.collapsed ? "展开" : "折叠";
-    });
-
     actions.appendChild(copyBtn);
-    actions.appendChild(toggleBtn);
 
-    header.appendChild(nameEl);
+    if (isPending) {
+      const removeBtn = document.createElement("button");
+      removeBtn.className = "notion-chat-btn";
+      removeBtn.title = "移除";
+      removeBtn.textContent = "✕";
+      removeBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        removePendingMessage(message.messageId);
+      });
+      actions.appendChild(removeBtn);
+    } else {
+      const toggleBtn = document.createElement("button");
+      toggleBtn.className = "notion-chat-btn";
+      toggleBtn.title = message.collapsed ? "展开" : "折叠";
+      toggleBtn.textContent = message.collapsed ? "▸" : "▾";
+      toggleBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        message.collapsed = !message.collapsed;
+        contentEl.style.display = message.collapsed ? "none" : "block";
+        toggleBtn.textContent = message.collapsed ? "▸" : "▾";
+        toggleBtn.title = message.collapsed ? "展开" : "折叠";
+      });
+      actions.appendChild(toggleBtn);
+    }
     header.appendChild(timeEl);
     header.appendChild(actions);
 
@@ -1363,6 +1424,17 @@ function renderPlatformMessages(convState) {
 
     if (avatar) msgRow.appendChild(avatar);
     msgRow.appendChild(bubble);
+
+    // 已阻塞消息点击发送
+    if (isBlocked) {
+      bubble.style.cursor = "pointer";
+      bubble.title = "点击发送该消息";
+      bubble.addEventListener("click", (e) => {
+        if (e.target.closest(".notion-chat-bubble-actions")) return;
+        sendBlockedMessage(message);
+      });
+    }
+
     root.appendChild(msgRow);
   });
 
@@ -1913,14 +1985,16 @@ function handleContextMenuAction(action, index) {
 /**
  * 直接发送入口 — 不捕获回复，发送后把消息展示到聊天框、切换到 AI 标签页
  */
-async function startDirectSend() {
+async function startDirectSend(presetMessage = null, forcedPlatformIds = null) {
   if (saveTimeout) {
     clearTimeout(saveTimeout);
     saveTimeout = null;
   }
-  await debouncedSaveMessage(elements.messageInput.value);
+  if (!presetMessage) {
+    await debouncedSaveMessage(elements.messageInput.value);
+  }
 
-  const originalMessage = validateMessageInput(elements.messageInput.value);
+  const originalMessage = presetMessage || validateMessageInput(elements.messageInput.value);
   if (!originalMessage) return;
 
   const selectedValue = elements.promptOptimizerSelect.querySelector(".selected-value");
@@ -1936,12 +2010,17 @@ async function startDirectSend() {
     finalMessage = extractedText + "\n\n" + originalMessage;
   }
 
-  const selectedPlatforms = Array.from(document.querySelectorAll('#platform-panel .platform-icon-option input[type="checkbox"]'))
-    .filter((checkbox) => {
-      const option = checkbox.closest('.platform-icon-option');
-      return option && option.style.display !== 'none' && checkbox.checked;
-    })
-    .map((checkbox) => checkbox.dataset.platform);
+  let selectedPlatforms;
+  if (forcedPlatformIds && forcedPlatformIds.length > 0) {
+    selectedPlatforms = forcedPlatformIds;
+  } else {
+    selectedPlatforms = Array.from(document.querySelectorAll('#platform-panel .platform-icon-option input[type="checkbox"]'))
+      .filter((checkbox) => {
+        const option = checkbox.closest('.platform-icon-option');
+        return option && option.style.display !== 'none' && checkbox.checked;
+      })
+      .map((checkbox) => checkbox.dataset.platform);
+  }
 
   if (!validatePlatformSelection(selectedPlatforms)) return;
 
@@ -1950,13 +2029,32 @@ async function startDirectSend() {
   if (!activePlatformId || !selectedPlatforms.includes(activePlatformId)) {
     activePlatformId = selectedPlatforms[0];
   }
+
+  // 如果是手动触发的新输入（非点击已阻塞消息），且开启了阻塞模式：仅展示，不真正发送
+  const isNewInput = !presetMessage;
+  const isBlocked = isNewInput && aichatSettings.blockOnSend;
+
   selectedPlatforms.forEach((platformId) => {
     const ps = getPlatformState(platformId);
     const conversationId = ps.activeConvId || DEFAULT_CONVERSATION_ID;
-    appendUserMessage(platformId, conversationId, originalMessage, sendTimestamp);
+    appendUserMessage(platformId, conversationId, originalMessage, sendTimestamp, isBlocked);
   });
   renderCurrentPlatform();
+  updatePendingSendBar();
   scrollToBottom(true);
+
+  // 清空输入框
+  if (isNewInput) {
+    elements.messageInput.value = "";
+    autoResizeInput(elements.messageInput);
+    updateSendButton();
+    clearExtractedContent();
+  }
+
+  if (isBlocked) {
+    showTempMessage(`已阻塞 ${selectedPlatforms.length} 个平台的消息，点击消息发送`);
+    return;
+  }
 
   setSidebarSendButtonState("busy", "直发");
 
@@ -1989,16 +2087,153 @@ async function startDirectSend() {
     updatePlatformCount();
     showTempMessage(`直接发送完成: ${successCount}/${selectedPlatforms.length}`);
 
-    // 清空输入框
-    elements.messageInput.value = "";
-    autoResizeInput(elements.messageInput);
-    updateSendButton();
-    // 清空提取/划词内容
-    clearExtractedContent();
-
   } catch (error) {
     console.error("直接发送失败:", error);
     showTempMessage("发送失败，请重试");
+  } finally {
+    updateSendButton();
+  }
+}
+
+// ==================== 问题阻塞（待发送队列） ====================
+
+async function loadPendingMessages() {
+  // 旧逻辑废弃：pending 消息现在作为 blocked user 消息存在会话中
+  renderPendingMessages();
+}
+
+async function savePendingMessages() {
+  // 不再需要单独保存 pending 数组
+}
+
+function enqueuePendingMessage(message) {
+  // 已废弃：由 startDirectSend/startSending 直接写入 blocked user 消息
+}
+
+function removePendingMessage(id) {
+  // 已废弃
+}
+
+function updatePendingSendBar() {
+  if (!elements.pendingSendBar || !elements.pendingSendCount) return;
+  const count = countBlockedMessages();
+  const visible = aichatSettings.blockOnSend && count > 0;
+  elements.pendingSendBar.style.display = visible ? "flex" : "none";
+  if (visible) {
+    elements.pendingSendCount.textContent = `${count} 条消息待发送`;
+  }
+}
+
+function renderPendingMessages() {
+  // 阻塞消息已随会话渲染，无需额外处理
+  updatePendingSendBar();
+}
+
+/**
+ * 点击某条被阻塞的消息时，只把该消息真正发送出去
+ */
+async function sendBlockedMessage(message) {
+  if (!message || !message.blocked) return;
+
+  // 找到该消息所属的平台和会话
+  let targetPlatformId = null;
+  let targetConversationId = null;
+  const ps = getPlatformState(activePlatformId);
+  for (const [convId, convState] of ps.conversationStates) {
+    const found = convState.messages.find((m) => m.messageId === message.messageId && m.blocked);
+    if (found) {
+      targetPlatformId = activePlatformId;
+      targetConversationId = convId;
+      break;
+    }
+  }
+  if (!targetPlatformId) return;
+
+  // 标记为已发送（取消阻塞样式）
+  message.blocked = false;
+  renderCurrentPlatform();
+  updatePendingSendBar();
+
+  // 执行真正发送
+  await dispatchMessageToPlatforms(message.content, [targetPlatformId]);
+}
+
+/**
+ * 统一发送当前所有被阻塞的消息
+ */
+async function flushPendingMessages() {
+  if (!activePlatformId) return;
+  const ps = getPlatformState(activePlatformId);
+  const blocked = [];
+  ps.conversationStates.forEach((convState, convId) => {
+    convState.messages.forEach((m) => {
+      if (m.role === "user" && m.blocked) {
+        blocked.push({ message: m, convId });
+      }
+    });
+  });
+
+  if (blocked.length === 0) return;
+
+  // 先全部标记为未阻塞
+  blocked.forEach(({ message }) => { message.blocked = false; });
+  renderCurrentPlatform();
+  updatePendingSendBar();
+
+  // 按时间顺序逐个发送
+  for (const { message } of blocked.sort((a, b) => a.message.timestamp - b.message.timestamp)) {
+    await dispatchMessageToPlatforms(message.content, [activePlatformId]);
+  }
+
+  showTempMessage(`已发送 ${blocked.length} 条消息`);
+}
+
+/**
+ * 将一条消息真正派发到指定平台（仅执行 background 发送，不写展示）
+ */
+async function dispatchMessageToPlatforms(originalMessage, platformIds) {
+  const selectedValue = elements.promptOptimizerSelect.querySelector(".selected-value");
+  const templateKey = selectedValue.dataset.value;
+  const templateContent = selectedValue.dataset.template;
+
+  const extractedText = getExtractedContentText();
+
+  let finalMessage = originalMessage;
+  if (templateKey && templateContent) {
+    finalMessage = applyPromptTemplate(templateContent, originalMessage, extractedText);
+  } else if (extractedText) {
+    finalMessage = extractedText + "\n\n" + originalMessage;
+  }
+
+  setSidebarSendButtonState("busy", "直发");
+
+  try { await addToHistory(originalMessage); } catch(e) {}
+  refreshHistoryCache();
+
+  let successCount = 0;
+  try {
+    for (const platform of platformIds) {
+      const result = await chrome.runtime.sendMessage({
+        action: "directSend",
+        platform,
+        message: finalMessage,
+        switchToTab: true,
+      });
+      if (result?.status === "success") {
+        successCount++;
+        const tabInfo = await chrome.tabs.get(result.tabId);
+        platformTabCache[platform] = {
+          tabId: result.tabId,
+          title: tabInfo.title,
+          url: tabInfo.url,
+        };
+      } else {
+        console.error(`[directSend] ${platform} 失败:`, result?.error);
+      }
+    }
+    updatePlatformCount();
+  } catch (error) {
+    console.error("发送消息失败:", error);
   } finally {
     updateSendButton();
   }

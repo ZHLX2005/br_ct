@@ -200,13 +200,25 @@
 .notion-chat-bubble--user {
   flex: 0 1 auto; max-width: min(88%, 640px);
   border-radius: 12px 6px 12px 12px;
-  background: #0071da; color: white;
-  border-color: rgba(37,99,235,0.08);
-  box-shadow: 0 8px 20px rgba(37,99,235,0.08);
+  background: white; color: var(--text);
+  border: 1.5px solid #2563eb;
+  box-shadow: none;
 }
-.notion-chat-bubble--user .notion-chat-bubble-header { border-bottom-color: rgba(255,255,255,0.7); }
+.notion-chat-bubble--user .notion-chat-bubble-header { border-bottom-color: rgba(37,99,235,0.12); }
 .notion-chat-bubble--user .notion-chat-bubble-name,
-.notion-chat-bubble--user .notion-chat-bubble-time { color: rgba(255,255,255,0.85) !important; }
+.notion-chat-bubble--user .notion-chat-bubble-time { color: var(--text-secondary) !important; }
+
+/* 待发送（阻塞）消息 */
+.notion-chat-bubble--pending {
+  flex: 0 1 auto; max-width: min(88%, 640px);
+  border-radius: 12px 6px 12px 12px;
+  background: white; color: var(--text);
+  border: 1.5px solid #f59e0b;
+  box-shadow: none;
+}
+.notion-chat-bubble--pending .notion-chat-bubble-header { border-bottom-color: rgba(245,158,11,0.14); }
+.notion-chat-bubble--pending .notion-chat-bubble-name { color: #b45309; }
+.notion-chat-bubble--pending .notion-chat-bubble-time { color: #d97706; }
 .notion-chat-bubble-header {
   display: flex; align-items: center; gap: 6px;
   margin-bottom: 6px; padding-bottom: 5px;
@@ -259,6 +271,23 @@
   border-color: var(--primary);
   box-shadow: 0 0 0 2px rgba(67,97,238,0.08);
 }
+
+.pending-send-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 6px 8px;
+  border-bottom: 1px solid rgba(245,158,11,0.22);
+  background: rgba(245,158,11,0.06);
+}
+.pending-send-count {
+  font-size: 11px; font-weight: 500; color: #b45309;
+}
+.pending-send-btn {
+  padding: 3px 10px; border: 1px solid #f59e0b; border-radius: 5px;
+  background: white; color: #b45309; font-size: 11px; font-weight: 600;
+  cursor: pointer; transition: all 0.12s ease;
+}
+.pending-send-btn:hover { background: #fffbeb; border-color: #d97706; color: #92400e; }
+
 .chat-input-inner {
   display: flex;
   flex-direction: column-reverse;
@@ -308,15 +337,13 @@
 /* send-btn */
 .send-btn {
   display: flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px; border: none; border-radius: 6px;
-  background: linear-gradient(180deg, #2563eb, #1d4ed8);
-  color: white; cursor: pointer; transition: all 0.12s ease; flex-shrink: 0;
+  width: 28px; height: 28px; border: 1.5px solid #2563eb; border-radius: 6px;
+  background: white; color: #2563eb; cursor: pointer; transition: all 0.12s ease; flex-shrink: 0;
 }
 .send-btn:hover:not(:disabled) {
-  background: linear-gradient(180deg, #1d4ed8, #1e40af);
-  box-shadow: 0 6px 14px rgba(29,78,216,0.2);
+  background: #eff6ff; border-color: #1d4ed8; color: #1d4ed8;
 }
-.send-btn:disabled { background: #e5e7eb; color: var(--text-muted); cursor: default; box-shadow: none; }
+.send-btn:disabled { background: #f3f4f6; color: var(--text-muted); border-color: #e5e7eb; cursor: default; box-shadow: none; }
 
 /* ===== 提取结果 ===== */
 .extract-result {
@@ -385,9 +412,9 @@
 .history-item .history-bubble {
   flex: 0 1 auto; max-width: min(88%, 640px);
   border-radius: 12px 6px 12px 12px;
-  background: #0071da; color: white;
-  border-color: rgba(37,99,235,0.08);
-  box-shadow: 0 8px 20px rgba(37,99,235,0.08);
+  background: white; color: var(--text);
+  border: 1.5px solid #2563eb;
+  box-shadow: none;
   padding: 8px 12px 9px; font-size: 13px; line-height: 1.55;
   word-break: break-word; white-space: normal;
   transition: opacity 0.1s ease;
