@@ -11,7 +11,11 @@ key.pem
 manifest_key.txt
 manifest_id.txt
 generate_key.js
-.claude/repo
+# Cloned repositories (nested git repos)
+# Ignore everything inside, but track reading notes in _read/
+.claude/repo/*
+!.claude/repo/_read/
+!.claude/repo/_read/**
 *.exe~
 
 # Claude Code worktrees (harness-managed)
