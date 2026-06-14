@@ -130,6 +130,14 @@ export const PLATFORM_CONFIG = {
     color: '#ff6b6b',
     url: 'https://www.coze.cn/',
     defaultVisible: true
+  },
+  xiaomi: {
+    name: '小米',
+    icon: '米',
+    shortIcon: '米',
+    color: '#ff6700',
+    url: 'https://aistudio.xiaomimimo.com/#/c',
+    defaultVisible: true
   }
 };
 

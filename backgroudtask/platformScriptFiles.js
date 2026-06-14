@@ -119,6 +119,12 @@ export function getPlatformScriptFiles(platform) {
     ];
   }
 
+  if (platform === "xiaomi") {
+    return [
+      "contentScripts/xiaomi.js",
+    ];
+  }
+
   return [`contentScripts/${platform}.js`];
 }
 
@@ -226,6 +232,13 @@ export function getResponseListenerFiles(platform) {
     return [
       "contentScripts/chatResponse/responseListenerCore.js",
       "contentScripts/chatResponse/zaiResponseListener.js",
+    ];
+  }
+
+  if (platform === "xiaomi") {
+    return [
+      "contentScripts/chatResponse/responseListenerCore.js",
+      "contentScripts/chatResponse/xiaomiResponseListener.js",
     ];
   }
 
