@@ -8,7 +8,9 @@ import {
   savePlatformStates,
   saveOptimizerSetting,
   loadStoredData as loadData,
-  addToHistory
+  addToHistory,
+  addMessageTabContext,
+  getMessageTabContext
 } from "../../../popup/main/modules/storage.js";
 import {
   loadPlatformVisibilitySettings,
@@ -192,6 +194,10 @@ export async function initializePopup() {
     promptBarAlias: document.getElementById("prompt-bar-alias"),
     promptBarClear: document.getElementById("prompt-bar-clear"),
     footHistoryBtn: document.getElementById("foot-history-btn"),
+    footSourceBtn: document.getElementById("foot-source-btn"),
+    sourcePanel: document.getElementById("source-panel"),
+    sourcePanelClose: document.getElementById("source-panel-close"),
+    sourcePanelBody: document.getElementById("source-panel-body"),
     modeToggle: document.getElementById("mode-toggle"),
     pendingSendBar: document.getElementById("pending-send-bar"),
     pendingSendCount: document.getElementById("pending-send-count"),
@@ -569,6 +575,10 @@ export function setupEventListeners() {
   // 历史按钮：切换显示/隐藏历史
   elements.footHistoryBtn?.addEventListener("click", toggleHistoryView);
 
+  // 来源按钮：切换显示/隐藏有来源的消息面板
+  elements.footSourceBtn?.addEventListener("click", toggleSourcePanel);
+  elements.sourcePanelClose?.addEventListener("click", closeSourcePanel);
+
   // 统一发送按钮
   elements.pendingSendBtn?.addEventListener("click", flushPendingMessages);
 
@@ -914,6 +924,142 @@ export function refreshHistoryCache() {
   });
 }
 
+// ==================== 有来源的消息面板 ====================
+
+let _sourcePanelOpen = false;
+
+function closeSourcePanel() {
+  _sourcePanelOpen = false;
+  if (elements.sourcePanel) {
+    elements.sourcePanel.classList.remove("open");
+    elements.sourcePanel.style.display = "none";
+  }
+  if (elements.footSourceBtn) elements.footSourceBtn.classList.remove("active");
+  // 恢复对话视图
+  if (elements.conversationSection) elements.conversationSection.style.display = "";
+  if (elements.historySection) elements.historySection.style.display = "";
+  if (responseContent) responseContent.classList.remove("source-open");
+}
+
+async function toggleSourcePanel() {
+  if (_sourcePanelOpen) {
+    closeSourcePanel();
+    return;
+  }
+
+  // 关闭历史视图（如果开着）
+  if (elements.historySection?.classList.contains("visible")) {
+    elements.historySection.classList.remove("visible");
+  }
+
+  _sourcePanelOpen = true;
+  if (elements.sourcePanel) {
+    elements.sourcePanel.style.display = "flex";
+    elements.sourcePanel.classList.add("open");
+  }
+  if (elements.footSourceBtn) elements.footSourceBtn.classList.add("active");
+
+  // 隐藏对话/历史区，避免滚动冲突
+  if (elements.conversationSection) elements.conversationSection.style.display = "none";
+  if (elements.historySection) elements.historySection.style.display = "none";
+  if (responseContent) responseContent.classList.add("source-open");
+
+  await renderSourcePanel();
+}
+
+async function renderSourcePanel() {
+  if (!elements.sourcePanelBody) return;
+
+  let data;
+  try {
+    data = await getMessageTabContext();
+  } catch (e) {
+    data = {};
+  }
+
+  const urls = Object.keys(data);
+  if (urls.length === 0) {
+    elements.sourcePanelBody.innerHTML = '<div class="source-empty-tip">暂无带来源的消息</div>';
+    return;
+  }
+
+  // 按消息数量降序，数量相同按 URL 字母序
+  urls.sort((a, b) => {
+    const countDiff = (data[b]?.length || 0) - (data[a]?.length || 0);
+    if (countDiff !== 0) return countDiff;
+    return a.localeCompare(b);
+  });
+
+  const frag = document.createDocumentFragment();
+  urls.forEach((url) => {
+    const messages = data[url] || [];
+    if (messages.length === 0) return;
+
+    const group = document.createElement("div");
+    group.className = "source-group open";
+
+    const header = document.createElement("div");
+    header.className = "source-group-header";
+
+    const toggle = document.createElement("span");
+    toggle.className = "source-group-toggle";
+    toggle.textContent = "▸";
+
+    let hostname = "";
+    try { hostname = new URL(url).hostname; } catch { /* ignore */ }
+
+    const favicon = document.createElement("img");
+    favicon.className = "source-group-favicon";
+    favicon.src = hostname
+      ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&size=16`
+      : "";
+    favicon.onerror = () => { favicon.style.display = "none"; };
+
+    const urlEl = document.createElement("span");
+    urlEl.className = "source-group-url";
+    urlEl.title = url;
+    urlEl.textContent = url;
+
+    const count = document.createElement("span");
+    count.className = "source-group-count";
+    count.textContent = messages.length;
+
+    header.appendChild(toggle);
+    header.appendChild(favicon);
+    header.appendChild(urlEl);
+    header.appendChild(count);
+
+    const list = document.createElement("div");
+    list.className = "source-msg-list";
+    messages.forEach((msg) => {
+      const item = document.createElement("div");
+      item.className = "source-msg";
+      item.title = "点击填充到输入框";
+      item.textContent = msg;
+      item.addEventListener("click", () => {
+        if (elements.messageInput) {
+          elements.messageInput.value = msg;
+          elements.messageInput.dispatchEvent(new Event("input"));
+          focusInputAndSetCursor(elements.messageInput);
+        }
+        closeSourcePanel();
+      });
+      list.appendChild(item);
+    });
+
+    header.addEventListener("click", () => {
+      group.classList.toggle("open");
+    });
+
+    group.appendChild(header);
+    group.appendChild(list);
+    frag.appendChild(group);
+  });
+
+  elements.sourcePanelBody.innerHTML = "";
+  elements.sourcePanelBody.appendChild(frag);
+}
+
 // ==================== 输入框自动调整 ====================
 
 function autoResizeInput(el) {
@@ -1019,7 +1165,9 @@ async function startSending() {
   // 问题阻塞模式：仅展示，不真正发送
   if (isBlocked) {
     // 阻塞阶段就入历史，避免用户未点统一发送就直接关闭侧边栏造成历史丢失
+    // 同时把当前激活标签页 URL 与该消息的关系冗余写入独立容器，方便后续统计专注窗口
     try { await addToHistory(originalMessage); } catch (e) { /* ignore */ }
+    try { await addMessageTabContext(originalMessage, await getCurrentActiveTabUrl()); } catch (e) { /* ignore */ }
     refreshHistoryCache();
     showTempMessage(`已阻塞 ${selectedPlatforms.length} 个平台的消息，点击消息发送`);
     return;
@@ -2085,7 +2233,9 @@ async function startDirectSend(presetMessage = null, forcedPlatformIds = null) {
 
   if (isBlocked) {
     // 阻塞阶段就入历史，避免用户未点统一发送就直接关闭侧边栏造成历史丢失
+    // 同时把当前激活标签页 URL 与该消息的关系冗余写入独立容器，方便后续统计专注窗口
     try { await addToHistory(originalMessage); } catch (e) { /* ignore */ }
+    try { await addMessageTabContext(originalMessage, await getCurrentActiveTabUrl()); } catch (e) { /* ignore */ }
     refreshHistoryCache();
     showTempMessage(`已阻塞 ${selectedPlatforms.length} 个平台的消息，点击消息发送`);
     return;
@@ -2165,31 +2315,49 @@ function renderPendingMessages() {
 }
 
 /**
- * 点击某条被阻塞的消息时，只把该消息真正发送出去
+ * 获取当前窗口激活标签页的 URL
+ * 用于阻塞发送时给"标签页-消息"关联容器打标
+ */
+async function getCurrentActiveTabUrl() {
+  try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    return tabs[0]?.url || "";
+  } catch (e) {
+    return "";
+  }
+}
+
+/**
+ * 点击某条被阻塞的消息时，把该消息发送到当前选中的所有平台
  */
 async function sendBlockedMessage(message) {
   if (!message || !message.blocked) return;
 
-  // 在所有平台中查找该消息所属的平台
-  let targetPlatformId = null;
-  for (const [platformId, ps] of platformStates) {
-    for (const [, convState] of ps.conversationStates) {
-      if (convState.messages.find((m) => m.messageId === message.messageId && m.blocked)) {
-        targetPlatformId = platformId;
-        break;
-      }
-    }
-    if (targetPlatformId) break;
-  }
-  if (!targetPlatformId) return;
+  const selectedPlatforms = getSelectedPlatformIds();
+  if (selectedPlatforms.length === 0) return;
+  const selectedSet = new Set(selectedPlatforms);
+
+  // 在选中平台中找出所有同内容的阻塞消息，统一取消阻塞样式
+  const refs = [];
+  platformStates.forEach((ps, platformId) => {
+    if (!selectedSet.has(platformId)) return;
+    ps.conversationStates.forEach((convState) => {
+      convState.messages.forEach((m) => {
+        if (m.role === "user" && m.blocked && m.content === message.content) {
+          refs.push(m);
+        }
+      });
+    });
+  });
+  if (refs.length === 0) return;
 
   // 标记为已发送（取消阻塞样式）
-  message.blocked = false;
+  refs.forEach((m) => { m.blocked = false; });
   renderCurrentPlatform();
   updatePendingSendBar();
 
-  // 执行真正发送（消息在阻塞阶段已存历史，此处跳过避免冗余写入）
-  await dispatchMessageToPlatforms(message.content, [targetPlatformId], { skipHistory: true });
+  // 执行真正发送：当前选中的所有平台
+  await dispatchMessageToPlatforms(message.content, selectedPlatforms, { skipHistory: true });
 }
 
 /**

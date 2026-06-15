@@ -79,6 +79,15 @@
   <section class="page active" id="page-main">
     <div class="response-content" id="response-content">
       <div class="history-section" id="history-section"></div>
+      <div class="source-panel" id="source-panel" style="display:none">
+        <div class="source-panel-header">
+          <span class="source-panel-title">有来源的消息</span>
+          <button class="source-panel-close" id="source-panel-close" type="button" title="关闭">×</button>
+        </div>
+        <div class="source-panel-body" id="source-panel-body">
+          <div class="source-empty-tip">暂无带来源的消息</div>
+        </div>
+      </div>
       <div class="conversation-section" id="conversation-section">
         <div class="response-placeholder">暂无回复内容</div>
       </div>
@@ -115,6 +124,10 @@
         <button class="foot-btn" id="foot-history-btn" title="查看历史消息">
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/><path d="M6 3.5v3l2 1.2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
           历史
+        </button>
+        <button class="foot-btn" id="foot-source-btn" title="查看来源消息">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          来源
         </button>
       </div>
       <div class="chat-input-foot-right">
