@@ -10,7 +10,9 @@ import {
   loadStoredData as loadData,
   addToHistory,
   addMessageTabContext,
-  getMessageTabContext
+  getMessageTabContext,
+  removeMessageFromTabContext,
+  removeTabContextUrl
 } from "../../../popup/main/modules/storage.js";
 import {
   loadPlatformVisibilitySettings,
@@ -1019,15 +1021,35 @@ async function renderSourcePanel() {
     urlEl.className = "source-group-url";
     urlEl.title = url;
     urlEl.textContent = url;
+    urlEl.addEventListener("click", (e) => {
+      e.stopPropagation();
+      try {
+        chrome.tabs.create({ url, active: false });
+      } catch (err) {
+        window.open(url, "_blank");
+      }
+    });
 
     const count = document.createElement("span");
     count.className = "source-group-count";
     count.textContent = messages.length;
 
+    const removeUrlBtn = document.createElement("button");
+    removeUrlBtn.className = "source-group-remove";
+    removeUrlBtn.title = "删除该来源及所有消息";
+    removeUrlBtn.innerHTML = "×";
+    removeUrlBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await removeTabContextUrl(url);
+      renderSourcePanel();
+      showTempMessage("已删除来源");
+    });
+
     header.appendChild(toggle);
     header.appendChild(favicon);
     header.appendChild(urlEl);
     header.appendChild(count);
+    header.appendChild(removeUrlBtn);
 
     const list = document.createElement("div");
     list.className = "source-msg-list";
@@ -1035,7 +1057,24 @@ async function renderSourcePanel() {
       const item = document.createElement("div");
       item.className = "source-msg";
       item.title = "点击填充到输入框";
-      item.textContent = msg;
+
+      const text = document.createElement("span");
+      text.className = "source-msg-text";
+      text.textContent = msg;
+
+      const removeMsgBtn = document.createElement("button");
+      removeMsgBtn.className = "source-msg-remove";
+      removeMsgBtn.title = "删除该消息";
+      removeMsgBtn.innerHTML = "×";
+      removeMsgBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        await removeMessageFromTabContext(msg, url);
+        renderSourcePanel();
+        showTempMessage("已删除消息");
+      });
+
+      item.appendChild(text);
+      item.appendChild(removeMsgBtn);
       item.addEventListener("click", () => {
         if (elements.messageInput) {
           elements.messageInput.value = msg;
