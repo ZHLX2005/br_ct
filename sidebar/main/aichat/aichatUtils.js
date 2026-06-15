@@ -1891,11 +1891,29 @@ function renderWorkspaceTabs() {
   });
 }
 
+/**
+ * 判断给定 URL 是否属于某个 AI 平台页面（origin 级比对）
+ * AI 平台页面由平台 pill 系统管理，加入工作区会与之冲突，需排除
+ */
+function isAiWebUrl(url) {
+  if (!url) return false;
+  let origin;
+  try { origin = new URL(url).origin; } catch { return false; }
+  return Object.values(PLATFORM_CONFIG).some((cfg) => {
+    try { return new URL(cfg.url).origin === origin; } catch { return false; }
+  });
+}
+
 async function addCurrentPageToWorkspace() {
   try {
     const response = await chrome.runtime.sendMessage({ action: "getCurrentTabInfo" });
     if (response?.status === "success" && response.tab) {
       const tab = response.tab;
+      // 排除 AI 平台页面：它们由平台 pill 系统管理，加入工作区会冲突
+      if (isAiWebUrl(tab.url)) {
+        showTempMessage("AI 平台页面无需添加到工作区");
+        return;
+      }
       // 去重
       if (workspaceTabs.some(t => t.tabId === tab.id)) {
         showTempMessage("该标签页已在工作区中");
@@ -2176,37 +2194,48 @@ async function sendBlockedMessage(message) {
 
 /**
  * 统一发送当前所有被阻塞的消息
+ * 去重阻塞队列中的消息后，统一发送到「当前选中的所有平台」，
+ * 而不是发到消息阻塞时所属的平台——这样用户在阻塞期间调整平台勾选也能即时生效。
  */
 async function flushPendingMessages() {
   const selectedPlatforms = getSelectedPlatformIds();
   if (selectedPlatforms.length === 0) return;
 
   const selectedSet = new Set(selectedPlatforms);
-  const blocked = [];
+  const blockedRefs = [];             // 选中平台里所有 blocked 消息引用（用于清除阻塞标记）
+  const uniqueByContent = new Map();  // content -> { content, timestamp }（按内容去重，保留最早时间戳）
+
   platformStates.forEach((ps, platformId) => {
     if (!selectedSet.has(platformId)) return;
     ps.conversationStates.forEach((convState) => {
       convState.messages.forEach((m) => {
-        if (m.role === "user" && m.blocked) {
-          blocked.push({ message: m, platformId });
+        if (m.role !== "user" || !m.blocked) return;
+        blockedRefs.push(m);
+        const prev = uniqueByContent.get(m.content);
+        if (!prev || prev.timestamp > m.timestamp) {
+          uniqueByContent.set(m.content, { content: m.content, timestamp: m.timestamp });
         }
       });
     });
   });
 
-  if (blocked.length === 0) return;
+  if (blockedRefs.length === 0) return;
 
-  // 先全部标记为未阻塞
-  blocked.forEach(({ message }) => { message.blocked = false; });
+  // 先把选中平台的所有阻塞消息标记为未阻塞（取消阻塞样式）
+  blockedRefs.forEach((m) => { m.blocked = false; });
   renderCurrentPlatform();
   updatePendingSendBar();
 
-  // 按时间顺序逐个发送到各自所属的平台（阻塞阶段已存历史，跳过避免冗余写入）
-  for (const { message, platformId } of blocked.sort((a, b) => a.message.timestamp - b.message.timestamp)) {
-    await dispatchMessageToPlatforms(message.content, [platformId], { skipHistory: true });
+  // 去重后的消息按时间顺序，统一发送到当前选中的所有平台
+  const queue = Array.from(uniqueByContent.values()).sort((a, b) => a.timestamp - b.timestamp);
+  for (const { content } of queue) {
+    await dispatchMessageToPlatforms(content, selectedPlatforms, { skipHistory: true });
   }
 
-  showTempMessage(`已发送 ${blocked.length} 条消息`);
+  const tip = queue.length <= 1
+    ? `已发送到 ${selectedPlatforms.length} 个平台`
+    : `已发送 ${queue.length} 条消息到 ${selectedPlatforms.length} 个平台`;
+  showTempMessage(tip);
 }
 
 /**
