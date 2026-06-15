@@ -1018,6 +1018,9 @@ async function startSending() {
 
   // 问题阻塞模式：仅展示，不真正发送
   if (isBlocked) {
+    // 阻塞阶段就入历史，避免用户未点统一发送就直接关闭侧边栏造成历史丢失
+    try { await addToHistory(originalMessage); } catch (e) { /* ignore */ }
+    refreshHistoryCache();
     showTempMessage(`已阻塞 ${selectedPlatforms.length} 个平台的消息，点击消息发送`);
     return;
   }
@@ -2063,6 +2066,9 @@ async function startDirectSend(presetMessage = null, forcedPlatformIds = null) {
   }
 
   if (isBlocked) {
+    // 阻塞阶段就入历史，避免用户未点统一发送就直接关闭侧边栏造成历史丢失
+    try { await addToHistory(originalMessage); } catch (e) { /* ignore */ }
+    refreshHistoryCache();
     showTempMessage(`已阻塞 ${selectedPlatforms.length} 个平台的消息，点击消息发送`);
     return;
   }
@@ -2164,8 +2170,8 @@ async function sendBlockedMessage(message) {
   renderCurrentPlatform();
   updatePendingSendBar();
 
-  // 执行真正发送
-  await dispatchMessageToPlatforms(message.content, [targetPlatformId]);
+  // 执行真正发送（消息在阻塞阶段已存历史，此处跳过避免冗余写入）
+  await dispatchMessageToPlatforms(message.content, [targetPlatformId], { skipHistory: true });
 }
 
 /**
@@ -2195,9 +2201,9 @@ async function flushPendingMessages() {
   renderCurrentPlatform();
   updatePendingSendBar();
 
-  // 按时间顺序逐个发送到各自所属的平台
+  // 按时间顺序逐个发送到各自所属的平台（阻塞阶段已存历史，跳过避免冗余写入）
   for (const { message, platformId } of blocked.sort((a, b) => a.message.timestamp - b.message.timestamp)) {
-    await dispatchMessageToPlatforms(message.content, [platformId]);
+    await dispatchMessageToPlatforms(message.content, [platformId], { skipHistory: true });
   }
 
   showTempMessage(`已发送 ${blocked.length} 条消息`);
@@ -2205,8 +2211,12 @@ async function flushPendingMessages() {
 
 /**
  * 将一条消息真正派发到指定平台（仅执行 background 发送，不写展示）
+ * @param {string} originalMessage - 原始消息文本
+ * @param {string[]} platformIds - 目标平台 id 列表
+ * @param {Object} [options]
+ * @param {boolean} [options.skipHistory=false] - 是否跳过入历史（阻塞路径已在阻塞阶段存过）
  */
-async function dispatchMessageToPlatforms(originalMessage, platformIds) {
+async function dispatchMessageToPlatforms(originalMessage, platformIds, { skipHistory = false } = {}) {
   const selectedValue = elements.promptOptimizerSelect.querySelector(".selected-value");
   const templateKey = selectedValue.dataset.value;
   const templateContent = selectedValue.dataset.template;
@@ -2222,8 +2232,11 @@ async function dispatchMessageToPlatforms(originalMessage, platformIds) {
 
   setSidebarSendButtonState("busy", "直发");
 
-  try { await addToHistory(originalMessage); } catch(e) {}
-  refreshHistoryCache();
+  // 阻塞路径在阻塞阶段已存历史；非阻塞路径在这里补存
+  if (!skipHistory) {
+    try { await addToHistory(originalMessage); } catch(e) {}
+    refreshHistoryCache();
+  }
 
   let successCount = 0;
   try {

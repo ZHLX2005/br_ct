@@ -130,11 +130,11 @@
 .platform-panel.open { display: block; }
 .platform-panel .platform-options-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 4px; }
 .platform-panel .platform-icon-option { display: flex; flex-direction: column; align-items: center; cursor: pointer; padding: 4px 2px; border-radius: var(--radius-sm); transition: all 0.12s ease; text-align: center; position: relative; min-width: 0; }
-.platform-panel .platform-icon-option:hover { background: rgba(0,0,0,0.03); }
+.platform-panel .platform-icon-option:hover .icon-wrapper { border-color: var(--primary); }
 .platform-panel .platform-icon-option input[type="checkbox"] { position: absolute; opacity: 0; width: 1px; height: 1px; overflow: hidden; }
-.platform-panel .icon-wrapper { width: 26px; height: 26px; margin-bottom: 2px; background: #f0f4ff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--primary); font-weight: bold; border: 1.5px solid var(--border); transition: all 0.12s ease; }
+.platform-panel .icon-wrapper { width: 26px; height: 26px; margin-bottom: 2px; background: #f0f4ff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--primary); font-weight: bold; border: 1.5px solid #e2e8f0; transition: all 0.12s ease; }
 .platform-panel .platform-icon-option input[type="checkbox"]:checked + .icon-wrapper { background: var(--primary); color: white; border-color: var(--primary); }
-.platform-panel .platform-label { font-size: 8px; color: var(--text-secondary); line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.platform-panel .platform-label { font-size: 8px; color: #2d3748; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 
 /* ===== 提示词指示器 ===== */
 .prompt-bar {
