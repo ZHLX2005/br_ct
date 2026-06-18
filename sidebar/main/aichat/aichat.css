@@ -273,13 +273,13 @@
 }
 
 .pending-send-bar {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center; justify-content: flex-end;
   gap: 8px; padding: 6px 8px;
   border-bottom: 1px solid rgba(245,158,11,0.22);
   background: rgba(245,158,11,0.06);
 }
 .pending-send-count {
-  font-size: 11px; font-weight: 500; color: #b45309;
+  display: none;
 }
 .pending-send-btn {
   padding: 3px 10px; border: 1px solid #f59e0b; border-radius: 5px;

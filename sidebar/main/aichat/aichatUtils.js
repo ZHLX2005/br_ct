@@ -582,7 +582,7 @@ export function setupEventListeners() {
   elements.sourcePanelClose?.addEventListener("click", closeSourcePanel);
 
   // 统一发送按钮
-  elements.pendingSendBtn?.addEventListener("click", flushPendingMessages);
+  elements.pendingSendBtn?.addEventListener("click", copyBlockedAsLinks);
 
   // 直发/复制模式切换
   elements.modeToggle?.addEventListener("click", toggleSendMode);
@@ -1061,7 +1061,6 @@ async function renderSourcePanel() {
       const text = document.createElement("span");
       text.className = "source-msg-text";
       text.textContent = msg;
-
       const removeMsgBtn = document.createElement("button");
       removeMsgBtn.className = "source-msg-remove";
       removeMsgBtn.title = "删除该消息";
@@ -1139,6 +1138,11 @@ async function runPreSendHooks() {
   }
 }
 
+/**
+ * 统一发送入口
+ * - 直接发送模式（isDirectMode=true）：不展示阻塞态，直接发
+ * - 阻塞模式：仅展示，不真正发送（等点击黄色气泡或点击统一发送时再走 dispatchMessageToPlatforms）
+ */
 async function startSending() {
   await runPreSendHooks();
 
@@ -1156,20 +1160,6 @@ async function startSending() {
 
   const originalMessage = validateMessageInput(elements.messageInput.value);
   if (!originalMessage) return;
-
-  const selectedValue = elements.promptOptimizerSelect.querySelector(".selected-value");
-  const templateKey = selectedValue.dataset.value;
-  const templateContent = selectedValue.dataset.template;
-
-  const extractedText = getExtractedContentText();
-
-  let finalMessage = originalMessage;
-  if (templateKey && templateContent) {
-    finalMessage = applyPromptTemplate(templateContent, originalMessage, extractedText);
-  } else if (extractedText) {
-    // 没有模板但有提取内容：把上下文拼在用户消息前面
-    finalMessage = extractedText + "\n\n" + originalMessage;
-  }
 
   const selectedPlatforms = Array.from(document.querySelectorAll('.platform-icon-option input[type="checkbox"]'))
     .filter((checkbox) => {
@@ -1200,11 +1190,10 @@ async function startSending() {
   elements.messageInput.value = "";
   autoResizeInput(elements.messageInput);
   updateSendButton();
+  clearExtractedContent();
 
-  // 问题阻塞模式：仅展示，不真正发送
+  // 问题阻塞模式：仅展示，不真正发送（等点击黄色气泡或点击「双链复制」/统一发送时再走 dispatchMessageToPlatforms）
   if (isBlocked) {
-    // 阻塞阶段就入历史，避免用户未点统一发送就直接关闭侧边栏造成历史丢失
-    // 同时把当前激活标签页 URL 与该消息的关系冗余写入独立容器，方便后续统计专注窗口
     try { await addToHistory(originalMessage); } catch (e) { /* ignore */ }
     try { await addMessageTabContext(originalMessage, await getCurrentActiveTabUrl()); } catch (e) { /* ignore */ }
     refreshHistoryCache();
@@ -1212,95 +1201,8 @@ async function startSending() {
     return;
   }
 
-  // 长文本复制到剪贴板
-  if (finalMessage.length > 400) {
-    setSidebarSendButtonState("busy", "复制");
-    const copySuccess = await copyToClipboard(finalMessage);
-    if (copySuccess) {
-      showTempMessage(`内容已复制到剪切板（${finalMessage.length}字符）`);
-    } else {
-      showTempMessage("复制失败，但将继续发送");
-    }
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-  }
-
-  setSidebarSendButtonState("busy", "处理中");
-
-  // 不管发送成功与否，先保存到历史
-  try { await addToHistory(originalMessage); } catch(e) {}
-  refreshHistoryCache();
-
-  try {
-    await savePlatformStates(document.querySelectorAll('.platform-icon-option input[type="checkbox"]'));
-
-    const actionsQueue = selectedPlatforms.map((platform) => ({
-      platform,
-      message: finalMessage,
-    }));
-
-    const response = await new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage(
-        {
-          action: "processTaskQueue",
-          source: "sidebar",
-          queue: actionsQueue,
-          config: {
-            maxConcurrent: 3,
-            batchDelay: 300,
-            tabLoadTimeout: 8000,
-            scriptTimeout: 5000
-          }
-        },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            reject(chrome.runtime.lastError);
-          } else {
-            resolve(response);
-          }
-        }
-      );
-    });
-
-    console.log("任务处理完成:", response);
-
-    if (response && response.status === "completed") {
-      const successMsg = `处理完成: 成功 ${response.success}/${response.total}`;
-      setSidebarSendButtonState("done", "✓");
-      showTempMessage(successMsg, 2000);
-
-      if (response.failed > 0) {
-        const failedPlatforms = response.results
-          .filter(r => r.status === 'rejected')
-          .map(r => {
-            const match = r.reason?.message?.match(/^(\w+):/);
-            return match ? match[1] : '未知';
-          })
-          .join(', ');
-        console.warn("失败的平台:", failedPlatforms);
-        setTimeout(() => { showTempMessage(`失败: ${failedPlatforms}`, 3000); }, 2000);
-      }
-    } else if (response && response.status === "error") {
-      throw new Error(response.error || "处理失败");
-    } else {
-      showTempMessage("发送完成");
-    }
-
-    // 清空输入框
-    elements.messageInput.value = "";
-    autoResizeInput(elements.messageInput);
-    updateSendButton();
-
-    // 清空提取/划词内容
-    clearExtractedContent();
-
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    updateSendButton();
-
-  } catch (error) {
-    console.error("发送消息失败:", error);
-    showTempMessage("发送失败，请重试");
-    updateSendButton();
-  }
+  // 非阻塞：直接发，逻辑收敛到 dispatchMessageToPlatforms（携带提取文本和提示词模板）
+  await dispatchMessageToPlatforms(originalMessage, selectedPlatforms);
 }
 
 // ==================== 多平台回复展示 ====================
@@ -2203,6 +2105,8 @@ function handleContextMenuAction(action, index) {
 
 /**
  * 直接发送入口 — 不捕获回复，发送后把消息展示到聊天框、切换到 AI 标签页
+ * - 非阻塞模式：直接走 dispatchMessageToPlatforms 发送
+ * - 阻塞模式（presetMessage 为空时）：仅展示阻塞气泡，等待用户点击发送
  */
 async function startDirectSend(presetMessage = null, forcedPlatformIds = null) {
   if (saveTimeout) {
@@ -2215,19 +2119,6 @@ async function startDirectSend(presetMessage = null, forcedPlatformIds = null) {
 
   const originalMessage = presetMessage || validateMessageInput(elements.messageInput.value);
   if (!originalMessage) return;
-
-  const selectedValue = elements.promptOptimizerSelect.querySelector(".selected-value");
-  const templateKey = selectedValue.dataset.value;
-  const templateContent = selectedValue.dataset.template;
-
-  const extractedText = getExtractedContentText();
-
-  let finalMessage = originalMessage;
-  if (templateKey && templateContent) {
-    finalMessage = applyPromptTemplate(templateContent, originalMessage, extractedText);
-  } else if (extractedText) {
-    finalMessage = extractedText + "\n\n" + originalMessage;
-  }
 
   let selectedPlatforms;
   if (forcedPlatformIds && forcedPlatformIds.length > 0) {
@@ -2271,8 +2162,6 @@ async function startDirectSend(presetMessage = null, forcedPlatformIds = null) {
   }
 
   if (isBlocked) {
-    // 阻塞阶段就入历史，避免用户未点统一发送就直接关闭侧边栏造成历史丢失
-    // 同时把当前激活标签页 URL 与该消息的关系冗余写入独立容器，方便后续统计专注窗口
     try { await addToHistory(originalMessage); } catch (e) { /* ignore */ }
     try { await addMessageTabContext(originalMessage, await getCurrentActiveTabUrl()); } catch (e) { /* ignore */ }
     refreshHistoryCache();
@@ -2280,43 +2169,8 @@ async function startDirectSend(presetMessage = null, forcedPlatformIds = null) {
     return;
   }
 
-  setSidebarSendButtonState("busy", "直发");
-
-  // 不管发送成功与否，先保存到历史
-  try { await addToHistory(originalMessage); } catch(e) {}
-  refreshHistoryCache();
-
-  let successCount = 0;
-  try {
-    for (const platform of selectedPlatforms) {
-      const result = await chrome.runtime.sendMessage({
-        action: "directSend",
-        platform,
-        message: finalMessage,
-        switchToTab: true,
-      });
-      if (result?.status === "success") {
-        successCount++;
-        const tabInfo = await chrome.tabs.get(result.tabId);
-        platformTabCache[platform] = {
-          tabId: result.tabId,
-          title: tabInfo.title,
-          url: tabInfo.url,
-        };
-      } else {
-        console.error(`[directSend] ${platform} 失败:`, result?.error);
-      }
-    }
-
-    updatePlatformCount();
-    showTempMessage(`直接发送完成: ${successCount}/${selectedPlatforms.length}`);
-
-  } catch (error) {
-    console.error("直接发送失败:", error);
-    showTempMessage("发送失败，请重试");
-  } finally {
-    updateSendButton();
-  }
+  // 非阻塞：直接发，逻辑收敛到 dispatchMessageToPlatforms（携带提取文本和提示词模板）
+  await dispatchMessageToPlatforms(originalMessage, selectedPlatforms);
 }
 
 // ==================== 问题阻塞（待发送队列） ====================
@@ -2395,7 +2249,7 @@ async function sendBlockedMessage(message) {
   renderCurrentPlatform();
   updatePendingSendBar();
 
-  // 执行真正发送：当前选中的所有平台
+  // 执行真正发送：当前选中的所有平台（与直发一致：携带提取文本和提示词模板）
   await dispatchMessageToPlatforms(message.content, selectedPlatforms, { skipHistory: true });
 }
 
@@ -2433,16 +2287,53 @@ async function flushPendingMessages() {
   renderCurrentPlatform();
   updatePendingSendBar();
 
-  // 去重后的消息按时间顺序，统一发送到当前选中的所有平台
+  // 收敛发送逻辑：所有路径（直发、点击黄色气泡、阻塞后统一发送）都走 dispatchMessageToPlatforms
   const queue = Array.from(uniqueByContent.values()).sort((a, b) => a.timestamp - b.timestamp);
   for (const { content } of queue) {
     await dispatchMessageToPlatforms(content, selectedPlatforms, { skipHistory: true });
   }
+}
 
-  const tip = queue.length <= 1
-    ? `已发送到 ${selectedPlatforms.length} 个平台`
-    : `已发送 ${queue.length} 条消息到 ${selectedPlatforms.length} 个平台`;
-  showTempMessage(tip);
+/**
+ * 收集当前所有阻塞消息，去重后以双链 [[消息]] 格式复制到剪贴板
+ * （每条一行）。用于把阻塞下来的问题快速粘贴进笔记软件做双向链接。
+ */
+async function copyBlockedAsLinks() {
+  const selectedPlatforms = getSelectedPlatformIds();
+  if (selectedPlatforms.length === 0) {
+    showTempMessage("未选中平台");
+    return;
+  }
+
+  const selectedSet = new Set(selectedPlatforms);
+  const uniqueByContent = new Map();
+  platformStates.forEach((ps, platformId) => {
+    if (!selectedSet.has(platformId)) return;
+    ps.conversationStates.forEach((convState) => {
+      convState.messages.forEach((m) => {
+        if (m.role !== "user" || !m.blocked) return;
+        const prev = uniqueByContent.get(m.content);
+        if (!prev || prev.timestamp > m.timestamp) {
+          uniqueByContent.set(m.content, { content: m.content, timestamp: m.timestamp });
+        }
+      });
+    });
+  });
+
+  if (uniqueByContent.size === 0) {
+    showTempMessage("暂无可复制的阻塞消息");
+    return;
+  }
+
+  const queue = Array.from(uniqueByContent.values()).sort((a, b) => a.timestamp - b.timestamp);
+  const text = queue.map(({ content }) => `[[${content}]]`).join("\n");
+
+  const ok = await copyToClipboard(text);
+  if (ok) {
+    showTempMessage(`已复制 ${queue.length} 条双链到剪贴板`);
+  } else {
+    showTempMessage("复制失败");
+  }
 }
 
 /**
@@ -2500,6 +2391,10 @@ async function dispatchMessageToPlatforms(originalMessage, platformIds, { skipHi
     console.error("发送消息失败:", error);
   } finally {
     updateSendButton();
+  }
+
+  if (successCount > 0) {
+    showTempMessage(`已发送到 ${successCount}/${platformIds.length} 个平台`);
   }
 }
 
