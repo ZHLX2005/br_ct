@@ -118,6 +118,30 @@ async function deleteSkillFromProject(skillName, projectId) {
   }
 }
 
+// 删除中心仓库的 skill（同时从分组配置中移除）
+async function deleteSkillFromCentral(skillName) {
+  if (!confirm(`确定要删除中心仓库中的 Skill「${skillName}」吗？\n该操作将同时从所有分组配置中移除此 Skill。`)) return;
+
+  const centralPath = await loadStorage(STORAGE_KEYS.skillCentralPath);
+  if (!centralPath) { toast('中心仓库路径未设置', 'error'); return; }
+
+  try {
+    const resp = await sendNativeMessage({
+      command: 'deleteCentralSkill',
+      path: centralPath,
+      name: skillName,
+    });
+    if (resp.data && resp.data.success) {
+      toast(`已删除 Skill: ${skillName}`);
+      loadSkills();
+    } else {
+      toast(`删除失败: ${resp.data?.error || resp.message || '未知错误'}`, 'error');
+    }
+  } catch (err) {
+    toast('删除失败: ' + err.message, 'error');
+  }
+}
+
 async function importProjectFromGit() {
   const gitDirs = await loadStorage(STORAGE_KEYS.gitMonitoredDirs);
   if (gitDirs.length === 0) { toast('请先在 Git 监控中添加项目', 'warning'); return; }
@@ -616,6 +640,7 @@ function renderCentralSkillList(skills, projectSkills) {
             <button class="btn btn-secondary" data-action="skill-more" data-name="${escapeHtml(s.name)}" title="更多操作">+</button>
             <div class="skill-more-dropdown" id="dropdown-${escapeHtml(s.name)}" style="display:none; position:absolute; right:0; bottom:100%; background:var(--paper); border:1px solid var(--line); border-radius:8px; padding:4px; min-width:160px; z-index:100; box-shadow:var(--shadow);">
               <button class="btn" style="width:100%; text-align:left; padding:8px 12px; background:none; border:none; cursor:pointer;" data-action="skill-sync-to-all" data-name="${escapeHtml(s.name)}">↻ 同步到所有项目</button>
+              <button class="btn btn-danger" style="width:100%; text-align:left; padding:8px 12px; background:none; border:none; cursor:pointer; color: var(--danger);" data-action="skill-delete-central" data-name="${escapeHtml(s.name)}">🗑 删除 Skill</button>
             </div>
           </div>
         </div>

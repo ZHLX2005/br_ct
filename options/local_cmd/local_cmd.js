@@ -113,6 +113,7 @@ function setupDelegation() {
       case 'skill-pull': skillPullFromCentral(btn.dataset.name); break;
       case 'skill-delete-project': deleteSkillProject(btn.dataset.id); break;
       case 'skill-delete-skill': deleteSkillFromProject(btn.dataset.name, btn.dataset.projectId); break;
+      case 'skill-delete-central': deleteSkillFromCentral(btn.dataset.name); break;
       case 'skill-filter-change': loadSkills(); break;
       case 'skill-manage-groups': openSkillGroupManageModal(); break;
       case 'skill-create-group': openSkillGroupModal(); break;

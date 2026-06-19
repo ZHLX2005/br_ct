@@ -603,3 +603,56 @@ func DeleteSkill(req protocol.Request) protocol.Response {
 
 	return protocol.Response{Status: "ok", Data: map[string]bool{"success": true}}
 }
+
+// DeleteCentralSkill 删除中心仓库的 skill 目录，并从分组配置中移除
+func DeleteCentralSkill(req protocol.Request) protocol.Response {
+	if req.Path == "" || req.Name == "" {
+		return protocol.Response{Status: "error", Message: "path 和 name 不能为空"}
+	}
+
+	// 删除中心仓库的 skill 目录 {centralPath}/skills/{name}
+	skillDir := filepath.Join(req.Path, "skills", req.Name)
+	if _, err := os.Stat(skillDir); err != nil {
+		return protocol.Response{Status: "error", Message: "中心仓库 Skill 不存在: " + req.Name}
+	}
+
+	if err := os.RemoveAll(skillDir); err != nil {
+		return protocol.Response{Status: "error", Message: "删除失败: " + err.Error()}
+	}
+
+	// 同步更新分组配置：从所有分组的 skills 列表中移除该 skill
+	cfg, err := ensureSkillConfig(req.Path)
+	if err == nil {
+		changed := false
+		for i := range cfg.Groups {
+			if cfg.Groups[i].Skills != nil {
+				originalLen := len(cfg.Groups[i].Skills)
+				cfg.Groups[i].Skills = removeSkillFromSlice(cfg.Groups[i].Skills, req.Name)
+				if len(cfg.Groups[i].Skills) < originalLen {
+					changed = true
+				}
+			}
+		}
+		if changed {
+			// 保存更新后的配置
+			configPath := filepath.Join(req.Path, ".browser_chat", "setting.json")
+			out, err := json.MarshalIndent(&cfg, "", "  ")
+			if err == nil {
+				os.WriteFile(configPath, out, 0644)
+			}
+		}
+	}
+
+	return protocol.Response{Status: "ok", Data: map[string]bool{"success": true}}
+}
+
+// removeSkillFromSlice 从字符串切片中移除指定元素
+func removeSkillFromSlice(slice []string, item string) []string {
+	result := make([]string, 0, len(slice))
+	for _, s := range slice {
+		if s != item {
+			result = append(result, s)
+		}
+	}
+	return result
+}
