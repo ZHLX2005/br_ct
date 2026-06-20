@@ -70,7 +70,7 @@ const MODE_STORAGE_KEY = "sidebar_send_mode";
 
 // AI Chat 设置（存储在 chrome.storage.sync，支持跨会话同步）
 const AICHAT_SETTINGS_KEY = "aichat_settings";
-let aichatSettings = { captureOnSend: false, addTabToWorkspaceOnSend: false, blockOnSend: false };
+let aichatSettings = { captureOnSend: false, addTabToWorkspaceOnSend: false, blockOnSend: false, selectionMode: false };
 
 // 待发送消息队列（问题阻塞模式）
 let pendingMessages = [];
@@ -84,6 +84,9 @@ async function loadAichatSettings() {
     }
   } catch (e) { /* ignore */ }
   updateSettingsUI();
+  // 应用划词模式持久化状态（静默同步内存状态，content script 启动时自读 storage）
+  isSelectionMode = !!aichatSettings.selectionMode;
+  await chrome.storage.local.set({ sidebarSelectionEnabled: isSelectionMode });
 }
 
 async function saveAichatSettings() {
@@ -99,6 +102,8 @@ function updateSettingsUI() {
   if (addTabCb) addTabCb.checked = !!aichatSettings.addTabToWorkspaceOnSend;
   const blockCb = document.getElementById("setting-block-on-send");
   if (blockCb) blockCb.checked = !!aichatSettings.blockOnSend;
+  const selectionCb = document.getElementById("setting-selection-mode");
+  if (selectionCb) selectionCb.checked = !!aichatSettings.selectionMode;
 }
 
 function openSettingsModal() {
@@ -218,8 +223,6 @@ export async function initializePopup() {
   elements.historySection = document.getElementById("history-section");
   elements.conversationSection = document.getElementById("conversation-section");
 
-  // 划词按钮
-  elements.selectionBtn = document.getElementById("toolbar-selection");
   elements.clearChatBtn = document.getElementById("toolbar-clear-chat");
 
   // 自动聚焦输入框
@@ -421,6 +424,11 @@ export function setupEventListeners() {
     saveAichatSettings();
     updatePendingSendBar();
   });
+  document.getElementById("setting-selection-mode")?.addEventListener("change", (e) => {
+    aichatSettings.selectionMode = e.target.checked;
+    saveAichatSettings();
+    setSelectionMode(e.target.checked);
+  });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeSettingsModal();
   });
@@ -436,11 +444,6 @@ export function setupEventListeners() {
       if (extractResult) extractResult.style.display = "none";
       _extractedTextCache = "";
     });
-  }
-
-  // 划词模式切换
-  if (elements.selectionBtn) {
-    elements.selectionBtn.addEventListener("click", toggleSelectionMode);
   }
 
   // 清除提示词
@@ -1803,35 +1806,21 @@ async function extractPageText() {
 // ==================== 划词选择模式 ====================
 
 /**
- * 切换划词模式：写入 storage + 广播到所有标签页
+ * 设置划词模式开关：写入 storage + 广播到所有标签页
  * 内容脚本始终注入，通过本开关控制激活/休眠（injected-dom-toggle-pattern）
+ * 开关状态持久化在 aichatSettings.selectionMode（设置弹窗 checkbox）
  */
-async function toggleSelectionMode() {
-  if (isSelectionMode) {
-    // 关闭模式
-    isSelectionMode = false;
-    elements.selectionBtn?.classList.remove("active");
-    await chrome.storage.local.set({ sidebarSelectionEnabled: false });
-    // 广播到所有标签页
+async function setSelectionMode(enabled) {
+  isSelectionMode = !!enabled;
+  await chrome.storage.local.set({ sidebarSelectionEnabled: isSelectionMode });
+  // 广播到所有标签页
+  try {
     const tabs = await chrome.tabs.query({});
     tabs.forEach(t => {
-      chrome.tabs.sendMessage(t.id, { action: "sidebarSelectionToggle", enabled: false }).catch(() => {});
+      chrome.tabs.sendMessage(t.id, { action: "sidebarSelectionToggle", enabled: isSelectionMode }).catch(() => {});
     });
-    showTempMessage("划词模式已关闭");
-    return;
-  }
-
-  // 开启模式
-  isSelectionMode = true;
-  elements.selectionBtn?.classList.add("active");
-  showTempMessage("划词模式已开启，在页面上选择文本");
-
-  await chrome.storage.local.set({ sidebarSelectionEnabled: true });
-  // 广播到所有标签页
-  const tabs = await chrome.tabs.query({});
-  tabs.forEach(t => {
-    chrome.tabs.sendMessage(t.id, { action: "sidebarSelectionToggle", enabled: true }).catch(() => {});
-  });
+  } catch (e) { /* ignore */ }
+  showTempMessage(isSelectionMode ? "划词模式已开启，在页面上选择文本" : "划词模式已关闭");
 }
 
 /**
