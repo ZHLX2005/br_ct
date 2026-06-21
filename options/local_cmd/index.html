@@ -1062,6 +1062,7 @@
         <button class="envvar-sub-btn" data-envtab="system-path">系统 PATH</button>
         <button class="envvar-sub-btn" data-envtab="user-vars">用户变量</button>
         <button class="envvar-sub-btn" data-envtab="system-vars">系统变量</button>
+        <button class="envvar-sub-btn" data-envtab="where">路径探查</button>
       </nav>
 
       <!-- 用户 PATH -->
@@ -1135,6 +1136,20 @@
         </div>
         <div id="envvar-systemVarsList" style="border:1px solid var(--line);border-radius:var(--radius-md);background:rgba(255,252,247,0.72);max-height:400px;overflow-y:auto;">
           <div class="empty-state"><p>加载中...</p></div>
+        </div>
+      </div>
+
+      <!-- 路径探查：查同名执行器在 cmd / git-bash / powershell 三套解析器下的全部命中 -->
+      <div class="envvar-sub-panel" id="envvar-panel-where">
+        <div class="batch-bar">
+          <input type="text" id="envvarWhereName" placeholder="输入要查询的执行器名，例如 python / git / node" style="flex:1;padding:6px 10px;border:1px solid var(--line-strong);border-radius:8px;font-size:14px;">
+          <button class="btn btn-primary" data-action="envvar-where-query">查询</button>
+        </div>
+        <p style="font-size:12px;color:var(--muted);margin:6px 0 10px;">
+          使用 cmd <code>where</code>、Git Bash <code>which -a</code>、PowerShell <code>Get-Command</code> 三种方式分别解析，并按 Windows 绝对路径归一化去重。
+        </p>
+        <div id="envvarWhereResult" style="border:1px solid var(--line);border-radius:var(--radius-md);background:rgba(255,252,247,0.72);padding:12px;min-height:120px;">
+          <div class="empty-state"><p>输入名字后点击「查询」</p></div>
         </div>
       </div>
     </div>

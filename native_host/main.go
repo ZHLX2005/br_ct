@@ -81,6 +81,7 @@ func main() {
 	registry.Register("getSystemEnvVars", envvars.GetSystemEnvVars)
 	registry.Register("setSystemEnvVar", envvars.SetSystemEnvVar)
 	registry.Register("removeSystemEnvVar", envvars.RemoveSystemEnvVar)
+	registry.Register("whereAllLocations", envvars.WhereAllLocations)
 
 	// nx-ce serve 进程管理（业务消息由 sidebar 直连 WS）
 	registry.Register("claudeStartServe", handler.ClaudeStartServe)

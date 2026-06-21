@@ -41,6 +41,7 @@ async function loadEnvvarSubTab(tab) {
     case 'system-path': await loadSystemPath(); break;
     case 'user-vars': await loadUserEnvVars(); break;
     case 'system-vars': await loadSystemEnvVars(); break;
+    case 'where': /* 静态页，点击查询触发 */ break;
   }
 }
 
@@ -456,3 +457,91 @@ document.addEventListener('input', (e) => {
 
 // 初始化 checkbox 委托（只调用一次）
 setupEnvvarCheckboxDelegation();
+
+// ========== 路径探查（whereAllLocations） ==========
+
+// 各解析器的人类可读标题
+const WHERE_PARSER_LABELS = {
+  'cmd-where': 'cmd where',
+  'git-bash-which': 'Git Bash which -a',
+  'powershell-getcommand': 'PowerShell Get-Command',
+};
+
+async function whereAllQuery() {
+  const input = document.getElementById('envvarWhereName');
+  const name = (input?.value || '').trim();
+  const container = document.getElementById('envvarWhereResult');
+  if (!name) {
+    toast('请输入要查询的执行器名', 'warning');
+    input?.focus();
+    return;
+  }
+  container.innerHTML = '<div class="skill-loading"><div class="spinner"></div></div>';
+  try {
+    const resp = await sendNativeMessage({ command: 'whereAllLocations', name });
+    if (resp.status !== 'ok' || !resp.data) {
+      container.innerHTML = `<div class="empty-state"><p style="color:var(--danger);">查询失败: ${escapeHtml(resp.message || '无返回数据')}</p></div>`;
+      return;
+    }
+    renderWhereResult(container, resp.data);
+  } catch (err) {
+    container.innerHTML = `<div class="empty-state"><p style="color:var(--danger);">查询失败: ${escapeHtml(err.message)}</p></div>`;
+  }
+}
+
+function renderWhereResult(container, data) {
+  const sources = data.sources || [];
+  const unique = data.uniqueWin || data.unique || [];
+  const totalHits = data.totalHits || 0;
+  const uniqueCount = unique.length;
+
+  const sourcesHtml = sources.map(src => {
+    const label = WHERE_PARSER_LABELS[src.parser] || src.parser;
+    const statusBadge = src.ok
+      ? '<span style="color:var(--ok);font-size:12px;">✓ OK</span>'
+      : '<span style="color:var(--danger);font-size:12px;">✗ 失败</span>';
+    let body;
+    if (src.ok && src.paths && src.paths.length > 0) {
+      body = `<ul style="margin:6px 0 0 0;padding-left:20px;font-family:monospace;font-size:13px;word-break:break-all;">` +
+        src.paths.map(p => `<li>${escapeHtml(p)}</li>`).join('') +
+        `</ul>`;
+    } else if (src.ok) {
+      body = '<p style="font-size:12px;color:var(--muted);margin:4px 0 0 0;">(无命中)</p>';
+    } else {
+      body = `<p style="font-size:12px;color:var(--danger);margin:4px 0 0 0;word-break:break-all;">${escapeHtml(src.error || '未知错误')}</p>`;
+    }
+    return `
+      <div style="padding:8px 0;border-bottom:1px solid var(--line);">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <strong style="font-size:13px;">${escapeHtml(label)}</strong>${statusBadge}
+        </div>
+        ${body}
+      </div>
+    `;
+  }).join('');
+
+  const uniqueHtml = unique.length === 0
+    ? '<p style="font-size:13px;color:var(--muted);">三套解析器都未命中</p>'
+    : `<ol style="margin:0;padding-left:20px;font-family:monospace;font-size:13px;word-break:break-all;">` +
+        unique.map(p => `<li>${escapeHtml(p)}</li>`).join('') +
+      `</ol>`;
+
+  container.innerHTML = `
+    <div style="margin-bottom:12px;">
+      <div style="display:flex;align-items:baseline;gap:12px;">
+        <strong style="font-size:15px;">查询: <code>${escapeHtml(data.name)}</code></strong>
+        <span style="font-size:12px;color:var(--muted);">三源合计 ${totalHits} 条命中，去重后 <strong style="color:var(--accent);">${uniqueCount}</strong> 条</span>
+      </div>
+    </div>
+
+    <div style="margin-bottom:14px;padding:10px 12px;background:rgba(106,135,88,0.08);border:1px solid var(--line);border-radius:8px;">
+      <div style="font-weight:600;font-size:14px;margin-bottom:6px;">跨源去重（Windows 绝对路径）</div>
+      ${uniqueHtml}
+    </div>
+
+    <div>
+      <div style="font-weight:600;font-size:14px;margin-bottom:4px;">各解析器原始输出</div>
+      ${sourcesHtml}
+    </div>
+  `;
+}

@@ -142,6 +142,7 @@ function setupDelegation() {
       case 'envvar-remove-system-var': if (needConfirm(btn)) return; deleteSystemEnvVar(btn.dataset.name); break;
       case 'envvar-batch-remove-system-var': if (needConfirm(btn)) return; batchRemoveSystemEnvVar(); break;
       case 'envvar-restore-snapshot': if (needConfirm(btn)) return; restoreEnvSnapshot(btn.dataset.file); break;
+      case 'envvar-where-query': whereAllQuery(); break;
 
       // 弹窗
       case 'cmd-cancel': closeCmdModal(); break;
@@ -158,6 +159,14 @@ function setupDelegation() {
   // Git Import 专用按钮事件
   document.getElementById('gitImportDiscoverBtn')?.addEventListener('click', discoverGitSkills);
   document.getElementById('gitImportConfirmBtn')?.addEventListener('click', importGitSkills);
+
+  // 路径探查：在输入框回车直接触发
+  document.getElementById('envvarWhereName')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      whereAllQuery();
+    }
+  });
 
   // 弹窗背景点击关闭
   document.querySelectorAll('.modal-overlay').forEach(overlay => {
