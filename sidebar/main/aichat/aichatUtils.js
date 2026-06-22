@@ -95,15 +95,19 @@ async function saveAichatSettings() {
   } catch (e) { /* ignore */ }
 }
 
+// 设置项 checkbox id → aichatSettings 字段名
+const SETTING_CHECKBOX_MAP = {
+  "setting-capture-on-send": "captureOnSend",
+  "setting-add-tab-on-send": "addTabToWorkspaceOnSend",
+  "setting-block-on-send": "blockOnSend",
+  "setting-selection-mode": "selectionMode",
+};
+
 function updateSettingsUI() {
-  const captureCb = document.getElementById("setting-capture-on-send");
-  if (captureCb) captureCb.checked = !!aichatSettings.captureOnSend;
-  const addTabCb = document.getElementById("setting-add-tab-on-send");
-  if (addTabCb) addTabCb.checked = !!aichatSettings.addTabToWorkspaceOnSend;
-  const blockCb = document.getElementById("setting-block-on-send");
-  if (blockCb) blockCb.checked = !!aichatSettings.blockOnSend;
-  const selectionCb = document.getElementById("setting-selection-mode");
-  if (selectionCb) selectionCb.checked = !!aichatSettings.selectionMode;
+  for (const [id, key] of Object.entries(SETTING_CHECKBOX_MAP)) {
+    const cb = document.getElementById(id);
+    if (cb) cb.checked = !!aichatSettings[key];
+  }
 }
 
 function openSettingsModal() {
@@ -411,24 +415,18 @@ export function setupEventListeners() {
   document.getElementById("toolbar-settings")?.addEventListener("click", openSettingsModal);
   document.getElementById("aichat-settings-close")?.addEventListener("click", closeSettingsModal);
   document.querySelector(".aichat-settings-backdrop")?.addEventListener("click", closeSettingsModal);
-  document.getElementById("setting-capture-on-send")?.addEventListener("change", (e) => {
-    aichatSettings.captureOnSend = e.target.checked;
-    saveAichatSettings();
-  });
-  document.getElementById("setting-add-tab-on-send")?.addEventListener("change", (e) => {
-    aichatSettings.addTabToWorkspaceOnSend = e.target.checked;
-    saveAichatSettings();
-  });
-  document.getElementById("setting-block-on-send")?.addEventListener("change", (e) => {
-    aichatSettings.blockOnSend = e.target.checked;
-    saveAichatSettings();
-    updatePendingSendBar();
-  });
-  document.getElementById("setting-selection-mode")?.addEventListener("change", (e) => {
-    aichatSettings.selectionMode = e.target.checked;
-    saveAichatSettings();
-    setSelectionMode(e.target.checked);
-  });
+  // 设置项 checkbox：写入 aichatSettings + 持久化 + 可选 after 钩子
+  const settingAfterHooks = {
+    "setting-block-on-send": () => updatePendingSendBar(),
+    "setting-selection-mode": (v) => setSelectionMode(v),
+  };
+  for (const [id, key] of Object.entries(SETTING_CHECKBOX_MAP)) {
+    document.getElementById(id)?.addEventListener("change", (e) => {
+      aichatSettings[key] = e.target.checked;
+      saveAichatSettings();
+      settingAfterHooks[id]?.(e.target.checked);
+    });
+  }
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeSettingsModal();
   });
@@ -847,7 +845,7 @@ function renderHistorySection() {
   for (let i = batch.length - 1; i >= 0; i--) {
     const msg = batch[i];
     const preview = msg.length > 80 ? msg.slice(0, 80) + '…' : msg;
-    html += `<div class="history-item" data-msg="${escapeAttr(msg)}">
+    html += `<div class="history-item" data-msg="${escapeHtml(msg)}">
       <div class="history-bubble">
         <div class="history-bubble-text">${escapeHtml(preview)}</div>
       </div>
@@ -1164,21 +1162,17 @@ async function startSending() {
   const originalMessage = validateMessageInput(elements.messageInput.value);
   if (!originalMessage) return;
 
-  const selectedPlatforms = Array.from(document.querySelectorAll('.platform-icon-option input[type="checkbox"]'))
-    .filter((checkbox) => {
-      const option = checkbox.closest('.platform-icon-option');
-      return option && option.style.display !== 'none' && checkbox.checked;
-    })
-    .map((checkbox) => checkbox.dataset.platform);
-
+  const selectedPlatforms = getSelectedPlatformIds();
   if (!validatePlatformSelection(selectedPlatforms)) return;
 
   const sendTimestamp = Date.now();
   const isBlocked = aichatSettings.blockOnSend;
+  // 阻塞提交时把当前提取/划词内容绑定到消息上，重发时带上
+  const boundExtracted = isBlocked ? getExtractedContentText() : "";
   selectedPlatforms.forEach((platformId) => {
     const ps = getPlatformState(platformId);
     const conversationId = ps.activeConvId || DEFAULT_CONVERSATION_ID;
-    appendUserMessage(platformId, conversationId, originalMessage, sendTimestamp, isBlocked);
+    appendUserMessage(platformId, conversationId, originalMessage, sendTimestamp, isBlocked, boundExtracted);
   });
 
   if (!activePlatformId || !selectedPlatforms.includes(activePlatformId)) {
@@ -1189,14 +1183,14 @@ async function startSending() {
   renderPlatformTabs();
   scrollToBottom(true);
 
-  // 清空输入框
+  // 清空输入框（提取内容延迟到发送读取后再清空，避免 dispatchMessageToPlatforms 读不到）
   elements.messageInput.value = "";
   autoResizeInput(elements.messageInput);
   updateSendButton();
-  clearExtractedContent();
 
   // 问题阻塞模式：仅展示，不真正发送（等点击黄色气泡或点击「双链复制」/统一发送时再走 dispatchMessageToPlatforms）
   if (isBlocked) {
+    clearExtractedContent();
     try { await addToHistory(originalMessage); } catch (e) { /* ignore */ }
     try { await addMessageTabContext(originalMessage, await getCurrentActiveTabUrl()); } catch (e) { /* ignore */ }
     refreshHistoryCache();
@@ -1206,6 +1200,7 @@ async function startSending() {
 
   // 非阻塞：直接发，逻辑收敛到 dispatchMessageToPlatforms（携带提取文本和提示词模板）
   await dispatchMessageToPlatforms(originalMessage, selectedPlatforms);
+  clearExtractedContent();
 }
 
 // ==================== 多平台回复展示 ====================
@@ -1293,7 +1288,7 @@ function buildMessageKey(role, id) {
   return `${role}::${id}`;
 }
 
-function appendUserMessage(platformId, conversationId, content, timestamp = Date.now(), blocked = false) {
+function appendUserMessage(platformId, conversationId, content, timestamp = Date.now(), blocked = false, extractedText = "") {
   const convState = getConvState(platformId, conversationId);
   const messageId = `user-${timestamp}-${Math.random().toString(36).slice(2, 8)}`;
   const messageKey = buildMessageKey("user", messageId);
@@ -1302,6 +1297,8 @@ function appendUserMessage(platformId, conversationId, content, timestamp = Date
     role: "user",
     messageId,
     content: String(content || ""),
+    // 阻塞提交时绑定的提取/划词上下文，重发时带上（避免多条阻塞消息上下文错位）
+    extractedText: String(extractedText || ""),
     timestamp,
     collapsed: false,
     blocked: !!blocked,
@@ -1389,14 +1386,38 @@ function countBlockedMessages() {
   return count;
 }
 
+/**
+ * 收集当前选中平台下的所有阻塞消息，并按 content 去重（保留最早时间戳及其绑定的提取上下文）
+ * @returns {{ refs: object[], queue: {content:string,timestamp:number,extractedText:string}[] }}
+ */
+function collectBlockedMessages() {
+  const selectedSet = new Set(getSelectedPlatformIds());
+  const refs = [];
+  const uniqueByContent = new Map();
+  platformStates.forEach((ps, platformId) => {
+    if (!selectedSet.has(platformId)) return;
+    ps.conversationStates.forEach((convState) => {
+      convState.messages.forEach((m) => {
+        if (m.role !== "user" || !m.blocked) return;
+        refs.push(m);
+        const prev = uniqueByContent.get(m.content);
+        if (!prev || prev.timestamp > m.timestamp) {
+          uniqueByContent.set(m.content, {
+            content: m.content,
+            timestamp: m.timestamp,
+            extractedText: m.extractedText,
+          });
+        }
+      });
+    });
+  });
+  const queue = Array.from(uniqueByContent.values()).sort((a, b) => a.timestamp - b.timestamp);
+  return { refs, queue };
+}
+
 function isNearBottom(el, threshold = 72) {
   if (!el) return true;
   return el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
-}
-
-function getCheckedPlatforms() {
-  return Array.from(document.querySelectorAll('.platform-icon-option input[type="checkbox"]:checked'))
-    .map(cb => cb.dataset.platform);
 }
 
 function renderCurrentPlatform() {
@@ -1729,7 +1750,7 @@ async function toggleSelectAll() {
 
   updatePlatformCount();
 
-  const platforms = getCheckedPlatforms();
+  const platforms = getSelectedPlatformIds();
   if (platforms.length) {
     activePlatformId = platforms[0];
     renderCurrentPlatform();
@@ -1783,10 +1804,11 @@ async function extractPageText() {
     if (response && response.status === "success" && response.result) {
       const data = response.result;
       if (data.extracted) {
-        if (extractResult) extractResult.style.display = "block";
-        if (extractTitle) extractTitle.textContent = data.title || "未获取到标题";
-        if (extractUrl) extractUrl.textContent = data.url || "";
-        if (extractContent) extractContent.textContent = data.text || "未获取到内容";
+        showExtractedContent({
+          title: data.title || "未获取到标题",
+          url: data.url || "",
+          text: data.text || "未获取到内容",
+        });
         showTempMessage(`已提取 ${data.text.length} 字符`, 2000);
       } else {
         showTempMessage("提取失败，请刷新页面后重试");
@@ -1829,10 +1851,11 @@ async function setSelectionMode(enabled) {
 function handleSidebarSelection(text, title, url) {
   if (!text || !text.trim()) return;
   _extractedTextCache = text;
-  if (extractResult) extractResult.style.display = "block";
-  if (extractTitle) extractTitle.textContent = `划词: ${title || "未获取到标题"}`;
-  if (extractUrl) extractUrl.textContent = url || "";
-  if (extractContent) extractContent.textContent = text;
+  showExtractedContent({
+    title: `划词: ${title || "未获取到标题"}`,
+    url: url || "",
+    text,
+  });
   showTempMessage(`已获取 ${text.length} 字符`, 2000);
 }
 
@@ -1872,6 +1895,16 @@ function applyPromptTemplate(template, userMessage, extractedText) {
 
   // 完全无占位符、无提取：向后兼容
   return user + " " + template;
+}
+
+/**
+ * 显示提取/划词结果到提取面板
+ */
+function showExtractedContent({ title = "", url = "", text = "" } = {}) {
+  if (extractResult) extractResult.style.display = "block";
+  if (extractTitle) extractTitle.textContent = title;
+  if (extractUrl) extractUrl.textContent = url;
+  if (extractContent) extractContent.textContent = text;
 }
 
 /**
@@ -1943,7 +1976,7 @@ function renderWorkspaceTabs() {
     el.dataset.index = i;
 
     const favicon = tab.favIconUrl
-      ? `<img class="workspace-tab-favicon" src="${escapeAttr(tab.favIconUrl)}" onerror="this.style.display='none'">`
+      ? `<img class="workspace-tab-favicon" src="${escapeHtml(tab.favIconUrl)}" onerror="this.style.display='none'">`
       : `<span class="workspace-tab-favicon" style="background:#e5e7eb;border-radius:2px;"></span>`;
 
     const title = tab.title || "新标签页";
@@ -2109,17 +2142,9 @@ async function startDirectSend(presetMessage = null, forcedPlatformIds = null) {
   const originalMessage = presetMessage || validateMessageInput(elements.messageInput.value);
   if (!originalMessage) return;
 
-  let selectedPlatforms;
-  if (forcedPlatformIds && forcedPlatformIds.length > 0) {
-    selectedPlatforms = forcedPlatformIds;
-  } else {
-    selectedPlatforms = Array.from(document.querySelectorAll('#platform-panel .platform-icon-option input[type="checkbox"]'))
-      .filter((checkbox) => {
-        const option = checkbox.closest('.platform-icon-option');
-        return option && option.style.display !== 'none' && checkbox.checked;
-      })
-      .map((checkbox) => checkbox.dataset.platform);
-  }
+  const selectedPlatforms = (forcedPlatformIds && forcedPlatformIds.length > 0)
+    ? forcedPlatformIds
+    : getSelectedPlatformIds();
 
   if (!validatePlatformSelection(selectedPlatforms)) return;
 
@@ -2132,25 +2157,27 @@ async function startDirectSend(presetMessage = null, forcedPlatformIds = null) {
   // 如果是手动触发的新输入（非点击已阻塞消息），且开启了阻塞模式：仅展示，不真正发送
   const isNewInput = !presetMessage;
   const isBlocked = isNewInput && aichatSettings.blockOnSend;
+  // 阻塞提交时把当前提取/划词内容绑定到消息上，重发时带上
+  const boundExtracted = isBlocked ? getExtractedContentText() : "";
 
   selectedPlatforms.forEach((platformId) => {
     const ps = getPlatformState(platformId);
     const conversationId = ps.activeConvId || DEFAULT_CONVERSATION_ID;
-    appendUserMessage(platformId, conversationId, originalMessage, sendTimestamp, isBlocked);
+    appendUserMessage(platformId, conversationId, originalMessage, sendTimestamp, isBlocked, boundExtracted);
   });
   renderCurrentPlatform();
   updatePendingSendBar();
   scrollToBottom(true);
 
-  // 清空输入框
+  // 清空输入框（提取内容延迟到发送读取后再清空，避免 dispatchMessageToPlatforms 读不到）
   if (isNewInput) {
     elements.messageInput.value = "";
     autoResizeInput(elements.messageInput);
     updateSendButton();
-    clearExtractedContent();
   }
 
   if (isBlocked) {
+    if (isNewInput) clearExtractedContent();
     try { await addToHistory(originalMessage); } catch (e) { /* ignore */ }
     try { await addMessageTabContext(originalMessage, await getCurrentActiveTabUrl()); } catch (e) { /* ignore */ }
     refreshHistoryCache();
@@ -2160,6 +2187,7 @@ async function startDirectSend(presetMessage = null, forcedPlatformIds = null) {
 
   // 非阻塞：直接发，逻辑收敛到 dispatchMessageToPlatforms（携带提取文本和提示词模板）
   await dispatchMessageToPlatforms(originalMessage, selectedPlatforms);
+  if (isNewInput) clearExtractedContent();
 }
 
 // ==================== 问题阻塞（待发送队列） ====================
@@ -2217,20 +2245,9 @@ async function sendBlockedMessage(message) {
 
   const selectedPlatforms = getSelectedPlatformIds();
   if (selectedPlatforms.length === 0) return;
-  const selectedSet = new Set(selectedPlatforms);
 
   // 在选中平台中找出所有同内容的阻塞消息，统一取消阻塞样式
-  const refs = [];
-  platformStates.forEach((ps, platformId) => {
-    if (!selectedSet.has(platformId)) return;
-    ps.conversationStates.forEach((convState) => {
-      convState.messages.forEach((m) => {
-        if (m.role === "user" && m.blocked && m.content === message.content) {
-          refs.push(m);
-        }
-      });
-    });
-  });
+  const refs = collectBlockedMessages().refs.filter((m) => m.content === message.content);
   if (refs.length === 0) return;
 
   // 标记为已发送（取消阻塞样式）
@@ -2238,8 +2255,8 @@ async function sendBlockedMessage(message) {
   renderCurrentPlatform();
   updatePendingSendBar();
 
-  // 执行真正发送：当前选中的所有平台（与直发一致：携带提取文本和提示词模板）
-  await dispatchMessageToPlatforms(message.content, selectedPlatforms, { skipHistory: true });
+  // 执行真正发送：当前选中的所有平台（携带该消息阻塞时绑定的提取/划词文本）
+  await dispatchMessageToPlatforms(message.content, selectedPlatforms, { skipHistory: true, extractedText: message.extractedText });
 }
 
 /**
@@ -2251,35 +2268,17 @@ async function flushPendingMessages() {
   const selectedPlatforms = getSelectedPlatformIds();
   if (selectedPlatforms.length === 0) return;
 
-  const selectedSet = new Set(selectedPlatforms);
-  const blockedRefs = [];             // 选中平台里所有 blocked 消息引用（用于清除阻塞标记）
-  const uniqueByContent = new Map();  // content -> { content, timestamp }（按内容去重，保留最早时间戳）
-
-  platformStates.forEach((ps, platformId) => {
-    if (!selectedSet.has(platformId)) return;
-    ps.conversationStates.forEach((convState) => {
-      convState.messages.forEach((m) => {
-        if (m.role !== "user" || !m.blocked) return;
-        blockedRefs.push(m);
-        const prev = uniqueByContent.get(m.content);
-        if (!prev || prev.timestamp > m.timestamp) {
-          uniqueByContent.set(m.content, { content: m.content, timestamp: m.timestamp });
-        }
-      });
-    });
-  });
-
-  if (blockedRefs.length === 0) return;
+  const { refs, queue } = collectBlockedMessages();
+  if (refs.length === 0) return;
 
   // 先把选中平台的所有阻塞消息标记为未阻塞（取消阻塞样式）
-  blockedRefs.forEach((m) => { m.blocked = false; });
+  refs.forEach((m) => { m.blocked = false; });
   renderCurrentPlatform();
   updatePendingSendBar();
 
   // 收敛发送逻辑：所有路径（直发、点击黄色气泡、阻塞后统一发送）都走 dispatchMessageToPlatforms
-  const queue = Array.from(uniqueByContent.values()).sort((a, b) => a.timestamp - b.timestamp);
-  for (const { content } of queue) {
-    await dispatchMessageToPlatforms(content, selectedPlatforms, { skipHistory: true });
+  for (const { content, extractedText } of queue) {
+    await dispatchMessageToPlatforms(content, selectedPlatforms, { skipHistory: true, extractedText });
   }
 }
 
@@ -2294,35 +2293,15 @@ async function copyBlockedAsLinks() {
     return;
   }
 
-  const selectedSet = new Set(selectedPlatforms);
-  const uniqueByContent = new Map();
-  platformStates.forEach((ps, platformId) => {
-    if (!selectedSet.has(platformId)) return;
-    ps.conversationStates.forEach((convState) => {
-      convState.messages.forEach((m) => {
-        if (m.role !== "user" || !m.blocked) return;
-        const prev = uniqueByContent.get(m.content);
-        if (!prev || prev.timestamp > m.timestamp) {
-          uniqueByContent.set(m.content, { content: m.content, timestamp: m.timestamp });
-        }
-      });
-    });
-  });
-
-  if (uniqueByContent.size === 0) {
+  const { queue } = collectBlockedMessages();
+  if (queue.length === 0) {
     showTempMessage("暂无可复制的阻塞消息");
     return;
   }
 
-  const queue = Array.from(uniqueByContent.values()).sort((a, b) => a.timestamp - b.timestamp);
   const text = queue.map(({ content }) => `[[${content}]]`).join("\n");
-
   const ok = await copyToClipboard(text);
-  if (ok) {
-    showTempMessage(`已复制 ${queue.length} 条双链到剪贴板`);
-  } else {
-    showTempMessage("复制失败");
-  }
+  showTempMessage(ok ? `已复制 ${queue.length} 条双链到剪贴板` : "复制失败");
 }
 
 /**
@@ -2332,18 +2311,19 @@ async function copyBlockedAsLinks() {
  * @param {Object} [options]
  * @param {boolean} [options.skipHistory=false] - 是否跳过入历史（阻塞路径已在阻塞阶段存过）
  */
-async function dispatchMessageToPlatforms(originalMessage, platformIds, { skipHistory = false } = {}) {
+async function dispatchMessageToPlatforms(originalMessage, platformIds, { skipHistory = false, extractedText = null } = {}) {
   const selectedValue = elements.promptOptimizerSelect.querySelector(".selected-value");
   const templateKey = selectedValue.dataset.value;
   const templateContent = selectedValue.dataset.template;
 
-  const extractedText = getExtractedContentText();
+  // 优先用调用方传入的绑定文本（阻塞消息重发场景），否则读当前提取面板
+  const extracted = extractedText !== null ? extractedText : getExtractedContentText();
 
   let finalMessage = originalMessage;
   if (templateKey && templateContent) {
-    finalMessage = applyPromptTemplate(templateContent, originalMessage, extractedText);
-  } else if (extractedText) {
-    finalMessage = extractedText + "\n\n" + originalMessage;
+    finalMessage = applyPromptTemplate(templateContent, originalMessage, extracted);
+  } else if (extracted) {
+    finalMessage = extracted + "\n\n" + originalMessage;
   }
 
   setSidebarSendButtonState("busy", "直发");
@@ -2447,10 +2427,6 @@ async function refreshPlatformTabStatus() {
 }
 
 // ==================== 工具函数 ====================
-
-function escapeAttr(str) {
-  return String(str || "").replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
 
 // ==================== 向后兼容 ====================
 
