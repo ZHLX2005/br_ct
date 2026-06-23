@@ -71,6 +71,18 @@
   <input class="cc-path-input" id="cc-path-input" type="text" spellcheck="false" value="C:\Windows\System32" />
 </div>
 
+<div class="cc-extract-panel" id="cc-extract-panel" style="display:none">
+  <div class="cc-extract-header">
+    <span class="cc-extract-charcount" id="cc-extract-charcount"></span>
+    <button class="cc-btn-tool cc-btn-tool-mini" id="cc-btn-extract-clear" title="清除提取的上下文">清除</button>
+  </div>
+  <div class="cc-extract-meta">
+    <div class="cc-extract-title" id="cc-extract-title"></div>
+    <div class="cc-extract-url" id="cc-extract-url"></div>
+  </div>
+  <pre class="cc-extract-preview" id="cc-extract-preview"></pre>
+</div>
+
 <div class="input-area" style="position:relative;">
   <div class="cc-skill-popup" id="cc-skill-popup" style="display:none;"></div>
   <div class="chat-input-bar" id="chat-input-bar">
@@ -78,7 +90,9 @@
       <textarea class="chat-input" id="chat-input" placeholder="输入消息..." rows="2"></textarea>
     </div>
     <div class="chat-input-foot">
-      <div class="chat-input-foot-left"></div>
+      <div class="chat-input-foot-left">
+        <button class="cc-btn-tool" id="cc-btn-extract" title="提取当前页面文本作为上下文">提取</button>
+      </div>
       <div class="chat-input-foot-right">
         <button class="send-btn" id="chat-btn-send" disabled>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8l12-6-6 12-2-4-4-2z" fill="currentColor"/></svg>

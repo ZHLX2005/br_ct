@@ -10,6 +10,7 @@ import { sendBg } from '../common/ccBgComms.js';
 import { loadTabSkills } from './ccSkills.js';
 import { escHtml } from '../common/ccUtils.js';
 import { CC_DEFAULT_PATH } from '../common/ccConstants.js';
+import { renderExtractPanel } from './ccExtract.js';
 
 // ==================== 查询 ====================
 
@@ -63,6 +64,7 @@ export function switchTab(tab) {
   const rc = document.getElementById('response-content');
   if (pi) pi.value = tab._path ?? CC_DEFAULT_PATH;
   if (rc) rc.innerHTML = tab._messages ?? '';
+  renderExtractPanel(tab);
 }
 
 // ==================== 关闭 Tab ====================
@@ -104,6 +106,7 @@ function buildTabDom(sessionName, cwd) {
     _skillsCwd: null,
     _skillsLoading: false,
     _silentTurn: false,
+    _extractedCtx: null,
   });
   tab.innerHTML =
     `<span class="cc-tab-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>` +
