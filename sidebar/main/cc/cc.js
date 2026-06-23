@@ -38,6 +38,7 @@ import {
 } from './modules/features/ccUI.js';
 import { dispatch, initThoughtToggle } from './modules/features/ccDispatcher.js';
 import { initSendButton } from './modules/features/ccSend.js';
+import { init as initExtract } from './modules/features/ccExtract.js';
 
 // ==================== mount / unmount ====================
 
@@ -64,6 +65,7 @@ export async function mount(container) {
   });
   initHistoryPopup();
   initSendButton();
+  initExtract();
   initServeControls();
   initSkillAutocomplete();
   initStatusPolling();

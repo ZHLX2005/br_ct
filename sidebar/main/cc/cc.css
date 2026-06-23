@@ -524,3 +524,120 @@
   width: 4px;
   height: 4px;
 }
+
+/* ==================== 提取上下文 ==================== */
+
+.cc-btn-tool {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid #cc7832;
+  color: #000000;
+  border-radius: 4px;
+  padding: 3px 9px;
+  font-size: 12px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+  outline: none;
+}
+
+.cc-btn-tool:hover:not(:disabled) {
+  background: rgba(204, 120, 50, 0.08);
+  border-color: #cc7832;
+  color: #cc7832;
+}
+
+.cc-btn-tool:focus-visible {
+  border-color: #cc7832;
+  color: #cc7832;
+}
+
+.cc-btn-tool:active:not(:disabled) {
+  background: rgba(204, 120, 50, 0.18);
+  border-color: #cc7832;
+  color: #cc7832;
+}
+
+.cc-btn-tool:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.cc-btn-tool-mini {
+  padding: 1px 7px;
+  font-size: 11px;
+}
+
+.cc-extract-panel {
+  margin: 0 8px 8px 8px;
+  padding: 8px 10px;
+  background: #ffffff;
+  border: 1px solid rgba(204, 120, 50, 0.3);
+  border-radius: 6px;
+  font-size: 12px;
+  color: #1a1a1a;
+}
+
+.cc-extract-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.cc-extract-charcount {
+  color: #888;
+  font-size: 11px;
+}
+
+.cc-extract-meta {
+  margin-bottom: 6px;
+  border-bottom: 1px solid #e8e8e8;
+  padding-bottom: 6px;
+}
+
+.cc-extract-title {
+  font-weight: 500;
+  color: #1a1a1a;
+  word-break: break-all;
+  margin-bottom: 2px;
+}
+
+.cc-extract-url {
+  color: #666;
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.cc-extract-preview {
+  max-height: 120px;
+  overflow: auto;
+  margin: 0;
+  padding: 6px 8px;
+  background: #f0f0f0;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #333333;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* panel 内部的按钮（"清除"）在浅色背景下要黑字 */
+.cc-extract-panel .cc-btn-tool {
+  background: #ffffff;
+  color: #000000;
+}
+
+.cc-extract-panel .cc-btn-tool:hover:not(:disabled) {
+  background: #fff5ec;
+  color: #cc7832;
+}
+
+.cc-extract-panel .cc-btn-tool:focus-visible {
+  color: #cc7832;
+}
+
+.cc-extract-panel .cc-btn-tool:active:not(:disabled) {
+  background: #ffe8d4;
+  color: #cc7832;
+}
