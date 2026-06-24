@@ -1,4 +1,3 @@
-console.log("📘 English Trainer Content Script loaded");
 
 // 向 background 请求单词
 function requestWordFromBackend() {
@@ -133,7 +132,6 @@ function handleWordInput() {
 
     // 检查是否输入正确
     if (inputValue === targetWord) {
-        console.log(`✅ Correct: ${currentWordData.en}`);
 
         // 成功输入，立即展示翻译结果
         inputElement.removeEventListener("input", handleWordInput); // 移除监听，防止重复触发
@@ -295,7 +293,6 @@ function exitTrainerMode() {
     hideTranslation();
     currentWordData = null;
     isTrainerModeActive = false;
-    console.log("❌ 英语学习脚本已退出模式。");
 }
 
 
@@ -314,7 +311,6 @@ document.addEventListener("keydown", (e) => {
         } else {
             // 启动模式
             isTrainerModeActive = true;
-            console.log("🚀 Alt+L 组合键触发，进入英语学习模式！");
             createInputBox(); // 启动第一轮
         }
         return;
@@ -361,4 +357,3 @@ document.addEventListener("keydown", (e) => {
 
 });
 
-console.log("✅ 英语学习脚本已加载！请使用 Alt + L 组合键启动/退出。按 'Esc' 退出。展示翻译后，按任意键（除 \ 外）进入下一轮，按 '\\' 收藏。");

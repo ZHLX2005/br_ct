@@ -30,7 +30,6 @@ function loadAPIConfig() {
         apiKey: config.apiKey,
         model: config.model || 'glm-4.5v'
       };
-      console.log('[Translation] API 配置已加载');
     } else {
       console.warn('[Translation] API 配置未设置，请在设置页面配置 API Key');
     }
@@ -67,7 +66,6 @@ async function initTransPrompts() {
     const response = await chrome.runtime.sendMessage({ action: 'translation.getTransPrompts' });
     if (response && response.success && response.prompts && response.prompts.length > 0) {
       transPrompts = response.prompts;
-      console.log('[Translation] 提示词已从 background 加载:', transPrompts);
       return;
     }
   } catch (e) {
@@ -1098,9 +1096,7 @@ function toggleAutoTranslate() {
   chrome.storage.local.get(['translation.settings'], (result) => {
     const translationSettings = result['translation.settings'] || {};
     translationSettings.selectionMode = newMode;
-    chrome.storage.local.set({ 'translation.settings': translationSettings }, () => {
-      console.log('[Translation] 模式已切换:', newMode);
-    });
+    chrome.storage.local.set({ 'translation.settings': translationSettings });
   });
 }
 
@@ -1527,7 +1523,6 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     // 监听 API 配置变化
     if (changes['translation.api.config']) {
       loadAPIConfig();
-      console.log('[Translation] API 配置已更新');
     }
   }
 });
@@ -1536,9 +1531,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 initTransPrompts();
 
 // 立即加载设置和 API 配置
-loadSettings().then(() => {
-  console.log('[划词] 设置加载完成', settings);
-});
+loadSettings();
 
 loadFavoritesShortcut();
 loadAPIConfig();

@@ -37,7 +37,6 @@ function loadOCR_APIConfig() {
         apiKey: config.apiKey,
         model: config.model || 'glm-4.5v'
       };
-      console.log('[OCR] API 配置已加载');
     } else {
       console.warn('[OCR] API 配置未设置，请在设置页面配置 API Key');
     }
@@ -51,7 +50,6 @@ function loadOCR_SilentMode() {
   chrome.storage.local.get(['translation.settings'], (result) => {
     const settings = result['translation.settings'] || {};
     OCR_SILENT_MODE = settings.ocrSilentMode || false;
-    console.log('[OCR] 静默模式:', OCR_SILENT_MODE ? '开启' : '关闭');
   });
 }
 
@@ -760,7 +758,6 @@ async function autoCopyOCRResult() {
 
   try {
     await navigator.clipboard.writeText(textToCopy);
-    console.log('[OCR] 结果已自动复制到剪贴板');
 
     // 显示短暂提示
     const btn = document.getElementById('ocr-copy-result');
@@ -927,7 +924,6 @@ function detectAndAdjustCoordinates(rect) {
 
   // 如果有缩放，调整坐标
   if (scaleAdjustment !== 1 && Math.abs(scaleAdjustment - 1) > 0.01) {
-    console.log(`检测到页面缩放: ${scaleAdjustment.toFixed(3)}, 调整坐标`);
 
     return {
       left: rect.left / scaleAdjustment,
@@ -1279,7 +1275,7 @@ async function callOCRApiStream(imageBase64, prompt = '请识别图片中的所�
     chunkSize: Math.max(5, Math.floor(flowRateSettings.chunkSize / 2))
   }) : null;
 
-  console.log(`[OCR] 使用流速档位: Lv${flowRateSettings.level}, 间隔: ${flowRateSettings.outputInterval}ms, 块大小: ${flowRateSettings.chunkSize}`);
+
 
   /**
    * 思考内容输出回调
@@ -1587,12 +1583,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   } else if (request.action === 'translation.ocr.updateShortcut') {
     // 更新快捷键
     currentShortcut = request.shortcut;
-    console.log('OCR 快捷键已更新:', formatShortcutForLog(currentShortcut));
     sendResponse({ success: true });
   } else if (request.action === 'translation.ocr.clearShortcut') {
     // 清除快捷键
     currentShortcut = null;
-    console.log('OCR 快捷键已清除');
     sendResponse({ success: true });
   }
 });
@@ -1610,7 +1604,6 @@ function loadShortcut() {
   chrome.storage.local.get(['translation.ocr.shortcut'], (result) => {
     if (result['translation.ocr.shortcut']) {
       currentShortcut = result['translation.ocr.shortcut'];
-      console.log('OCR 快捷键已加载:', formatShortcutForLog(currentShortcut));
     }
   });
 }
@@ -1652,8 +1645,6 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     e.stopPropagation();
 
-    console.log('触发 OCR 快捷键:', formatShortcutForLog(currentShortcut));
-
     // 启动 OCR 选择
     startSelection();
   }
@@ -1669,11 +1660,9 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === 'local') {
     if (changes['translation.api.config']) {
       loadOCR_APIConfig();
-      console.log('[OCR] API 配置已更新');
     }
     if (changes['translation.settings']) {
       loadOCR_SilentMode();
-      console.log('[OCR] 静默模式设置已更新');
     }
   }
 });

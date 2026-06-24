@@ -71,7 +71,6 @@ async function initializeSelectionAsk() {
       selectionAskEnabled = settingsResponse.settings.enabled !== false;
     }
 
-    console.log('[SelectionAsk] 配置加载完成，启用状态:', selectionAskEnabled);
   } catch (e) {
     console.warn('[SelectionAsk] 配置加载失败，使用默认配置:', e);
   }
@@ -309,7 +308,6 @@ async function handleCopyClick() {
 
   try {
     await navigator.clipboard.writeText(selectedText);
-    console.log('[SelectionAsk] 已复制到剪贴板:', selectedText.substring(0, 50) + '...');
   } catch (e) {
     console.warn('[SelectionAsk] 复制失败:', e);
   }
@@ -334,8 +332,6 @@ function handleTemplateClick(template) {
     return;
   }
 
-  console.log(`[SelectionAsk] 发送消息到 ${platform}: "${message}"`);
-
   // 通过 background.js 发送
   try {
     chrome.runtime.sendMessage({
@@ -344,8 +340,6 @@ function handleTemplateClick(template) {
     }, (response) => {
       if (chrome.runtime.lastError) {
         console.warn('[SelectionAsk] 消息发送失败:', chrome.runtime.lastError.message);
-      } else {
-        console.log('[SelectionAsk] 消息发送成功');
       }
     });
   } catch (e) {
@@ -368,8 +362,6 @@ function handleCustomInputSend(selectedText, userQuestion) {
     return;
   }
 
-  console.log(`[SelectionAsk] 发送自定义提问到 ${platform}: "${message}"`);
-
   try {
     chrome.runtime.sendMessage({
       action: 'processTaskQueue',
@@ -377,8 +369,6 @@ function handleCustomInputSend(selectedText, userQuestion) {
     }, (response) => {
       if (chrome.runtime.lastError) {
         console.warn('[SelectionAsk] 消息发送失败', chrome.runtime.lastError.message);
-      } else {
-        console.log('[SelectionAsk] 消息发送成功');
       }
     });
   } catch (e) {
@@ -435,7 +425,6 @@ document.addEventListener('keydown', (e) => {
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName === 'local' && changes.selectionAskSettings) {
     selectionAskEnabled = changes.selectionAskSettings.newValue.enabled !== false;
-    console.log('[SelectionAsk] 启用状态已更新:', selectionAskEnabled);
     if (!selectionAskEnabled) {
       hidePanel();
     }
@@ -470,10 +459,8 @@ async function initializeSelectionAsk() {
       selectionAskEnabled = settingsResponse.settings.enabled !== false;
     }
 
-    console.log('[SelectionAsk] 配置加载完成，启用状态:', selectionAskEnabled);
   } catch (e) {
     console.warn('[SelectionAsk] 配置加载失败，使用默认配置:', e);
   }
 }
 
-console.log('[SelectionAsk] 划词快捷提问模块已加载');

@@ -1,5 +1,3 @@
-console.log("tripleSpace.js loaded - Quick Capture Notes");
-
 let spaceCount = 0;
 let lastSpaceTime = 0;
 let activeNotebook = null;
