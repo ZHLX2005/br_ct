@@ -29,3 +29,4 @@ _run_debug.js
 native_host/.omc/
 .CLAUDE/logs/
 native_host/.claude/logs/
+.CLAUDE/repo/

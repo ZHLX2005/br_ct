@@ -5,6 +5,17 @@
       <excludeFolder url="file://$MODULE_DIR$/.tmp" />
       <excludeFolder url="file://$MODULE_DIR$/temp" />
       <excludeFolder url="file://$MODULE_DIR$/tmp" />
+      <excludeFolder url="file://$MODULE_DIR$/.CLAUDE/logs" />
+      <excludeFolder url="file://$MODULE_DIR$/.CLAUDE/repo/.omc" />
+      <excludeFolder url="file://$MODULE_DIR$/.CLAUDE/repo/claudian" />
+      <excludeFolder url="file://$MODULE_DIR$/.CLAUDE/repo/happy" />
+      <excludeFolder url="file://$MODULE_DIR$/.CLAUDE/repo/happy-cli" />
+      <excludeFolder url="file://$MODULE_DIR$/.CLAUDE/repo/project" />
+      <excludeFolder url="file://$MODULE_DIR$/.gstack" />
+      <excludeFolder url="file://$MODULE_DIR$/.omc" />
+      <excludeFolder url="file://$MODULE_DIR$/native_host/.claude/logs" />
+      <excludeFolder url="file://$MODULE_DIR$/native_host/.omc" />
+      <excludeFolder url="file://$MODULE_DIR$/sidebar/main/.omc" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

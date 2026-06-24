@@ -10,6 +10,7 @@ import { loadTabSkills } from './ccSkills.js';
 import { sendBg, sendBgRequest } from '../common/ccBgComms.js';
 import { state, QUERY_TIMEOUT_MS } from '../common/ccConstants.js';
 import { escHtml } from '../common/ccUtils.js';
+import { buildPromptWithContext } from './ccExtract.js';
 
 // ==================== 初始化发送按钮 ====================
 
@@ -197,7 +198,8 @@ export async function handleSend() {
       state.pendingQuery.reject = (e) => { if (timer) clearTimeout(timer); origReject(e); };
       state.pendingQuery.resolve = (v) => { if (timer) clearTimeout(timer); finish(null, v); };
 
-      const queryMsg = { action: 'nxce_ws', cmd: 'query', session, cwd: workDir, prompt, queryId: 'q-' + Date.now() };
+      const finalPrompt = buildPromptWithContext(tab, prompt);
+      const queryMsg = { action: 'nxce_ws', cmd: 'query', session, cwd: workDir, prompt: finalPrompt, queryId: 'q-' + Date.now() };
       if (skills.length > 0) queryMsg.skills = skills;
       console.log('[cc] sendMessage queryMsg:', JSON.stringify(queryMsg));
       chrome.runtime.sendMessage(queryMsg, (resp) => {
