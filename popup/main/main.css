@@ -312,6 +312,8 @@ body {
   top: 100%;
   left: 0;
   right: 0;
+  /* 限制下拉框高度，超出部分内部滚动，避免撑高弹出页导致出现页面滚动条 */
+  max-height: 300px;
   overflow-y: auto;
   background: white;
   border: 1px solid var(--border-color);
@@ -446,4 +448,24 @@ body {
 .message-input.drop-error {
   border-color: #e53e3e;
   background-color: rgba(229, 62, 62, 0.05);
+}
+
+/*
+ * 隐藏弹出页的页面级滚动条（仅视觉隐藏，鼠标滚轮仍可滚动）。
+ * main.css 仅被 popup/main/main.html 加载，不属于共享外壳，
+ * 因此无需 :has(.page-container) 作用域，直接作用于 html/body 即可，
+ * 不会泄漏到 options 外壳或其他页面。
+ */
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track,
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb {
+  background: transparent;
+  opacity: 0;
 }
