@@ -103,6 +103,32 @@ const SETTING_CHECKBOX_MAP = {
   "setting-selection-mode": "selectionMode",
 };
 
+// 划词快捷提问（AI 平台页面增强）——与 aichat_settings (sync) 是两套独立契约：
+// 该开关存于 chrome.storage.local，由 content script (runjs/translation/selection-ask.js)
+// 通过 getSelectionAskSettings 消息读取 + storage.onChanged 实时响应。故单独读写，不并入 aichatSettings。
+const SELECTION_ASK_KEY = "selectionAskSettings";
+
+async function loadSelectionAskSetting() {
+  try {
+    const result = await chrome.storage.local?.get(SELECTION_ASK_KEY);
+    const enabled = result?.[SELECTION_ASK_KEY]?.enabled !== false; // 默认启用
+    const cb = document.getElementById("setting-selection-ask");
+    if (cb) cb.checked = enabled;
+  } catch (e) { /* ignore */ }
+}
+
+async function saveSelectionAskSetting(enabled) {
+  const settings = { enabled };
+  try {
+    await chrome.storage.local?.set({ [SELECTION_ASK_KEY]: settings });
+  } catch (e) { /* ignore */ }
+  // content script 已通过 storage.onChanged 自动响应；此处再通知 background 同步，保持与原 options 行为一致
+  try {
+    const p = chrome.runtime?.sendMessage?.({ action: "selectionAskSettingsUpdated", settings });
+    p?.catch?.(() => {});
+  } catch (e) { /* ignore */ }
+}
+
 function updateSettingsUI() {
   for (const [id, key] of Object.entries(SETTING_CHECKBOX_MAP)) {
     const cb = document.getElementById(id);
@@ -252,6 +278,8 @@ export async function initializePopup() {
 
   // 加载 AI Chat 设置
   await loadAichatSettings();
+  // 加载划词快捷提问设置（与 aichat_settings 独立存储，契约不同）
+  await loadSelectionAskSetting();
 
   // 恢复待发送队列
   await loadPendingMessages();
@@ -429,6 +457,11 @@ export function setupEventListeners() {
   }
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeSettingsModal();
+  });
+
+  // 划词快捷提问（独立于 aichatSettings，存于 chrome.storage.local）
+  document.getElementById("setting-selection-ask")?.addEventListener("change", (e) => {
+    saveSelectionAskSetting(e.target.checked);
   });
 
   // 提取页面文本按钮

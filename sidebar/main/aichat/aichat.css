@@ -102,6 +102,9 @@
 .aichat-settings-item input[type="checkbox"] {
   width: 14px; height: 14px; accent-color: var(--primary); cursor: pointer; flex-shrink: 0;
 }
+.aichat-settings-item--desc { align-items: flex-start; }
+.aichat-settings-text { display: flex; flex-direction: column; gap: 2px; }
+.aichat-settings-hint { font-size: 11px; color: var(--text-muted); font-weight: 400; line-height: 1.35; }
 
 /* ===== 右键菜单 ===== */
 .tab-context-menu {

@@ -6,7 +6,6 @@
 import { PLATFORM_CONFIG } from '../../config/platformConfig.js';
 
 const PLATFORM_VISIBILITY_KEY = 'platformVisibilitySettings';
-const SELECTION_ASK_KEY = 'selectionAskSettings';
 
 // DOM 元素
 let platformGrid;
@@ -24,7 +23,6 @@ function initializePlatformSettings() {
 
   // 加载保存的设置
   loadPlatformVisibilitySettings();
-  loadSelectionAskSettings();
 
   // 绑定事件监听器
   bindEventListeners();
@@ -36,25 +34,10 @@ function initializePlatformSettings() {
 function generatePlatformOptions() {
   platformGrid.innerHTML = '';
 
-  // 添加 AI 页面增强提示词提问开关
-  const selectionAskSection = document.createElement('div');
-  selectionAskSection.className = 'selection-ask-section';
-  selectionAskSection.innerHTML = `
-    <div class="section-title">AI 页面增强</div>
-    <div class="selection-ask-item">
-      <label class="toggle-label">
-        <input type="checkbox" id="selection-ask-enabled">
-        <span>启用划词快捷提问</span>
-      </label>
-      <p class="selection-ask-desc">在 AI 平台页面划词时显示快捷提示词模板</p>
-    </div>
-  `;
-  platformGrid.appendChild(selectionAskSection);
-
-  // 分隔线
+  // 分组标题
   const divider = document.createElement('div');
   divider.className = 'section-divider';
-  divider.innerHTML = '<hr><div class="section-title">平台可见性</div>';
+  divider.innerHTML = '<div class="section-title">平台可见性</div>';
   platformGrid.appendChild(divider);
 
   Object.entries(PLATFORM_CONFIG).forEach(([platformId, config]) => {
@@ -95,43 +78,6 @@ function loadPlatformVisibilitySettings() {
           ? settings[platformId]
           : config.defaultVisible;
       }
-    });
-  });
-}
-
-/**
- * 加载划词快捷提问设置
- */
-function loadSelectionAskSettings() {
-  chrome.storage.local.get([SELECTION_ASK_KEY], (result) => {
-    const settings = result[SELECTION_ASK_KEY] || {};
-    const checkbox = document.getElementById('selection-ask-enabled');
-    if (checkbox) {
-      checkbox.checked = settings.enabled !== false; // 默认启用
-    }
-  });
-}
-
-/**
- * 保存划词快捷提问设置
- */
-function saveSelectionAskSettings() {
-  const checkbox = document.getElementById('selection-ask-enabled');
-  if (!checkbox) return;
-
-  const settings = {
-    enabled: checkbox.checked
-  };
-
-  chrome.storage.local.set({ [SELECTION_ASK_KEY]: settings }, () => {
-    showStatusMessage('设置已保存', 'success');
-
-    // 通知扩展设置已更新
-    chrome.runtime.sendMessage({
-      action: 'selectionAskSettingsUpdated',
-      settings: settings
-    }).catch(() => {
-      console.log('忽略消息错误');
     });
   });
 }
@@ -212,9 +158,8 @@ function showStatusMessage(message, type = 'success') {
  * 绑定事件监听器
  */
 function bindEventListeners() {
-  // 保存设置按钮 - 同时保存平台可见性和划词快捷提问设置
+  // 保存设置按钮 - 保存平台可见性设置
   document.getElementById('save-settings').addEventListener('click', () => {
-    saveSelectionAskSettings();
     savePlatformVisibilitySettings();
   });
 
