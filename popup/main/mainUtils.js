@@ -470,6 +470,11 @@ async function startSending() {
             setButtonLoadingState(elements.sendButton, successMsg);
             showTempMessage(successMsg, 2000);
 
+            // 清空输入框并清除持久化的 lastMessage，避免下次打开弹窗时旧消息回来
+            elements.messageInput.value = "";
+            lastSavedContent = "";
+            try { chrome.storage.local.remove(STORAGE_KEYS.LAST_MESSAGE); } catch (e) { /* ignore */ }
+
             // 如果有失败的任务，显示详细信息
             if (response.failed > 0) {
                 const failedPlatforms = response.results
