@@ -112,9 +112,14 @@ toolbar
 └── toolbar-actions
     ├── toolbar-selection     ← 划词模式切换
     ├── toolbar-extract       ← 提取页面文本
-    ├── toolbar-select-all    ← 全选/取消全选平台
     ├── toolbar-clear-chat    ← 清空聊天
     └── toolbar-close-ai      ← 关闭所有 AI 标签页
+
+platform-panel                ← 平台选择面板（展开时显示，含 panel 头部「全选/取消全选」）
+  ├── platform-panel-header
+  │   ├── platform-panel-title "选择 AI 平台"
+  │   └── panel-select-all   ← 全选/取消全选（与面板同生命周期）
+  └── platform-options-row
 
 workspace-tabs                ← 浏览器标签页快捷方式（"+" 添加）
   └── workspace-tab × N

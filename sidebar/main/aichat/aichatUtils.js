@@ -216,7 +216,7 @@ export async function initializePopup() {
     messageInput: document.getElementById("chat-input"),
     sendButton: document.getElementById("chat-btn-send"),
     closeTabsButton: document.getElementById("toolbar-close-ai"),
-    selectAllButton: document.getElementById("toolbar-select-all"),
+    selectAllButton: document.getElementById("panel-select-all"),
     promptOptimizerSelect: document.getElementById("prompt-optimizer-select"),
     workspaceTabs: document.getElementById("workspace-tabs"),
     workspaceTabAdd: document.getElementById("workspace-tab-add"),
