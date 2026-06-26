@@ -1053,13 +1053,29 @@ select:focus {
 
 .btn-add,
 .btn-add-item {
-  background: linear-gradient(135deg, var(--accent), var(--accent-deep));
-  color: #fffaf4;
+  /* 兼容历史命名：与 btn-primary 一致（2px accent 边框 + 淡米色背景） */
+  color: var(--accent-deep);
+  background: var(--btn-bg-primary);
+  border-width: 2px;
+  border-color: var(--accent);
+}
+
+.btn-add:hover,
+.btn-add-item:hover {
+  background: var(--btn-bg-primary-hover);
+  border-color: var(--accent-deep);
 }
 
 .btn-edit {
-  background: rgba(88, 63, 41, 0.08);
   color: var(--ink);
+  background: transparent;
+  border-color: var(--line-strong);
+}
+
+.btn-edit:hover {
+  background: var(--btn-bg-hover);
+  border-color: var(--accent);
+  color: var(--accent-deep);
 }
 
 .backup-status-card {
