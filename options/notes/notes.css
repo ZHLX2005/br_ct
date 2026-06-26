@@ -69,12 +69,17 @@
   font-weight: 600;
   line-height: 1.1;
   color: var(--ink);
-  font-size: var(--font-h1);
 }
 
 .notes-hero-copy h1 {
   max-width: 24ch;
   line-height: 1.3;
+}
+
+.composer-card h2,
+.preview-card h2,
+.history-head h2 {
+  font-size: var(--font-h2);
 }
 
 .notes-hero-copy p {
@@ -148,6 +153,19 @@
   border: 1px solid var(--line-strong);
   background: transparent;
   color: var(--ink);
+}
+
+.btn-light {
+  /* 等价于 .btn-secondary：透明背景 + 1px 灰边 */
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line-strong);
+}
+
+.btn-light:hover {
+  background: var(--btn-bg-hover);
+  border-color: var(--accent);
+  color: var(--accent-deep);
 }
 
 .note-action.danger {
@@ -261,7 +279,7 @@
 }
 
 .empty-title {
-  font-size: var(--font-h1);
+  font-size: var(--font-h2);
   font-weight: 600;
   color: var(--ink);
 }

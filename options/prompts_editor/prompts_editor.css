@@ -198,6 +198,7 @@
   color: var(--accent-deep);
 }
 
+/* 页面特定 .btn-primary 覆盖：调整 padding 以匹配本地 .btn (7px 14px) */
 .btn-primary {
   color: var(--accent-deep);
   border-color: var(--accent);
@@ -474,9 +475,9 @@
 }
 
 .modal h3 {
-  margin: 0 0 20px;
+  margin: 0 0 18px;
   color: var(--ink);
-  font-size: var(--font-h1);
+  font-size: var(--font-h2);
   font-weight: 600;
 }
 

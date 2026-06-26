@@ -113,9 +113,9 @@
 
 .section-header h2 {
   margin: 6px 0 0;
-  font-size: var(--font-h1);
+  font-size: var(--font-h2);
   line-height: 1.2;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
   color: var(--ink);
   font-weight: 600;
 }

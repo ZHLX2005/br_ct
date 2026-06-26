@@ -335,7 +335,7 @@
 }
 
 .empty-state h2 {
-  font-size: var(--font-h1);
+  font-size: var(--font-h2);
   font-weight: 600;
   color: var(--ink);
   margin: 0 0 8px;
@@ -400,7 +400,7 @@
 }
 
 .modal-header h2 {
-  font-size: var(--font-h1);
+  font-size: var(--font-h2);
   font-weight: 600;
   color: var(--ink);
   margin: 0;
