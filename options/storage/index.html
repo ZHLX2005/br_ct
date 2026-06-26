@@ -4,332 +4,21 @@
     <meta charset="UTF-8" />
     <title>存储管理</title>
     <link rel="stylesheet" href="../options.css" />
-    <style>
-      .backup-status-card {
-        background: rgba(255, 252, 247, 0.82);
-        border-radius: 20px;
-        padding: 24px;
-        margin-bottom: 24px;
-        border: 1px solid rgba(93, 67, 43, 0.1);
-      }
-
-      .backup-status-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 12px;
-      }
-
-      .backup-status-title {
-        font-size: 18px;
-        font-weight: 600;
-        color: #2d241c;
-      }
-
-      .backup-status-time {
-        font-size: 14px;
-        color: #7a6858;
-        margin-bottom: 16px;
-      }
-
-      .backup-status-time.never {
-        color: #ef5350;
-        font-style: italic;
-      }
-
-      .backup-stats {
-        display: flex;
-        gap: 16px;
-        margin-top: 16px;
-      }
-
-      .backup-stat-item {
-        flex: 1;
-        background: rgba(255, 252, 247, 0.72);
-        border: 1px solid rgba(93, 67, 43, 0.1);
-        border-radius: 18px;
-        padding: 12px;
-        text-align: center;
-      }
-
-      .backup-stat-value {
-        font-size: 20px;
-        font-weight: 600;
-        color: #2d241c;
-      }
-
-      .backup-stat-label {
-        font-size: 11px;
-        color: #7a6858;
-        margin-top: 4px;
-      }
-
-      /* JSON 递归显示样式 */
-      .json-tree {
-        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-        font-size: 13px;
-        line-height: 1.5;
-      }
-
-      .json-item {
-        margin-left: 20px;
-        position: relative;
-      }
-
-      .json-item > .json-key::before {
-        content: '';
-        position: absolute;
-        left: -15px;
-        top: 0;
-        bottom: 0;
-        width: 1px;
-        background: rgba(93, 67, 43, 0.12);
-      }
-
-      .json-key {
-        color: #7a4d2b;
-        font-weight: 500;
-      }
-
-      .json-string { color: #465f72; }
-      .json-number { color: #6c4b31; }
-      .json-boolean { color: #8250df; }
-      .json-null { color: #6e7781; font-style: italic; }
-
-      .json-collapsible {
-        cursor: pointer;
-        user-select: none;
-      }
-
-      .json-collapsible:hover {
-        background: rgba(107, 74, 49, 0.05);
-      }
-
-      .json-collapsible::before {
-        content: '▼';
-        display: inline-block;
-        width: 12px;
-        color: #6e7781;
-        font-size: 10px;
-        margin-right: 4px;
-        transition: transform 0.2s;
-      }
-
-      .json-collapsible.collapsed::before {
-        transform: rotate(-90deg);
-      }
-
-      .json-collapsed { display: none; }
-
-      /* 设置行 */
-      .setting-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 12px 0;
-        border-bottom: 1px solid rgba(93, 67, 43, 0.08);
-      }
-
-      .setting-row:last-child { border-bottom: none; }
-
-      .setting-label { flex: 1; }
-
-      .setting-title {
-        font-weight: 500;
-        color: #333;
-        margin-bottom: 2px;
-        font-size: 14px;
-      }
-
-      .setting-description {
-        font-size: 12px;
-        color: #666;
-      }
-
-      .setting-control {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-
-      /* 开关样式 */
-      .toggle-switch {
-        position: relative;
-        width: 44px;
-        height: 24px;
-      }
-
-      .toggle-switch input {
-        opacity: 0;
-        width: 0;
-        height: 0;
-      }
-
-      .toggle-slider {
-        position: absolute;
-        cursor: pointer;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-color: rgba(88, 63, 41, 0.18);
-        transition: 0.3s;
-        border-radius: 24px;
-      }
-
-      .toggle-slider:before {
-        position: absolute;
-        content: "";
-        height: 18px;
-        width: 18px;
-        left: 3px;
-        bottom: 3px;
-        background-color: white;
-        transition: 0.3s;
-        border-radius: 50%;
-      }
-
-      .toggle-switch input:checked + .toggle-slider {
-        background-color: #99673f;
-      }
-
-      .toggle-switch input:checked + .toggle-slider:before {
-        transform: translateX(20px);
-      }
-
-      select.setting-select,
-      input.setting-select {
-        padding: 6px 10px;
-        border: 1px solid #ddd;
-        border-radius: 6px;
-        font-size: 13px;
-        background: rgba(255, 255, 255, 0.1);
-        cursor: pointer;
-        min-width: 100px;
-      }
-
-      .setting-select:focus {
-        outline: none;
-        border-color: #99673f;
-        box-shadow: 0 0 0 3px rgba(153, 103, 63, 0.08);
-      }
-
-      .storage-setting-select {
-        padding: 6px 10px;
-        border: 1px solid rgba(221, 221, 221, 0.6);
-        border-radius: 6px;
-        font-size: 13px;
-        cursor: pointer;
-        min-width: 100px;
-        background: rgba(255, 255, 255, 0.2);
-      }
-
-      .storage-setting-select:focus {
-        outline: none;
-        border-color: #99673f;
-        box-shadow: 0 0 0 3px rgba(153, 103, 63, 0.08);
-        background: rgba(255, 255, 255, 0.25);
-      }
-
-      .delete-key-btn {
-          min-height: 0;
-        padding: 2px 8px;
-        font-size: 11px;
-        margin-left: 8px;
-        background: rgba(154, 79, 64, 0.14);
-        color: #7a3025;
-        border: none;
-        border-radius: 2px;
-        cursor: pointer;
-        opacity: 0.7;
-        transition: opacity 0.2s;
-      }
-
-      .delete-key-btn:hover { opacity: 1; }
-      .storage-item-header:hover .delete-key-btn { opacity: 1; }
-
-      /* 存储分组 */
-      .storage-group {
-        margin-bottom: 16px;
-      }
-
-      .storage-group-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 10px 14px;
-        background: rgba(255, 252, 247, 0.72);
-        border: 1px solid rgba(93, 67, 43, 0.1);
-        border-radius: 14px;
-        cursor: pointer;
-        font-weight: 500;
-        color: #2d241c;
-        margin-bottom: 8px;
-      }
-
-      .storage-group-content {
-        padding-left: 8px;
-      }
-
-      .storage-group-content.collapsed {
-        display: none;
-      }
-
-      .group-badge {
-        font-size: 11px;
-        background: rgba(93, 67, 43, 0.1);
-        padding: 2px 8px;
-        border-radius: 5px;
-        color: #7a6858;
-      }
-
-      .storage-item {
-        margin-bottom: 6px;
-      }
-
-      .storage-item-header {
-        display: flex;
-        align-items: center;
-        padding: 6px 10px;
-        background: rgba(255, 255, 255, 0.73);
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 13px;
-      }
-
-      .key-name {
-        color: #7a4d2b;
-        font-family: monospace;
-        flex: 1;
-      }
-
-      .key-type {
-        font-size: 11px;
-        color: #999;
-        margin-right: 8px;
-      }
-
-      .storage-item-content {
-        padding: 8px;
-        background: #fafafa;
-        border-radius: 6px;
-        margin-top: 4px;
-        font-family: monospace;
-        font-size: 12px;
-      }
-    </style>
+    <link rel="stylesheet" href="./storage.css" />
   </head>
   <body>
     <div class="page-container">
-      <header class="page-header">
-        <h1 class="page-title">存储管理</h1>
-        <p class="page-description">
-          查看、备份和恢复插件存储数据
-        </p>
+      <header class="page-header page-header--compact">
+        <div class="page-header-row">
+          <h1 class="page-title page-title--compact">存储管理</h1>
+          <p class="page-description page-description--compact">
+            查看、备份和恢复插件存储数据
+          </p>
+        </div>
       </header>
 
       <!-- 备份状态卡片 -->
-      <section class="section">
+      <section class="section section--compact">
         <div class="backup-status-card">
           <div class="backup-status-header">
             <div class="backup-status-title">数据备份</div>
@@ -358,7 +47,7 @@
       </section>
 
       <!-- 自动备份设置 -->
-      <section class="section">
+      <section class="section section--compact">
         <h2 class="section-title">自动备份设置</h2>
 
         <div class="setting-row">
@@ -420,7 +109,7 @@
       </section>
 
       <!-- 存储数据 -->
-      <section class="section">
+      <section class="section section--compact">
         <div class="debug-controls" style="margin-bottom: 16px;">
           <button class="btn btn-success" id="refresh-storage">刷新</button>
           <button class="btn btn-danger" id="clear-storage">清空所有</button>

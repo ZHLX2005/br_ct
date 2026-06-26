@@ -4,142 +4,19 @@
     <meta charset="UTF-8" />
     <title>API 设置</title>
     <link rel="stylesheet" href="../options.css" />
-    <style>
-      .api-form {
-        max-width: 600px;
-      }
-
-      .form-group {
-        margin-bottom: 20px;
-      }
-      .url-title{
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-      }
-
-      .form-label {
-        display: block;
-        font-weight: 500;
-        margin-bottom: 8px;
-        color: #333;
-      }
-
-      .form-input {
-        width: 100%;
-        padding: 10px 12px;
-        border: 1px solid #ddd;
-        border-radius: 6px;
-        font-size: 14px;
-        font-family: inherit;
-        transition: border-color 0.2s;
-      }
-
-      .form-input:focus {
-        outline: none;
-        border-color: #3b82f6;
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-      }
-
-      .form-hint {
-        font-size: 12px;
-        color: #666;
-        margin-top: 6px;
-      }
-
-      .form-warning {
-        font-size: 12px;
-        color: #f59e0b;
-        margin-top: 6px;
-      }
-
-      .api-status {
-        display: inline-block;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 12px;
-        font-weight: 500;
-        margin-left: 8px;
-      }
-
-      .api-status.configured {
-        background: #d1fae5;
-        color: #065f46;
-      }
-
-      .api-status.not-configured {
-        background: #fee2e2;
-        color: #991b1b;
-      }
-
-      .test-result {
-        margin-top: 12px;
-        padding: 12px;
-        border-radius: 6px;
-        font-size: 13px;
-        display: none;
-      }
-
-      .test-result.success {
-        background: rgba(210, 250, 229, 0.4);
-        color: #065f46;
-        border: 1px solid #6ee7b7;
-      }
-
-      .test-result.error {
-        background: rgba(255, 227, 227, 0.4);
-        color: #991b1b;
-        border: 1px solid #fca5a5;
-      }
-
-      .button-row {
-        display: flex;
-        gap: 12px;
-        align-items: center;
-      }
-
-      .btn-test {
-        background: transparent;
-        color: rgb(17, 186, 130);
-      }
-
-      .btn-test:hover {
-        color: rgb(5, 150, 104);
-      }
-      .api-form,
-      .button-row {
-        position: relative;
-        z-index: 1;
-      }
-
-      .api-form .form-warning {
-        color: #8b6848;
-      }
-
-      .section ul {
-        color: #7a6858;
-        line-height: 1.9;
-      }
-      .form-input:focus {
-        border-color: #99673f;
-        box-shadow: 0 0 0 3px rgba(153, 103, 63, 0.08);
-      }
-
-      .section a {
-        color: #6b4a31 !important;
-      }
-    </style>
   </head>
   <body>
     <div class="page-container">
-      <header class="page-header">
-        <h1 class="page-title">API 设置</h1>
-        <p class="page-description">
-          配置智谱 AI 的 API 信息，用于划词翻译和 OCR 功能。
-        </p>
+      <header class="page-header page-header--compact">
+        <div class="page-header-row">
+          <h1 class="page-title page-title--compact">API 设置</h1>
+          <p class="page-description page-description--compact">
+            配置智谱 AI 的 API 信息，用于划词翻译和 OCR 功能。
+          </p>
+        </div>
       </header>
 
-      <section class="section">
+      <section class="section section--compact">
         <div class="api-form">
           <!-- API Base URL -->
           <div class="form-group">
@@ -208,7 +85,7 @@
         </div>
       </section>
 
-      <section class="section">
+      <section class="section section--compact">
         <h2 style="font-size: 16px; margin-bottom: 12px;">使用说明</h2>
         <ul style="font-size: 13px; color: #666; line-height: 1.8; padding-left: 20px;">
           <li>访问 <a href="https://open.bigmodel.cn/" target="_blank" style="color: #6b4a31;">智谱 AI 开放平台</a> 注册并获取 API Key</li>

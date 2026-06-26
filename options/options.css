@@ -1796,6 +1796,59 @@ select:focus {
 }
 */
 
+/* ========== API 页面专用样式 ========== */
+
+.api-form {
+  max-width: 640px;
+}
+
+.url-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.button-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* 测试连接按钮：success 风格变体 */
+.btn-test {
+  color: var(--success-deep);
+  background: transparent;
+  border-color: rgba(106, 135, 88, 0.45);
+  padding: 4px 12px;
+  min-height: 28px;
+  font-size: var(--font-small);
+  border-radius: 6px;
+}
+
+.btn-test:hover {
+  background: rgba(106, 135, 88, 0.10);
+  border-color: var(--success-deep);
+  color: var(--success-deep);
+}
+
+.api-form,
+.button-row {
+  position: relative;
+  z-index: 1;
+}
+
+.section ul {
+  color: var(--muted);
+  line-height: 1.9;
+  padding-left: 22px;
+  font-size: var(--font-h3);
+}
+
+.section a {
+  color: var(--accent-deep);
+}
+
 /* ========== 紧凑单行 page-header（仅供 platform 等需要高密度的页面使用） ========== */
 
 .page-header--compact {
