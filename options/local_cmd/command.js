@@ -20,17 +20,17 @@ async function loadCommandList() {
   container.innerHTML = templates.map(t => `
     <div class="cmd-card">
       <div class="cmd-card-header">
-        <span class="cmd-card-name">${escapeHtml(t.name)}</span>
+        <span class="cmd-card-name" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</span>
+        <dl class="cmd-card-detail">
+          <dt>目录</dt><dd title="${escapeHtml(t.workDir)}">${escapeHtml(t.workDir)}</dd>
+          <dt>命令</dt><dd title="${escapeHtml(t.cmd)} ${escapeHtml(t.args || '')}">${escapeHtml(t.cmd)} ${escapeHtml(t.args || '')}</dd>
+        </dl>
         <div class="cmd-card-actions">
           <button class="btn btn-success" data-action="execute-cmd" data-id="${t.id}">启动</button>
           <button class="btn btn-edit" data-action="edit-cmd" data-id="${t.id}">编辑</button>
           <button class="btn btn-danger" data-action="delete-cmd" data-id="${t.id}">删除</button>
         </div>
       </div>
-      <dl class="cmd-card-detail">
-        <dt>目录</dt><dd>${escapeHtml(t.workDir)}</dd>
-        <dt>命令</dt><dd>${escapeHtml(t.cmd)} ${escapeHtml(t.args || '')}</dd>
-      </dl>
     </div>
   `).join('');
 }
