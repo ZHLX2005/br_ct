@@ -60,20 +60,21 @@
   min-height: calc(100vh - 180px);
 }
 
-/* 文件列表面板（去浮岛：仅 1px 边框 + 透明背景） */
+/* 文件列表面板（去浮岛：去圆角 + 透明背景，仅靠 1px 右分隔线与右栏分开） */
 .file-list-panel {
   width: 260px;
-  background: rgba(255, 252, 247, 0.5);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
+  background: transparent;
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-radius: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
 .file-list-header {
-  padding: 12px 16px;
-  background: rgba(255, 252, 247, 0.85);
+  padding: 8px 12px 8px 0;
+  background: transparent;
   color: var(--ink);
   font-weight: 600;
   font-size: var(--font-h3);
@@ -108,12 +109,12 @@
 .file-list {
   flex: 1;
   overflow-y: auto;
-  padding: 8px;
+  padding: 4px 0;
 }
 
 .file-item {
-  padding: 10px 14px;
-  border-radius: 6px;
+  padding: 8px 10px;
+  border-radius: 0;
   cursor: pointer;
   transition: background 120ms ease, color 120ms ease;
   display: flex;
@@ -121,17 +122,19 @@
   gap: 10px;
   color: var(--muted);
   font-size: var(--font-h3);
+  border-left: 2px solid transparent;
 }
 
 .file-item:hover {
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(153, 103, 63, 0.05);
   color: var(--ink);
 }
 
 .file-item.active {
-  background: rgba(153, 103, 63, 0.10);
+  background: rgba(153, 103, 63, 0.08);
   color: var(--accent-deep);
   font-weight: 500;
+  border-left-color: var(--accent);
 }
 
 .file-item::before {
@@ -151,17 +154,17 @@
 /* 编辑面板（去浮岛） */
 .editor-panel {
   flex: 1;
-  background: rgba(255, 252, 247, 0.5);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
 .editor-toolbar {
-  padding: 12px 16px;
-  background: rgba(255, 252, 247, 0.85);
+  padding: 8px 0;
+  background: transparent;
   border-bottom: 1px solid var(--line);
   display: flex;
   justify-content: space-between;
@@ -216,30 +219,35 @@
 .editor-content {
   flex: 1;
   overflow-y: auto;
-  padding: 18px;
+  padding: 12px 0;
 }
 
 .prompts-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
 }
 
 .prompt-item {
-  background: rgba(255, 252, 247, 0.55);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  transition: border-color 160ms ease, background 160ms ease;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  overflow: visible;
+  transition: background 160ms ease;
+}
+
+.prompt-item:last-child {
+  border-bottom: 0;
 }
 
 .prompt-item:hover {
-  border-color: var(--line-strong);
-  background: rgba(255, 252, 247, 0.85);
+  border-bottom-color: var(--line-strong);
+  background: transparent;
 }
 
 .prompt-item-header {
-  padding: 12px 16px;
+  padding: 10px 0;
   background: transparent;
   display: flex;
   justify-content: space-between;
@@ -250,7 +258,7 @@
 }
 
 .prompt-item-header:hover {
-  background: rgba(255, 255, 255, 0.4);
+  background: rgba(153, 103, 63, 0.04);
 }
 
 .prompt-item.expanded .prompt-item-header {
@@ -328,8 +336,8 @@
 
 .prompt-item-body {
   display: none;
-  padding: 14px 16px;
-  background: rgba(255, 252, 247, 0.4);
+  padding: 10px 0 14px;
+  background: transparent;
 }
 
 .prompt-item-body.expanded {
