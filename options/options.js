@@ -41,7 +41,6 @@ const NAV_ITEMS = [
   { icon: 'DB', name: '存储管理', page: 'storage/index.html' },
   { icon: 'NT', name: '随手笔记', page: 'notes/index.html' },
   { icon: 'OC', name: 'OCR 批量识别', page: 'ocr/index.html' },
-  { icon: 'TM', name: '倒计时面板', page: 'countdown/index.html' },
   { icon: 'PR', name: '提示词编辑', page: 'prompts_editor/prompts_editor.html' },
   { icon: 'CMD', name: '本地命令管理', page: 'local_cmd/index.html' },
 ];
@@ -156,20 +155,6 @@ function initializeOptions() {
       const { direction } = data;
       handleFocusScrollNavigate(direction);
       return;
-    }
-
-    // countdown panel navigation
-    if (data.action === 'navigateToHistory') {
-      navigateToPage('countdown/history.html');
-      updateNavActive('countdown/index.html');
-    } else if (data.action === 'navigateToTimers') {
-      navigateToPage('countdown/index.html');
-      updateNavActive('countdown/index.html');
-    } else if (data.action === 'refreshTimers') {
-      const currentSrc = activeFrame?.src || '';
-      if (currentSrc.includes('countdown/index.html')) {
-        activeFrame.contentWindow.postMessage({ action: 'refresh' }, frameOrigin);
-      }
     }
   });
 

@@ -1186,16 +1186,13 @@ select:focus {
   color: var(--muted);
 }
 
-.ocr-container,
-.countdown-container {
+.ocr-container {
   max-width: 1400px;
   margin: 0 auto;
   padding: 24px 20px 34px;
 }
 
-
-.ocr-header,
-.countdown-header {
+.ocr-header {
   position: relative;
   overflow: visible;
   padding: 6px 0 14px;
@@ -1207,8 +1204,7 @@ select:focus {
   border-bottom: 1px solid var(--line);
 }
 
-.ocr-header h1,
-.countdown-header h1 {
+.ocr-header h1 {
   margin: 0;
   font-size: var(--font-h1);
   line-height: 1.1;
@@ -1217,15 +1213,12 @@ select:focus {
   color: var(--ink);
 }
 
-.ocr-header .subtitle,
-.countdown-header .subtitle,
-.countdown-header .count-stat,
-.countdown-header .header-left h1 {
+.ocr-header .subtitle {
   color: var(--muted);
+  font-size: var(--font-h3);
+  line-height: 1.7;
 }
 
-.ocr-header .subtitle,
-.countdown-header .subtitle,
 .count-stat {
   color: var(--muted);
   font-size: var(--font-h3);
@@ -1245,8 +1238,7 @@ select:focus {
   }
 
   .page-container,
-  .ocr-container,
-  .countdown-container {
+  .ocr-container {
     padding-left: 14px;
     padding-right: 14px;
   }
