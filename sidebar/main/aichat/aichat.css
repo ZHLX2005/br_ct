@@ -155,6 +155,8 @@
 .prompt-bar-alias { color: var(--text-secondary); font-weight: 500; font-size: 10px; margin-left: 2px; }
 .prompt-bar-clear { margin-left: auto; width: 16px; height: 16px; border: none; border-radius: 3px; background: transparent; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.12s ease; }
 .prompt-bar-clear:hover { background: rgba(0,0,0,0.06); color: #dc2626; }
+.prompt-bar-edit { width: 16px; height: 16px; border: none; border-radius: 3px; background: transparent; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.12s ease; }
+.prompt-bar-edit:hover { background: rgba(67,97,238,0.10); color: var(--primary); }
 
 /* ===== 回复内容区（补充 AI Chat 专属） ===== */
 /* .response-content 骨架定义在 sidebar.css */
@@ -643,3 +645,148 @@
   margin-left: 6px;
   font-variant-numeric: tabular-nums;
 }
+
+/* ===== page 切换（主页 / 提示词编辑器） ===== */
+.main-pages { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.page { display: none; flex: 1; min-height: 0; flex-direction: column; overflow: hidden; }
+.page.active { display: flex; }
+
+/* ===== 提示词编辑器（内嵌面板） ===== */
+.prompt-editor-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: linear-gradient(180deg, rgba(248,249,250,0.96), white);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.prompt-editor-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-light);
+  background: rgba(255,255,255,0.9);
+  flex-shrink: 0;
+}
+.prompt-editor-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.prompt-editor-title::before {
+  content: '';
+  width: 4px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--primary);
+}
+.prompt-editor-path {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: "SF Mono", "Monaco", "Consolas", monospace;
+  margin-left: auto;
+  padding: 2px 6px;
+  background: var(--bg-subtle);
+  border-radius: 3px;
+}
+.prompt-editor-close {
+  width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;
+  border: none; border-radius: 4px; background: transparent; color: var(--text-muted);
+  font-size: 16px; line-height: 1; cursor: pointer;
+}
+.prompt-editor-close:hover { background: var(--bg-subtle); color: var(--text); }
+
+.prompt-editor-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 12px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.prompt-editor-field { display: flex; flex-direction: column; gap: 4px; }
+.prompt-editor-field label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.prompt-editor-hint {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+.prompt-editor-hint code,
+.prompt-editor-field label code {
+  font-size: 10px;
+  padding: 1px 4px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-light);
+  border-radius: 3px;
+  color: var(--primary);
+}
+.prompt-editor-body input[type="text"],
+.prompt-editor-body textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  background: white;
+  color: var(--text);
+  font-family: "SF Mono", "Monaco", "Consolas", monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  outline: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+  resize: vertical;
+}
+.prompt-editor-body input[type="text"]:focus,
+.prompt-editor-body textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(67,97,238,0.12);
+}
+.prompt-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border-light);
+  background: rgba(255,255,255,0.85);
+  flex-shrink: 0;
+}
+.pe-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  background: white;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.pe-btn:hover { background: var(--bg-subtle); border-color: var(--primary); color: var(--primary); }
+.pe-btn-primary {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+.pe-btn-primary:hover { background: #3551d8; border-color: #3551d8; color: white; }
+.pe-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.prompt-editor-loading,
+.prompt-editor-error {
+  padding: 32px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.prompt-editor-error { color: #dc2626; }

@@ -1,6 +1,7 @@
 // mainUtils.js - 核心popup功能模块
 import { populateOptimizer, initAliasShortcut } from "./prompts/promptsUI.js";
 import { PROMPT_TEMPLATES } from "./prompts/prompts.js";
+import { applyPromptTemplate } from "./prompts/promptsCore.js";
 import {
   STORAGE_KEYS,
   saveMessageContent,
@@ -372,11 +373,11 @@ async function startSending() {
     let finalMessage = originalMessage;
 
     if (templateKey && templateContent) {
+        // 走 promptsCore.applyPromptTemplate：决策树统一处理 %s / %v / good_eg / bad_eg
         if (templateContent.includes("%s")) {
-            // 有 %s 占位符，用用户输入替换（可为空）
-            finalMessage = templateContent.replace("%s", originalMessage);
+            finalMessage = applyPromptTemplate(templateContent, { userMessage: originalMessage });
         } else {
-            // 无 %s 占位符，直接使用模板作为短指令
+            // 无 %s 占位符，直接使用模板作为短指令（保留 popup 原有 UX 策略）
             finalMessage = templateContent;
             if (originalMessage.trim()) {
                 showTempMessage(`使用模板: ${templateContent.substring(0, 20)}...`);

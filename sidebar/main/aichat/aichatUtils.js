@@ -2,6 +2,8 @@
 // 100% AI Chat 代码，无任何 Claude Code 逻辑
 import { populateOptimizer, initAliasShortcut } from "../../../popup/main/prompts/promptsUI.js";
 import { PROMPT_TEMPLATES } from "../../../popup/main/prompts/prompts.js";
+import { applyPromptTemplate } from "../../../popup/main/prompts/promptsCore.js";
+import * as promptEditor from "./promptEditor.js";
 import {
   STORAGE_KEYS,
   saveMessageContent,
@@ -230,6 +232,10 @@ export async function initializePopup() {
     promptBarName: document.getElementById("prompt-bar-name"),
     promptBarAlias: document.getElementById("prompt-bar-alias"),
     promptBarClear: document.getElementById("prompt-bar-clear"),
+    promptBarEdit: document.getElementById("prompt-bar-edit"),
+    promptEditorClose: document.getElementById("prompt-editor-close"),
+    promptEditorBody: document.getElementById("prompt-editor-body"),
+    pagePromptEditor: document.getElementById("page-prompt-editor"),
     footHistoryBtn: document.getElementById("foot-history-btn"),
     footSourceBtn: document.getElementById("foot-source-btn"),
     sourcePanel: document.getElementById("source-panel"),
@@ -479,6 +485,13 @@ export function setupEventListeners() {
 
   // 清除提示词
   elements.promptBarClear?.addEventListener("click", clearSelectedPrompt);
+
+  // 编辑当前提示词
+  elements.promptBarEdit?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openPromptEditor();
+  });
+  elements.promptEditorClose?.addEventListener("click", closePromptEditor);
 
   // 点击提示词条展开/收起简易模板选择器
   const promptBar = elements.promptBar || document.getElementById("prompt-bar");
@@ -821,6 +834,7 @@ function syncPromptIndicator() {
     elements.promptBarAlias.style.display = '';
     const labelEl = elements.promptBar.querySelector('.prompt-bar-label');
     if (labelEl) labelEl.textContent = '提示词:';
+    if (elements.promptBarEdit) elements.promptBarEdit.style.display = '';
   } else {
     elements.promptBarName.textContent = '选择提示词';
     elements.promptBarName.style.opacity = '0.5';
@@ -828,6 +842,7 @@ function syncPromptIndicator() {
     elements.promptBarAlias.style.display = 'none';
     const labelEl = elements.promptBar.querySelector('.prompt-bar-label');
     if (labelEl) labelEl.textContent = '';
+    if (elements.promptBarEdit) elements.promptBarEdit.style.display = 'none';
   }
   elements.promptBar.style.display = '';
 }
@@ -842,6 +857,60 @@ function clearSelectedPrompt() {
   // 触发 change 事件
   const event = new CustomEvent('change', { detail: { value: '', template: '', label: '不使用优化' } });
   elements.promptOptimizerSelect?.dispatchEvent(event);
+  syncPromptIndicator();
+}
+
+// ==================== 提示词编辑器（内嵌面板） ====================
+
+/**
+ * 打开当前选中提示词的编辑面板。
+ * 触发条件：syncPromptIndicator 检测到有选中模板。
+ */
+async function openPromptEditor() {
+  const selectedValue = elements.promptOptimizerSelect?.querySelector('.selected-value');
+  if (!selectedValue) return;
+  const key = selectedValue.dataset.value;
+  if (!key) return;
+
+  const tpl = PROMPT_TEMPLATES[key];
+  if (!tpl) {
+    console.warn('[aichat] 当前提示词不在 PROMPT_TEMPLATES 中:', key);
+    return;
+  }
+
+  await promptEditor.open(
+    {
+      key,
+      label: tpl.label,
+      alias: tpl.alias || '',
+      group: tpl.group,
+      template: tpl.template,
+    },
+    onPromptSaved,
+  );
+}
+
+function closePromptEditor() {
+  promptEditor.close();
+}
+
+/**
+ * 保存成功回调：直接更新内存中的 PROMPT_TEMPLATES，
+ * 让后续 %s 替换立刻走新模板，并把提示词栏 UI 同步刷新。
+ */
+function onPromptSaved({ key, label, alias, template }) {
+  if (PROMPT_TEMPLATES[key]) {
+    PROMPT_TEMPLATES[key].label = label;
+    PROMPT_TEMPLATES[key].alias = alias;
+    PROMPT_TEMPLATES[key].template = template;
+  }
+
+  // 把 select 的 dataset.template 也更新，保持 promptPicker 等读取路径一致
+  const selectedValue = elements.promptOptimizerSelect?.querySelector('.selected-value');
+  if (selectedValue && selectedValue.dataset.value === key) {
+    selectedValue.dataset.template = template;
+    selectedValue.dataset.alias = alias;
+  }
   syncPromptIndicator();
 }
 
@@ -1893,42 +1962,8 @@ function handleSidebarSelection(text, title, url) {
 }
 
 // ==================== Prompt 占位符 ====================
-
-/**
- * 占位符说明：
- *   %s — 用户输入的原始消息（string）
- *   %v — 提取的网页上下文（string，提取面板隐藏时为空）
- *
- * 模板里没出现任何占位符时，沿用旧行为：模板拼在用户消息后面（向后兼容）。
- */
-function applyPromptTemplate(template, userMessage, extractedText) {
-  const user = userMessage ?? "";
-  const ctx = extractedText ?? "";
-
-  const hasUserPlaceholder = template.includes("%s");
-  const hasCtxPlaceholder = template.includes("%v");
-
-  if (hasUserPlaceholder || hasCtxPlaceholder) {
-    let result = template
-      .replace(/%v/g, ctx)
-      .replace(/%s/g, user);
-
-    // 模板有 %s 但没有 %v，且有提取内容 → 提取内容兜底前置
-    if (!hasCtxPlaceholder && ctx) {
-      result = ctx + "\n\n" + result;
-    }
-
-    return result;
-  }
-
-  // 没有占位符但有提取内容 → 提取内容兜底前置
-  if (ctx) {
-    return ctx + "\n\n" + user + " " + template;
-  }
-
-  // 完全无占位符、无提取：向后兼容
-  return user + " " + template;
-}
+// applyPromptTemplate 已收敛到 ../../../popup/main/prompts/promptsCore.js
+// 本文件仅 import 调用，不再保留本地实现。
 
 /**
  * 显示提取/划词结果到提取面板
@@ -2354,7 +2389,8 @@ async function dispatchMessageToPlatforms(originalMessage, platformIds, { skipHi
 
   let finalMessage = originalMessage;
   if (templateKey && templateContent) {
-    finalMessage = applyPromptTemplate(templateContent, originalMessage, extracted);
+    // applyPromptTemplate 决策树统一处理 %s / %v / good_eg / bad_eg / 提取文本兜底
+    finalMessage = applyPromptTemplate(templateContent, { userMessage: originalMessage, extractedText: extracted });
   } else if (extracted) {
     finalMessage = extracted + "\n\n" + originalMessage;
   }

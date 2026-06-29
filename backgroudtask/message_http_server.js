@@ -8,6 +8,7 @@
 
 // 导入统一平台配置
 import { PLATFORM_CONFIG, getPlatformIds } from '../config/platformConfig.js';
+import { applyPromptTemplate } from '../popup/main/prompts/promptsCore.js';
 
 // 可配置的端口和域名
 const SERVER_PORT = 8902;
@@ -156,8 +157,9 @@ async function handleSendMessage(request, sendResponse) {
     if (optimizer) {
       const template = await getOptimizerTemplate(optimizer);
       if (template) {
+        // 走 promptsCore.applyPromptTemplate 决策树：%s / %v / good_eg / bad_eg 统一处理
         finalMessage = template.includes("%s")
-          ? template.replace("%s", finalMessage)
+          ? applyPromptTemplate(template, { userMessage: finalMessage })
           : finalMessage + " " + template;
       }
     }
