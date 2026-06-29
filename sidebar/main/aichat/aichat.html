@@ -7,15 +7,6 @@
     </svg>
   </button>
 
-  <div class="workspace-tabs-wrap">
-    <div class="workspace-tabs" id="workspace-tabs">
-      <!-- 工作区标签由 JS 动态渲染 -->
-    </div>
-    <button class="workspace-tab-add" id="workspace-tab-add" title="添加当前页面到工作区">
-      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-    </button>
-  </div>
-
   <div class="toolbar-actions">
     <button class="toolbar-action-btn" id="toolbar-extract" title="提取页面文本">提取</button>
     <button class="toolbar-action-btn" id="toolbar-clear-chat" title="清空聊天内容">清空</button>
@@ -69,7 +60,12 @@
   <div class="context-menu-item danger" data-action="remove">移除工作区</div>
 </div>
 
-<div class="platform-pills" id="platform-pills"></div>
+<div class="platform-pills" id="platform-pills">
+  <div class="platform-pills-pages" id="page-pills"></div>
+  <button class="page-tab-add" id="workspace-tab-add" title="添加当前页面到工作区">
+    <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+  </button>
+</div>
 
 <div class="platform-panel" id="platform-panel">
   <div class="platform-panel-header">

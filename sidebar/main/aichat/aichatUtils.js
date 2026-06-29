@@ -220,8 +220,8 @@ export async function initializePopup() {
     closeTabsButton: document.getElementById("toolbar-close-ai"),
     selectAllButton: document.getElementById("panel-select-all"),
     promptOptimizerSelect: document.getElementById("prompt-optimizer-select"),
-    workspaceTabs: document.getElementById("workspace-tabs"),
     workspaceTabAdd: document.getElementById("workspace-tab-add"),
+    pagePills: document.getElementById("page-pills"),
     platformPanel: document.getElementById("platform-panel"),
     platformSelectorBtn: document.getElementById("platform-selector-btn"),
     platformCount: document.getElementById("platform-count"),
@@ -662,7 +662,7 @@ export function setupEventListeners() {
   });
 
   // 阻止右键默认菜单（仅在工作区标签区域）
-  elements.workspaceTabs?.addEventListener("contextmenu", (e) => {
+  elements.pagePills?.addEventListener("contextmenu", (e) => {
     const tabEl = e.target.closest(".workspace-tab");
     if (tabEl) {
       e.preventDefault();
@@ -781,15 +781,25 @@ function renderPlatformPills() {
   }
 
   if (activePlatforms.length === 0) {
-    elements.platformPills.innerHTML = '';
     return;
   }
 
-  elements.platformPills.innerHTML = '';
+  // 追加模式：避免覆盖 page-pills / 添加按钮这些非平台子元素
+  // 找到 + 按钮位置，插入到它前面
+  const addBtn = elements.platformPills.querySelector('.page-tab-add');
   activePlatforms.forEach(platformId => {
     const config = PLATFORM_CONFIG[platformId];
     if (!config) return;
     const name = config.shortName || config.name || platformId;
+
+    // 避免重复插入
+    const existing = elements.platformPills.querySelector(`.platform-pill[data-platform="${platformId}"]`);
+    if (existing) {
+      if (addBtn && existing.nextSibling !== addBtn) {
+        elements.platformPills.insertBefore(existing, addBtn);
+      }
+      return;
+    }
 
     const pill = document.createElement('button');
     pill.className = 'platform-pill';
@@ -808,7 +818,18 @@ function renderPlatformPills() {
       switchToPlatformTab(platformId);
     });
 
-    elements.platformPills.appendChild(pill);
+    if (addBtn) {
+      elements.platformPills.insertBefore(pill, addBtn);
+    } else {
+      elements.platformPills.appendChild(pill);
+    }
+  });
+
+  // 清理掉不再勾选的平台 pill
+  elements.platformPills.querySelectorAll('.platform-pill').forEach(p => {
+    if (!activePlatforms.includes(p.dataset.platform)) {
+      p.remove();
+    }
   });
 }
 
@@ -2034,26 +2055,27 @@ async function saveWorkspaceTabs() {
 }
 
 function renderWorkspaceTabs() {
-  if (!elements.workspaceTabs) return;
+  if (!elements.pagePills) return;
 
-  elements.workspaceTabs.innerHTML = "";
+  elements.pagePills.innerHTML = "";
 
   workspaceTabs.forEach((tab, i) => {
     const el = document.createElement("button");
     el.className = "workspace-tab";
     el.dataset.index = i;
+    el.title = `切换到：${tab.title || "新标签页"}`;
 
     const favicon = tab.favIconUrl
       ? `<img class="workspace-tab-favicon" src="${escapeHtml(tab.favIconUrl)}" onerror="this.style.display='none'">`
-      : `<span class="workspace-tab-favicon" style="background:#e5e7eb;border-radius:2px;"></span>`;
+      : `<span class="workspace-tab-favicon workspace-tab-favicon--placeholder"></span>`;
 
     const title = tab.title || "新标签页";
-    const maxTitle = title.length > 20 ? title.slice(0, 20) + "…" : title;
+    const maxTitle = title.length > 14 ? title.slice(0, 14) + "…" : title;
 
     el.innerHTML = `
       ${favicon}
       <span class="workspace-tab-title">${escapeHtml(maxTitle)}</span>
-      <span class="workspace-tab-close" data-index="${i}">×</span>
+      <span class="workspace-tab-close" data-index="${i}" title="从工作区移除">×</span>
     `;
 
     el.addEventListener("click", (e) => {
@@ -2063,10 +2085,11 @@ function renderWorkspaceTabs() {
 
     el.querySelector(".workspace-tab-close").addEventListener("click", (e) => {
       e.stopPropagation();
+      // 仅从工作区移除（保留浏览器标签）
       removeWorkspaceTab(i);
     });
 
-    elements.workspaceTabs.appendChild(el);
+    elements.pagePills.appendChild(el);
   });
 }
 
