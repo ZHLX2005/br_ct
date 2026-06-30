@@ -1,3 +1,13 @@
+/**
+ * @fileoverview DOM输入解析复制工具
+ *
+ * @scenario    需要从HTML/文本中识别内容并复制
+ * @feature     解析输入框内容并复制到剪贴板，带状态提示
+ * @effect      注入解析输入框DOM，复制解析结果到剪贴板
+ * @category    DOM创建
+ * @platform    通用
+ * @entry       main()
+ */
 
 // 创建一个dom 输入html 识别对应的内容
 

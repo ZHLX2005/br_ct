@@ -1,3 +1,14 @@
+/**
+ * @fileoverview 开发者色彩搭配工具
+ *
+ * @scenario    开发者需要快速对比/挑选/导出配色方案
+ * @feature     注入可拖动浮动面板，添加/复制/导入导出调色板
+ * @effect      在页面中创建浮动调色板面板DOM，支持 HEX/RGB 切换
+ * @category    DOM创建
+ * @platform    通用
+ * @entry       main()
+ */
+
 /*
  * 🎨 开发者色彩搭配工具 - 控制台脚本版本 (多格式输入支持版)
  *

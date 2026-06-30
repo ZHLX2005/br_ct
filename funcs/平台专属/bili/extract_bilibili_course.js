@@ -1,4 +1,15 @@
 /**
+ * @fileoverview B站课程合集分P链接提取
+ *
+ * @scenario    B站课程/合集播放页右侧"视频选集"使用
+ * @feature     提取合集所有分P生成完整URL列表
+ * @effect      返回 {results, summary} 含URL与标题信息
+ * @category    平台专属
+ * @platform    bilibili
+ * @entry       main()
+ */
+
+/**
  * Bilibili 课程合集视频链接提取
  * 目标页面：B站课程/合集播放页右侧的 "视频选集" 区域
  * 定位方式：div.video-pod__body

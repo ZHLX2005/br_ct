@@ -1,4 +1,15 @@
 /**
+ * @fileoverview Video操作工具模块
+ *
+ * @scenario    控制台脚本中需要统一管理页面video元素
+ * @feature     提供video查找/选择/控制/监听的纯逻辑操作
+ * @effect      不直接操作DOM，作为类被其他模块引用以管理视频元素
+ * @category    视频处理
+ * @platform    通用
+ * @entry       VideoOperator
+ */
+
+/**
  * Video 操作工具模块
  * 提供视频元素的查找、控制、监听等核心功能
  * 从 videoPlane.js 中提取的纯 video 操作逻辑

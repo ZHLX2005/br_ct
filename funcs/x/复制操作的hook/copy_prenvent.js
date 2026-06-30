@@ -1,3 +1,14 @@
+/**
+ * @fileoverview 剪贴板写入 Hook + 模拟复制点击
+ *
+ * @scenario    在 DevTools Console 手动执行，调试 ChatGPT 等站点复制按钮行为
+ * @feature     Hook navigator.clipboard.writeText/write、copy 事件、模拟按钮点击
+ * @effect      拦截所有写入剪贴板的内容，提供 simulateCopy()/getCapturedText() 全局函数
+ * @category    行为Hook
+ * @platform    通用
+ * @entry       IIFE 自动执行
+ */
+
 (function() {
     'use strict';
 

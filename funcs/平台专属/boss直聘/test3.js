@@ -1,3 +1,13 @@
+/**
+ * @fileoverview Boss直聘随机延迟打招呼测试
+ *
+ * @scenario    Boss直聘职位详情页测试用
+ * @feature     随机延迟点击主按钮+取消弹窗
+ * @effect      模拟真人节奏批量打招呼
+ * @category    自动化点击
+ * @platform    boss直聘
+ * @entry       自动执行
+ */
 (async function() {
     // ===================================
     // 1. 配置参数

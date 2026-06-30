@@ -2,6 +2,17 @@
  * 实时资源选择器 + 选择器确认功能
  * 基于 div_Img_wrapper.js，添加确认选择器按钮
  */
+
+/**
+ * @fileoverview 页面元素拾取与确认
+ *
+ * @scenario    用户启动 BindDom 选择器时
+ * @feature     提供悬浮高亮 overlay、tooltip 实时选中页面元素
+ * @effect      创建遮罩/提示/容器 DOM 元素，高亮鼠标悬停的元素
+ * @category    工具辅助
+ * @platform    通用
+ * @entry       ResourcePicker 构造函数自动执行
+ */
 console.log('[BindDom] 脚本开始加载');
 
 // 防止重复加载

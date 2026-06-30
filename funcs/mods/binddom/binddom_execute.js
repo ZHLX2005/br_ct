@@ -3,6 +3,17 @@
  * 由 background 命令触发
  */
 
+/**
+ * @fileoverview 注入页面执行选择器点击
+ *
+ * @scenario    由 background 派发 binddom.doClick 消息时触发
+ * @feature     按 CSS 选择器定位目标元素并模拟点击
+ * @effect      在页面注入 highlight 样式高亮被点元素，返回点击结果
+ * @category    自动化点击
+ * @platform    通用
+ * @entry       (function IIFE)
+ */
+
 (function() {
   console.log('[BindDom] 执行脚本已注入');
 

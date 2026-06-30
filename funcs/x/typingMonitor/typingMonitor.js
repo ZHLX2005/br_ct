@@ -1,3 +1,14 @@
+/**
+ * @fileoverview 输入框打字监听器，停止后自动复制
+ *
+ * @scenario    任何网页加载后激活，用于自动捕获用户输入
+ * @feature     监听 keydown/input 事件，倒计时结束后复制输入框内容
+ * @effect      页面右上角出现圆环倒计时 UI，停止后自动写入剪贴板并弹通知
+ * @category    行为Hook
+ * @platform    通用
+ * @entry       自动执行
+ */
+
 console.log("typingMonitor.js loaded");
 
 let typingTimer = null;

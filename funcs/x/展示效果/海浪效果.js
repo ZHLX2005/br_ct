@@ -1,3 +1,14 @@
+/**
+ * @fileoverview 页面底部动态海浪效果
+ *
+ * @scenario    在 DevTools Console 手动执行，为任意网页底部添加装饰性动画
+ * @feature     Canvas 多层 Perlin 噪声 + 正弦波叠加绘制蓝色海浪
+ * @effect      在页面底部固定位置生成 25vh 高的 canvas 动画海浪
+ * @category    视觉展示
+ * @platform    通用
+ * @entry       IIFE 自动执行
+ */
+
 (() => {
   // 清除旧的波浪层
   const old = document.getElementById("realistic-waves");

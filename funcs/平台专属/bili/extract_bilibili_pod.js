@@ -1,4 +1,15 @@
 /**
+ * @fileoverview B站视频Pod列表分P提取
+ *
+ * @scenario    B站课程/合集播放页右侧视频列表使用
+ * @feature     提取每个分项下的多个分P生成URL列表
+ * @effect      返回 {results, summary} 含分项BV号与分P链接
+ * @category    平台专属
+ * @platform    bilibili
+ * @entry       main()
+ */
+
+/**
  * Bilibili 合集/课程分P链接提取脚本（Pod List 版）
  * 目标页面：B站课程/合集播放页右侧的 "视频列表" 区域
  * 定位方式：div.video-pod__body

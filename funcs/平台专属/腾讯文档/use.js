@@ -1,3 +1,13 @@
+/**
+ * @fileoverview 腾讯文档批量爬取单元格内容
+ *
+ * @scenario    腾讯文档在线表格批量读取使用
+ * @feature     输入左上角+右下角坐标批量抓取单元格
+ * @effect      按区域循环读取单元格值并返回结果数组
+ * @category    平台专属
+ * @platform    腾讯文档
+ * @entry       batchFetch()
+ */
 function input(value) {
     const inputElement = document.querySelector("#mainContainer > div.formula-bar > input");
     if (inputElement) {

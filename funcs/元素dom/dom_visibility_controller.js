@@ -1,4 +1,15 @@
 /**
+ * @fileoverview DOM可见性控制器
+ *
+ * @scenario    信息流页面干扰元素太多，需要屏蔽指定元素
+ * @feature     选取DOM元素并控制其显隐，支持配置导入导出
+ * @effect      修改目标元素的display/visibility样式，控制其显隐
+ * @category    视觉展示
+ * @platform    通用
+ * @entry       自动执行
+ */
+
+/**
  * DOM 可见性控制器 (DOM Visibility Controller) 类。
  * 用于选择 DOM 元素并控制其可见性，帮助屏蔽过多的信息流。
  * 支持隐藏模式、正常浏览模式，以及配置的导入和导出功能。

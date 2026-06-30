@@ -1,3 +1,13 @@
+/**
+ * @fileoverview Boss直聘自动打招呼
+ *
+ * @scenario    Boss直聘推荐职位列表页使用
+ * @feature     自动遍历列表项+点击聊天按钮+取消弹窗
+ * @effect      模拟点击操作执行批量打招呼
+ * @category    自动化点击
+ * @platform    boss直聘
+ * @entry       自动执行
+ */
 (async function() {
     // ===================================
     // 1. 配置参数

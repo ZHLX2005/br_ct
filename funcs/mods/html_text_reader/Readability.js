@@ -20,6 +20,17 @@
  */
 
 /**
+ * @fileoverview Mozilla Readability 解析器封装
+ *
+ * @scenario    文章正文提取、正文净化处理时调用
+ * @feature     基于启发式评分提取 article title/byline/textContent
+ * @effect      构造 Readability(doc) 实例并调用 .parse() 返回 article 对象
+ * @category    数据提取
+ * @platform    通用
+ * @entry       无入口（被 pageTextExtractor.js 引用）
+ */
+
+/**
  * Public constructor.
  * @param {HTMLDocument} doc     The document to parse.
  * @param {Object}       options The options object.

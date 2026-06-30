@@ -1,3 +1,13 @@
+/**
+ * @fileoverview 提取页面表单数据
+ *
+ * @scenario    需要快速导出页面上所有表单的有效数据
+ * @feature     扫描input/select/textarea，提取非空值输出到控制台
+ * @effect      在控制台输出所有非空表单数据
+ * @category    数据提取
+ * @platform    通用
+ * @entry       main()
+ */
 
 // 获得表单数据 
 function main(){

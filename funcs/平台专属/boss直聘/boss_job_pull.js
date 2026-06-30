@@ -1,4 +1,15 @@
 /**
+ * @fileoverview Boss直聘页面自动滚动加载
+ *
+ * @scenario    Boss直聘长列表页触发懒加载
+ * @feature     分步滚动到底部并等待3秒后停止
+ * @effect      触发页面动态内容加载直至滚到底部
+ * @category    自动化点击
+ * @platform    boss直聘
+ * @entry       scrollToBottomAndWait()
+ */
+
+/**
  * 滚动到页面底部（支持动态加载内容），并停留3秒后停止
  * @param {number} step - 每次滚动的步长（像素）
  * @param {number} interval - 每次滚动的间隔时间（毫秒），用于等待动态内容加载

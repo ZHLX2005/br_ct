@@ -1,4 +1,15 @@
 /**
+ * @fileoverview DOM 元素计数器
+ *
+ * @scenario    想知道页面上某类元素一共有多少个（按钮、广告位、列表项等）
+ * @feature     悬浮选取 DOM 自动生成 CSS 选择器，统计匹配数量，实时更新
+ * @effect      注入一个悬浮计数器面板，显示当前选择器命中的元素数；多个选择器并列展示
+ * @category    DOM创建
+ * @platform    通用
+ * @entry       window.DOMCounter
+ */
+
+/**
  * DOM 计数器 (Counter) 类。
  * 输入 CSS 选择器统计匹配数，支持悬浮选取 DOM 生成选择器，追踪并列结构稳定性。
  */

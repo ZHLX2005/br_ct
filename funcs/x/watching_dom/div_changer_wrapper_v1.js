@@ -1,3 +1,14 @@
+/**
+ * @fileoverview DOM 变化可视化监听器
+ *
+ * @scenario    在 DevTools Console 手动执行，对任意目标 DOM 节点进行实时观察
+ * @feature     悬浮面板+MutationObserver 捕获属性/新增/移除/文本变更
+ * @effect      注入悬浮监听面板，实时显示目标元素的 DOM 结构和变化日志
+ * @category    DOM创建
+ * @platform    通用
+ * @entry       IIFE 自动执行
+ */
+
 (function () {
   if (document.getElementById("ai-dom-visualizer-root")) {
     alert("监听面板已存在！");

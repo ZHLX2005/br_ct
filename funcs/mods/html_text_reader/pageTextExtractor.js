@@ -1,3 +1,14 @@
+/**
+ * @fileoverview Readability 阅读模式文本提取器
+ *
+ * @scenario    启用页面阅读模式或提取正文时
+ * @feature     基于 Mozilla Readability 解析 Document 抽取正文
+ * @effect      返回标题、摘要、纯文本内容，不修改页面 DOM
+ * @category    数据提取
+ * @platform    通用
+ * @entry       main()
+ */
+
 // pageTextExtractor.js - 使用 Mozilla Readability 提取页面纯文本
 // 依赖: Readability.js (需先注入)
 

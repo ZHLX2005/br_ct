@@ -1,3 +1,14 @@
+/**
+ * @fileoverview 保留#messages-container全屏展示
+ *
+ * @scenario    需要让聊天容器独占全屏、移除其它干扰元素
+ * @feature     清空body并保留#messages-container占满100vh
+ * @effect      移除body所有子节点后重新挂载#messages-container并全屏展示
+ * @category    视觉展示
+ * @platform    通用
+ * @entry       自动执行
+ */
+
 (function() {
     var keep = document.querySelector('#messages-container');                                                                                                             
     document.body.innerHTML = '';

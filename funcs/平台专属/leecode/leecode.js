@@ -1,3 +1,13 @@
+/**
+ * @fileoverview LeetCode题目标题提取
+ *
+ * @scenario    LeetCode题库列表页使用
+ * @feature     双层XPath遍历抓取所有题目标题
+ * @effect      输出Markdown并自动复制到剪贴板
+ * @category    平台专属
+ * @platform    leecode
+ * @entry       main()
+ */
 // funcs/example_func2.js
 
 function main() {

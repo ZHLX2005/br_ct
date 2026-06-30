@@ -1,3 +1,13 @@
+/**
+ * @fileoverview B站项目列表转Markdown输出
+ *
+ * @scenario    在 B站用户主页项目列表页使用
+ * @feature     遍历XPath抓取项目并生成Markdown
+ * @effect      输出到控制台并自动复制到剪贴板
+ * @category    平台专属
+ * @platform    bilibili
+ * @entry       自动执行
+ */
 // 获取所有匹配的节点
 const items = [];
 for (let i = 1; ; i++) {

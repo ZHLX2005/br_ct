@@ -1,4 +1,15 @@
 /**
+ * @fileoverview 输入框双向绑定工具
+ *
+ * @scenario    想给任意网页的输入框套一个外置"遥控输入面板"，两端实时同步
+ * @feature     悬浮选取 DOM → 创建伴生输入框 → 与原元素双向绑定
+ * @effect      注入一个可拖拽的悬浮输入框；改动原元素或悬浮框任一侧，另一侧实时同步
+ * @category    DOM创建
+ * @platform    通用
+ * @entry       new InputBindingPicker()
+ */
+
+/**
  * 输入框双向绑定工具
  * 功能：
  * 1. 通过框选智能发现可输入的第一个DOM元素

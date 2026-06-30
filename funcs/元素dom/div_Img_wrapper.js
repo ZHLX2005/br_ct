@@ -1,4 +1,15 @@
 /**
+ * @fileoverview 实时资源嗅探选择器
+ *
+ * @scenario    调试时需要嗅探页面上元素对应的图片/链接等资源
+ * @feature     悬浮高亮元素，嗅探并展示关联的图片/链接等资源
+ * @effect      注入悬浮面板DOM，展示选中元素的资源嗅探结果
+ * @category    DOM创建
+ * @platform    通用
+ * @entry       自动执行
+ */
+
+/**
  * 实时资源选择器 (Resource Picker) 类。
  * 将所有 UI 元素、状态和事件处理逻辑封装在一起，提高可维护性。
  */

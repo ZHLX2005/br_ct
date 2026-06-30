@@ -1,5 +1,17 @@
 
 
+/**
+ * @fileoverview 腾讯文档单元格输入与读取
+ *
+ * @scenario    腾讯文档在线表格页面使用
+ * @feature     通过公式栏输入单元格地址并读取内容
+ * @effect      调用input写入单元格getRe读取值
+ * @category    平台专属
+ * @platform    腾讯文档
+ * @entry       自动执行
+ */
+
+
 function input(value){
 const inputElement = document.querySelector("#mainContainer > div.formula-bar > input");
 

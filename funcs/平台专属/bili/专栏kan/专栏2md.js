@@ -1,3 +1,13 @@
+/**
+ * @fileoverview B站专栏列表提取并转Markdown
+ *
+ * @scenario    B站个人空间专栏合集页使用
+ * @feature     XPath遍历抓取专栏标题与链接生成Markdown
+ * @effect      输出Markdown到控制台并自动复制到剪贴板
+ * @category    平台专属
+ * @platform    bilibili
+ * @entry       自动执行
+ */
 // 获取父容器节点
 const parentXPath = "/html/body/div[2]/div[2]/div[2]/div/div[5]/div[1]/div[2]/div";
 const parentNode = document.evaluate(

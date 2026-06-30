@@ -1,3 +1,14 @@
+/**
+ * @fileoverview 剪贴板内容保存为文件
+ *
+ * @scenario    看到一段文本想立即存下来当文件，而不是先粘到编辑器再另存为
+ * @feature     读取系统剪贴板内容，弹出保存对话框让用户下载为文件
+ * @effect      触发浏览器下载，文件名由用户或自动推断，文件落盘到本地
+ * @category    数据提取
+ * @platform    通用
+ * @entry       main()
+ */
+
 // 保存剪切板为文件 然后下载 
 
 function main() {

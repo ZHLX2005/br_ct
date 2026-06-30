@@ -1,3 +1,13 @@
+/**
+ * @fileoverview Boss直聘主按钮点击测试
+ *
+ * @scenario    Boss直聘职位详情页测试用
+ * @feature     尝试用CSS/XPath双选择器点击主操作按钮
+ * @effect      模拟点击"立即沟通"按钮
+ * @category    自动化点击
+ * @platform    boss直聘
+ * @entry       自动执行
+ */
 (async function() {
     // --- 实用工具函数 ---
 

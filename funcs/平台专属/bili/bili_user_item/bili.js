@@ -24,6 +24,16 @@ for (let i = 1; ; i++) {
 console.log('发现项目:', items.length);
 
 
+/**
+ * @fileoverview B站个人空间项目DOM展示
+ *
+ * @scenario    在 B站个人空间项目页面使用
+ * @feature     遍历XPath收集项目链接并渲染DOM列表
+ * @effect      在页面顶部插入有序列表DOM元素
+ * @category    DOM创建
+ * @platform    bilibili
+ * @entry       自动执行
+ */
 // 构建有序列表  使用js在浏览器创建dom
 const ol = document.createElement('ol');
 ol.style.fontFamily = 'system-ui, sans-serif';

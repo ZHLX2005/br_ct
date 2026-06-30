@@ -1,3 +1,14 @@
+/**
+ * @fileoverview 视频定间隔抽帧打包下载
+ *
+ * @scenario    需要把长视频按固定间隔抽帧保存为图片集
+ * @feature     定时跳转视频currentTime，截取canvas帧，打包为ZIP下载
+ * @effect      触发浏览器下载，生成包含视频帧图片的ZIP压缩包
+ * @category    视频处理
+ * @platform    通用
+ * @entry       自动执行
+ */
+
 // 按照间隔获得视频帧  然后进行下载 
 
 (async () => {

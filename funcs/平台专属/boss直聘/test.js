@@ -1,3 +1,13 @@
+/**
+ * @fileoverview Boss直聘列表逐项点击测试
+ *
+ * @scenario    Boss直聘职位列表页测试用
+ * @feature     按固定延迟依次点击列表中所有职位项
+ * @effect      模拟点击列表项切换右侧详情
+ * @category    自动化点击
+ * @platform    boss直聘
+ * @entry       自动执行
+ */
 (function() {
     // 1. 定义核心选择器
     const CONTAINER_SELECTOR = "#wrap > div.page-jobs-main > div.job-recommend-result > div > div > div.job-list-container";

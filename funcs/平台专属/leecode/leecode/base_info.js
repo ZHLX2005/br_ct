@@ -1,3 +1,13 @@
+/**
+ * @fileoverview LeetCode页面XPath调试脚本
+ *
+ * @scenario    LeetCode页面调试XPath定位
+ * @feature     解析固定XPath获取元素并打印
+ * @effect      控制台输出目标DOM供调试
+ * @category    工具辅助
+ * @platform    leecode
+ * @entry       自动执行
+ */
 var xpath = "/html/body/div[1]/div[1]/div[6]/div/div/div/div[2]/div/div[1]/div/div[2]/div[17]/div[2]";
 var result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
 var element = result.singleNodeValue;

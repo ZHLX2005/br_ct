@@ -1,3 +1,14 @@
+/**
+ * @fileoverview DOM元素变化监听面板
+ *
+ * @scenario    调试时需要监控页面元素的 DOM 变化
+ * @feature     悬浮面板，监听并展示目标元素的 DOM 变化日志
+ * @effect      在页面注入悬浮监听面板DOM，记录DOM变更
+ * @category    DOM创建
+ * @platform    通用
+ * @entry       自动执行
+ */
+
 // dev - 元素相关的监听 
 
 (function () {

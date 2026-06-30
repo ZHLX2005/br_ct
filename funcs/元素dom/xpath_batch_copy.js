@@ -1,4 +1,15 @@
 /**
+ * @fileoverview XPath批量复制工具
+ *
+ * @scenario    需要批量复制同一层级兄弟元素的文字内容
+ * @feature     悬浮识别XPath，高亮并列兄弟元素，点击批量复制文本
+ * @effect      注入悬浮面板DOM，高亮兄弟元素并复制其文本到剪贴板
+ * @category    DOM创建
+ * @platform    通用
+ * @entry       main()
+ */
+
+/**
  * XPath 批量复制工具
  *
  * 功能说明：

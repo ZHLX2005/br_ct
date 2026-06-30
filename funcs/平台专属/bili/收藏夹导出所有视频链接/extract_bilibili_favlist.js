@@ -1,4 +1,15 @@
 /**
+ * @fileoverview B站收藏夹视频链接批量导出
+ *
+ * @scenario    B站收藏夹/UP主空间投稿页/合集页使用
+ * @feature     滚动加载+翻页收集所有BV号视频链接
+ * @effect      输出视频链接集合到控制台
+ * @category    平台专属
+ * @platform    bilibili
+ * @entry       main()
+ */
+
+/**
  * Bilibili 视频链接提取脚本（通用版）
  * 支持：收藏夹 / UP主空间投稿页 / 合集页
  * 使用方法：在目标页面打开浏览器控制台(F12)，粘贴此脚本并回车执行

@@ -1,3 +1,14 @@
+/**
+ * @fileoverview 蒙版选区复制工具
+ *
+ * @scenario    需要从页面蒙版选区中复制文本
+ * @feature     蒙版高亮选中区域，复制对应文本到剪贴板
+ * @effect      注入蒙版高亮DOM，复制选中区域文本到剪贴板
+ * @category    DOM创建
+ * @platform    通用
+ * @entry       main()
+ */
+
 // 蒙版+复制 
 
 function main() {

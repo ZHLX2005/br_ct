@@ -1,3 +1,14 @@
+/**
+ * @fileoverview 多行文本转 \n 转义字符串
+ *
+ * @scenario    在控制台调试时，需要把一段多行 JSON/代码贴进单行字符串里
+ * @feature     prompt 弹窗接收多行文本 → 把换行替换成 \n → 输出到 console 并复制到剪贴板
+ * @effect      console 输出转义后的单行字符串，剪贴板里也是这份转义结果
+ * @category    文本处理
+ * @platform    通用
+ * @entry       main()
+ */
+
 
 function main() {
   // 提示用户输入多行文本
