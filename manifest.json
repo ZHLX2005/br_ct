@@ -47,6 +47,10 @@
     "type": "module"
   },
   "commands": {
+    "toggle_sidebar": {
+      "suggested_key": { "default": "Alt+S" },
+      "description": "打开/关闭 AI 助手边栏"
+    },
     "execute_div_copy": {
       "suggested_key": { "default": "Alt+C" },
       "description": "执行 div Copy 脚本"
@@ -55,10 +59,7 @@
       "suggested_key": { "default": "Alt+D" },
       "description": "执行 div Copy 脚本"
     },
-    "copy_file": {
-      "suggested_key": { "default": "Alt+F" },
-      "description": "获得剪切板内容保存为文件"
-    },
+
     "binddom_execute": {
       "suggested_key": { "default": "Alt+B" },
       "description": "执行 BindDom 绑定点击"

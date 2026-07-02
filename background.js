@@ -12,6 +12,7 @@ import { initBackupService, setupBackupMessageListener } from './backgroudtask/b
 import { setupTranslationModule } from './backgroudtask/translation/index.js';
 import { setupBinddomCommandListener, setupBinddomMessageListener } from './backgroudtask/binddom/index.js';
 import { setupHtmlTextReaderListener } from './backgroudtask/html_text_reader/index.js';
+import { setupSidebarCommandListener } from './backgroudtask/sidebar_toggle.js';
 
 // 初始化标签页更新监听器
 setupTabUpdateListener();
@@ -49,6 +50,10 @@ console.log('[Background] BindDom 模块初始化完成');
 // 初始化页面文本提取模块
 setupHtmlTextReaderListener();
 console.log('[Background] HtmlTextReader 模块初始化完成');
+
+// 初始化边栏快捷键监听
+setupSidebarCommandListener();
+console.log('[Background] SidebarToggle 模块初始化完成');
 
 // 初始化划词快捷提问配置 (已移至 translation/index.js)
 // import { initSelectionAskConfig } from './backgroudtask/translation/selectionAskConfig.js';
