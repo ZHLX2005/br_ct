@@ -104,6 +104,9 @@ function main() {
  * @category    <从下列9个选一个>
  * @platform    <通用 / bilibili / boss直聘 / chatgpt / leecode / 腾讯文档 / yuanbao（腾讯元宝）>
  * @entry       <main() / new ClassName() / 自动执行 / 模块导出>
+ *
+ * @test_url    <模式1名称>：<完整URL>   ← 可选，多行
+ * @test_url    <模式2名称>：<完整URL>
  */
 ```
 
@@ -120,6 +123,21 @@ function main() {
 | `视频处理` | 视频帧捕获、播放控制、片段剪辑 |
 | `平台专属` | 仅当脚本同时是平台专用 + 跨类别（如 B站提取）时使用 |
 | `工具辅助` | 通用辅助，不创建 DOM、不抓数据、不点击 |
+
+**可选标签 `@test_url`（推荐平台专属脚本使用）：**
+
+平台专属脚本最容易因页面改版失效，**强烈建议**头部标注 1~N 个真实测试 URL，注明对应模式，方便后续回归测试。
+
+格式：
+```
+@test_url    <模式名>：<完整URL>
+```
+
+- **模式名**：简短描述该 URL 触发的代码分支，如"多层课程（pod 模式）"、"单层合集（flat 模式）"
+- **URL**：含 query string 的完整链接（`?spm_id_from=...` 等也保留），方便定位具体入口
+- **多模式时多行**：每行一个 `@test_url`，谁看到这个脚本都能立刻找到验证素材
+
+> 💡 真实案例：`funcs/平台专属/bili/extract_bilibili_pod.js` 头部带 2 个 `@test_url`，分别覆盖 pod/flat 两种分支。
 
 #### 2.3 模块隔离（不能用 import/export）
 
@@ -244,6 +262,7 @@ function main() {
 - [ ] `file` 字段路径相对于 `funcs/` 且与实际文件位置一致
 - [ ] 脚本在目标页面上已通过 popup 手动测试执行成功
 - [ ] （仅当用户要求快捷键）`manifest.json` 的 `commands` 和 `func_executor.js` 的 `setupFuncCommandListener` 两边 ID 一致
+- [ ] （平台专属脚本强烈推荐）头部带至少 1 个 `@test_url`，覆盖每种代码分支
 
 ## 加头标注（仅修改注释的批量任务）
 
