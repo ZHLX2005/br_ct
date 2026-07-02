@@ -62,6 +62,8 @@ func main() {
 	registry.Register("gitBatchPull", gitmon.GitBatchPull)
 	registry.Register("gitBatchPush", gitmon.GitBatchPush)
 	registry.Register("gitAutoCommitAndPush", gitmon.GitAutoCommitAndPush)
+	registry.Register("gitDiscard", gitmon.GitDiscard)
+	registry.Register("gitClean", gitmon.GitClean)
 
 	// 环境变量管理
 	registry.Register("saveEnvSnapshot", envvars.SaveSnapshot)

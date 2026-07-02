@@ -36,7 +36,13 @@ async function loadGitDirList() {
           <button class="btn btn-warning" data-action="git-add-commit-pull" data-id="${d.id}">推送</button>
           <button class="btn btn-success" data-action="git-pull" data-id="${d.id}">Pull</button>
           <button class="btn btn-primary" data-action="git-push" data-id="${d.id}">Push</button>
-          <button class="btn btn-danger" data-action="git-delete" data-id="${d.id}">移除</button>
+          <div class="git-more-actions" style="position:relative;display:inline-block;">
+            <button class="btn btn-secondary" data-action="git-more-toggle" data-id="${d.id}">+</button>
+            <div class="git-more-dropdown" id="git-more-${d.id}" style="display:none;position:absolute;right:0;top:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:100;min-width:120px;">
+              <button class="btn btn-warning git-confirm-btn" data-action="git-discard" data-id="${d.id}" data-confirm="false" style="width:100%;border-radius:0 0 6px 6px;border:none;padding:8px 12px;">丢弃</button>
+              <button class="btn btn-danger" style="width:100%;border-radius:0 0 6px 6px;border:none;padding:8px 12px;margin-top:4px;" data-action="git-delete" data-id="${d.id}">移除</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -285,6 +291,92 @@ async function batchPush() {
   } catch (err) {
     toast('批量 Push 失败: ' + err.message, 'error');
   }
+}
+
+// 切换更多操作下拉菜单
+function toggleGitMoreDropdown(btn) {
+  const id = btn.dataset.id;
+  const dropdown = document.getElementById('git-more-' + id);
+  if (!dropdown) return;
+
+  // 关闭其他所有下拉
+  document.querySelectorAll('.git-more-dropdown').forEach(d => {
+    if (d !== dropdown) d.style.display = 'none';
+  });
+
+  dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+}
+
+// 点击其他地方关闭下拉
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.git-more-actions')) {
+    document.querySelectorAll('.git-more-dropdown').forEach(d => {
+      d.style.display = 'none';
+    });
+  }
+});
+
+// 丢弃暂存区的更改和未跟踪文件（双重点击确认）
+async function gitDiscardStaged(id) {
+  const btn = document.querySelector(`[data-action="git-discard"][data-id="${id}"]`);
+  if (!btn) return;
+
+  const isConfirmed = btn.dataset.confirm === 'true';
+
+  if (!isConfirmed) {
+    // 第一次点击：切换为确认状态
+    btn.dataset.confirm = 'true';
+    btn.textContent = '确认?';
+    btn.classList.remove('btn-warning');
+    btn.classList.add('btn-danger');
+
+    // 3秒后自动恢复
+    setTimeout(() => {
+      if (btn.dataset.confirm === 'true') {
+        btn.dataset.confirm = 'false';
+        btn.textContent = '丢弃';
+        btn.classList.remove('btn-danger');
+        btn.classList.add('btn-warning');
+      }
+    }, 3000);
+    return;
+  }
+
+  // 第二次点击：执行丢弃操作
+  btn.dataset.confirm = 'false';
+  btn.textContent = '丢弃';
+  btn.classList.remove('btn-danger');
+  btn.classList.add('btn-warning');
+
+  const dirs = await loadStorage(STORAGE_KEYS.gitMonitoredDirs);
+  const dir = dirs.find(d => d.id === id);
+  if (!dir) return;
+
+  try {
+    // 执行 git reset HEAD 丢弃暂存
+    const resetResp = await sendNativeMessage({ command: 'gitDiscard', path: dir.path });
+    const resetResult = resetResp.data;
+
+    // 执行 git clean -fd 丢弃未跟踪文件
+    const cleanResp = await sendNativeMessage({ command: 'gitClean', path: dir.path });
+    const cleanResult = cleanResp.data;
+
+    const resetOk = resetResult.success;
+    const cleanOk = cleanResult.success;
+    const messages = [];
+    if (resetOk) messages.push('暂存已丢弃');
+    if (cleanOk) messages.push('未跟踪已删除');
+
+    toast(messages.length > 0 ? messages.join('\n') : '没有需要丢弃的内容', 'success');
+    gitRefreshDir(id);
+  } catch (err) {
+    toast('丢弃失败: ' + err.message, 'error');
+  }
+}
+
+// 丢弃未跟踪文件（已废弃，由 gitDiscardStaged 统一处理）
+async function gitCleanUntracked(id) {
+  // 此函数保留但不再使用
 }
 
 // ========== Git 自动刷新 ==========

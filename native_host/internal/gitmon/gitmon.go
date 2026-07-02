@@ -276,6 +276,65 @@ func GitAutoCommitAndPush(req protocol.Request) protocol.Response {
 	return protocol.Response{Status: "ok", Data: result}
 }
 
+// GitClean 清理未跟踪文件和目录 (git clean -fd)
+func GitClean(req protocol.Request) protocol.Response {
+	dir := req.Path
+	result := GitOperationResult{Dir: dir}
+
+	// 先检查是否有未跟踪文件
+	statusOut, _ := runGit(dir, "status", "--porcelain", "-uall")
+	if strings.TrimSpace(statusOut) == "" {
+		result.Output = "没有需要清理的文件"
+		result.Success = true
+		return protocol.Response{Status: "ok", Data: result}
+	}
+
+	// 执行 git clean -fd 清理未跟踪文件和目录
+	out, err := runGitCombined(dir, "clean", "-fd")
+	result.Output = out
+	if err != nil {
+		result.Error = err.Error()
+	} else {
+		result.Success = true
+	}
+	return protocol.Response{Status: "ok", Data: result}
+}
+
+// GitDiscard 丢弃所有暂存区的更改 (git reset HEAD)
+func GitDiscard(req protocol.Request) protocol.Response {
+	dir := req.Path
+	result := GitOperationResult{Dir: dir}
+
+	// 检查是否有暂存的内容
+	statusOut, _ := runGit(dir, "status", "--porcelain", "-uall")
+	hasStaged := false
+	for _, line := range strings.Split(statusOut, "\n") {
+		if len(line) >= 4 {
+			x := line[0]
+			if x != ' ' && x != '?' {
+				hasStaged = true
+				break
+			}
+		}
+	}
+
+	if !hasStaged {
+		result.Output = "暂存区没有需要丢弃的更改"
+		result.Success = true
+		return protocol.Response{Status: "ok", Data: result}
+	}
+
+	// 执行 git reset HEAD 丢弃所有暂存区的更改
+	out, err := runGitCombined(dir, "reset", "HEAD")
+	result.Output = out
+	if err != nil {
+		result.Error = err.Error()
+	} else {
+		result.Success = true
+	}
+	return protocol.Response{Status: "ok", Data: result}
+}
+
 func gitStatusForDir(dir string) GitStatusInfo {
 	info := GitStatusInfo{Dir: dir}
 
