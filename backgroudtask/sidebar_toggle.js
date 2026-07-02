@@ -42,14 +42,11 @@ async function openSidebar(tabId) {
   }
 }
 
-// 关闭边栏 - 使用 setOptions 切换到空白页
+// 关闭边栏 - 使用 close() 方法真正关闭
 async function closeSidebar(tabId) {
   try {
     console.log('[SidebarToggle] 关闭边栏，tab:', tabId);
-    await chrome.sidePanel.setOptions({
-      tabId,
-      path: CLOSED_PATH
-    });
+    await chrome.sidePanel.close({ tabId });
     sidebarOpenTabs.delete(tabId);
     await saveState();
     console.log('[SidebarToggle] 关闭成功');
