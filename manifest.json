@@ -85,11 +85,6 @@
         "runjs/translation/lib/katex.min.css"
       ],
       "run_at": "document_idle"
-    },
-    {
-      "matches": ["https://www.bilibili.com/video/*"],
-      "js": ["runjs/bilibiliCleaner/bilibiliCleaner.js"],
-      "run_at": "document_end"
     }
   ],
   "web_accessible_resources": [

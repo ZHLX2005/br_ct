@@ -400,8 +400,6 @@ bro_chat/
 │   │   └── goto.js
 │   ├── tripleSpace/                # 三击激活
 │   │   └── tripleSpace.js
-│   ├── word/                       # Word 集成
-│   │   └── word.js
 │   ├── translation/                # 翻译覆盖层
 │   │   ├── content.js             # 翻译主脚本
 │   │   ├── content-ocr.js         # OCR 脚本
@@ -409,7 +407,6 @@ bro_chat/
 │   │   └── lib/
 │   │       ├── marked.min.js
 │   │       └── katex.min.js
-│   └── bilibiliCleaner/            # B站视频页清理
 │
 ├── funcs/                          # 可执行函数库
 │   ├── 元素dom/                    # DOM 操作工具
