@@ -1,6 +1,7 @@
 ---
 name: add-func-script
 description: 当用户要求"添加脚本到函数库"、"加一个新功能脚本"、"把这个脚本加到popup"、"新增函数执行"、或提到 funcs/ 目录下的脚本接入时触发。指导用户按分层、main() 包装、统一头标注的规范，将新脚本接入 bro_chat 扩展的函数执行系统（含 popup 注册、快捷键绑定、注入限制三大链路）。
+reference: code-standards-guide — funcs/ 脚本接入规范（归档版，与代码规范主 skill 分离）
 ---
 
 # 添加函数执行脚本

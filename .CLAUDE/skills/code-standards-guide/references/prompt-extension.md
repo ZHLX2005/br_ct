@@ -1,6 +1,7 @@
 ---
 name: prompt-extension
 description: 当用户想要扩展或添加提示词模板时触发。适用于：添加新提示词、修改现有提示词、分组归类、理解占位符使用、查询可用提示词。提供提示词扩展的结构规范和项目上下文。
+reference: code-standards-guide — popup 提示词模板扩展指南（非代码规范，仅作项目资源归档）
 ---
 
 # 提示词扩展指南

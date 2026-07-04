@@ -1,6 +1,7 @@
 ---
 name: background-module-reorg
 description: 当需要整理 background.js 模块、重组 backgroudtask 目录结构、迁移模块到子目录时触发
+reference: code-standards-guide — backgroudtask/ 模块化重组规范（归档版）
 ---
 
 # Background 模块化重组规范
