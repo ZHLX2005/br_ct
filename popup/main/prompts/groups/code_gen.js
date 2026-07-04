@@ -1,15 +1,5 @@
 export default [
   {
-    "label": "完整代码输出",
-    "alias": "full",
-    "template": "%s\n要求：输出完整的文件结构 输出完整的代码 输出完整的文件 !!!"
-  },
-  {
-    "label": "异常日志",
-    "alias": "err",
-    "template": "代码: %s\n\n\t 要求：异常及时抛出 并且尽可能打印出完整的异常上下文 具体相关传入的参数或者网络相关的错误"
-  },
-  {
     "label": "不修饰",
     "alias": "raw",
     "template": "%s"
