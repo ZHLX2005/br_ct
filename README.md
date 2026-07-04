@@ -274,9 +274,9 @@
 ├─────────────────────────────────────────────────────────┤
 │                    运行层 (runjs/)                      │
 │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐ │
-│  │ Circular │  │ Triple  │  │Transla- │  │  Word   │ │
-│  │  Menu   │  │  Space  │  │  tion   │  │         │ │
-│  └─────────┘  └─────────┘  └─────────┘  └─────────┘ │
+│  │ Circular │  │ Triple  │  │Transla- │               │ │
+│  │  Menu   │  │  Space  │  │  tion   │               │ │
+│  └─────────┘  └─────────┘  └─────────┘               │ │
 ├─────────────────────────────────────────────────────────┤
 │                    原生层 (Go Native Host)              │
 │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐ │
@@ -375,7 +375,6 @@ bro_chat/
 │   ├── gotoServer.js               # 导航/菜单服务
 │   ├── backupService.js            # 备份服务
 │   ├── chatgpt_copy_automation.js  # ChatGPT CDP 自动化
-│   ├── word_http_server.js         # Word 集成服务
 │   ├── message_http_server.js       # 消息服务
 │   ├── video_plane_server.js       # 视频片段配置
 │   ├── platformScriptFiles.js      # 平台脚本管理

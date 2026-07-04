@@ -6,7 +6,6 @@ import {
     setupMessageListener as setupAIProcessorListener
 } from './backgroudtask/ai_platform_processor.js';
 import { setupFuncCommandListener, setupMessageListener as setupFuncExecutorListener } from './backgroudtask/func_executor.js';
-import { startServer } from './backgroudtask/word_http_server.js';
 import { init as initVideoPlaneServer } from './backgroudtask/video_plane_server.js';
 import { initBackupService, setupBackupMessageListener } from './backgroudtask/backupService.js';
 import { setupTranslationModule } from './backgroudtask/translation/index.js';
@@ -27,8 +26,6 @@ console.log('[Background] setupFuncCommandListener 完成');
 
 setupFuncExecutorListener();      // 函数执行消息监听
 console.log('[Background] setupFuncExecutorListener 完成');
-
-startServer();
 
 // 初始化视频片段播放器配置服务器
 initVideoPlaneServer();

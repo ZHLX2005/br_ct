@@ -37,6 +37,6 @@ export default [
   {
     "label": "reflect",
     "alias": "ref",
-    "template": "请反思我们的对话 用户在重复提问当中体现出了语言习惯和倾向 前面的回答面向作为不过关的回答\n你现在需要给出\ngood_eg和bad_eg, 整理出spec\n\n用户补充: "
+    "template": "请反思我们的对话 用户在重复提问当中体现出了语言习惯和倾向 前面的回答面向作为不过关的回答\n你现在需要给出\ngood_eg和bad_eg, 整理出spec\n\n用户补充: \n%s"
   }
 ];
