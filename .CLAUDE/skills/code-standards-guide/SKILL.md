@@ -32,7 +32,8 @@ description: 当需要在 bro_chat 扩展项目中的 funcs/、runjs/、backgrou
 |---------|----------------|
 | 加一个 funcs/ 下的脚本（popup 点击 / 快捷键触发） | `references/add-func-script.md` |
 | 给 funcs/ 脚本批量加头标注 | `references/add-func-script.md` 末尾「加头标注」章节 |
-| 在 backgroudtask/ 新增模块 / 重组目录 | `references/background-module-reorg.md` |
+| 在 backgroudtask/ 新增模块 / 重组目录结构 | `references/background-module-reorg.md` |
+| 写新的 background 模块代码（命名空间 / setup 模式 / 防重复注册 / 长连接守卫） | `references/chrome-bg-module-pattern.md` |
 | 在 runjs/ 新增内容脚本 / 改 manifest 注入策略 | `references/runjs-module-standards.md` |
 | 评估"这个快捷键脚本放 runjs 还是 funcs" | `references/runjs-module-standards.md` 末尾「快捷键脚本归属决策树」 |
 | 加 prompt 提示词模板（@scenario/@feature 等占位符） | `references/prompt-extension.md`（**非代码规范**，仅作项目提示词资源） |
@@ -58,9 +59,16 @@ description: 当需要在 bro_chat 扩展项目中的 funcs/、runjs/、backgrou
 | 文档 | 内容定位 |
 |------|---------|
 | `references/add-func-script.md` | funcs/ 脚本接入规范：分层目录、main() 包装、统一头标注 9 类别、popup 注册、快捷键绑定三步骤 |
-| `references/background-module-reorg.md` | backgroudtask/ 模块化：目录优于文件、index.js 入口、集成模式、import 路径 +1 ../ 规则 |
+| `references/background-module-reorg.md` | backgroudtask/ 目录组织规范：建子目录、index.js 入口、import 路径 +1 ../ 规则、迁移到父模块的集成模式 |
+| `references/chrome-bg-module-pattern.md` | Chrome MV3 后台模块代码模式：thin background.js + setupXxxModule() 聚合层、命名空间、setup 内防重复注册、长连接守卫、错误案例警示 |
 | `references/runjs-module-standards.md` | runjs/ 内容脚本：必要的才注入 + 快捷键脚本归属决策树 + 模块依赖矩阵 |
 | `references/prompt-extension.md` | （非代码规范）popup 提示词模板的扩展：占位符规范、分组结构、新增步骤 |
+
+> 💡 **backgroudtask/ 下的两个 reference 是互补关系**：
+> - `background-module-reorg.md` 解决「**目录怎么组织**」（建子目录 / index.js / import 路径）
+> - `chrome-bg-module-pattern.md` 解决「**代码怎么写**」（命名空间 / setupXxxModule / 防重复注册 / 长连接）
+>
+> 新增 background 模块时**两份都要读**：先用 reorg 规划目录结构，再用 pattern 写代码。
 
 > 📁 主文档刻意保持极简（约 50 行），所有详细内容完整保留在 references/ 子文档中。这样做的好处：
 > 1. 每个目录规范独立维护，互不污染
@@ -71,4 +79,3 @@ description: 当需要在 bro_chat 扩展项目中的 funcs/、runjs/、backgrou
 
 - [[keyboard-shortcut-architecture]] — 全扩展的快捷键分层架构（Chrome Commands / content script / 用户自定义）
 - [[content-script-reactive-config]] — content_scripts 与 settings 页面的响应式配置同步
-- [[chrome-bg-module-pattern]] — MV3 service worker 模块拆分模式（thin background.js + module/index.js setupXxxModule）

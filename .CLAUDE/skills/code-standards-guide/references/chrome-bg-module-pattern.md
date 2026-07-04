@@ -1,6 +1,7 @@
 ---
 name: chrome-bg-module-pattern
 description: Use when adding or refactoring background modules in a Chrome MV3 extension service worker. Establishes the "thin background.js + module/index.js setupXxxModule()" pattern, ES6 import aggregation, action/storage namespacing, and split-by-responsibility sub-files (contextMenu / messageHandler / storage / ocr). Trigger phrases - "新增 background 模块", "拆分 service worker", "background.js 太臃肿", "添加右键菜单 + 消息监听 + storage 的功能".
+reference: code-standards-guide — Chrome MV3 后台模块开发模式（归档版，与 background-module-reorg 互补：前者讲目录组织，后者讲代码模式 + 命名空间）
 ---
 
 # Chrome Extension Background 模块化开发规范
