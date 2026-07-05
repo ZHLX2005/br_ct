@@ -619,7 +619,6 @@ body:has(.page-container)::-webkit-scrollbar-thumb {
 }
 
 .section-kicker,
-.ocr-kicker,
 .notes-kicker {
   font-size: 11px;
   font-weight: 700;
@@ -1186,39 +1185,6 @@ select:focus {
   color: var(--muted);
 }
 
-.ocr-container {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 24px 20px 34px;
-}
-
-.ocr-header {
-  position: relative;
-  overflow: visible;
-  padding: 6px 0 14px;
-  margin-bottom: var(--section-gap);
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  border-bottom: 1px solid var(--line);
-}
-
-.ocr-header h1 {
-  margin: 0;
-  font-size: var(--font-h1);
-  line-height: 1.1;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--ink);
-}
-
-.ocr-header .subtitle {
-  color: var(--muted);
-  font-size: var(--font-h3);
-  line-height: 1.7;
-}
-
 .count-stat {
   color: var(--muted);
   font-size: var(--font-h3);
@@ -1237,8 +1203,7 @@ select:focus {
     min-height: 70vh;
   }
 
-  .page-container,
-  .ocr-container {
+  .page-container {
     padding-left: 14px;
     padding-right: 14px;
   }
