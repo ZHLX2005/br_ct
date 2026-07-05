@@ -3,6 +3,8 @@
 import { populateOptimizer, initAliasShortcut } from "../../../popup/main/prompts/promptsUI.js";
 import { PROMPT_TEMPLATES } from "../../../popup/main/prompts/prompts.js";
 import { applyPromptTemplate } from "../../../popup/main/prompts/promptsCore.js";
+import { createImageOcrController } from "../../../shared/imageOcr.js";
+import { setupImageDragDrop } from "./dragDropImageHandler.js";
 import * as promptEditor from "./promptEditor.js";
 import {
   STORAGE_KEYS,
@@ -36,6 +38,19 @@ import {
 } from "../../../popup/main/modules/uiHelpers.js";
 
 import { PLATFORM_CONFIG } from "../../../config/platformConfig.js";
+
+// 图片 OCR 控制器（依赖注入 shared/imageOcr.js）
+let ocrController = null;
+function getOcrController() {
+  if (!ocrController) {
+    ocrController = createImageOcrController({
+      getPreviewContainer: () => document.getElementById("aichat-image-preview-area"),
+      showTempMessage: (msg) => showTempMessage(msg),
+      onChange: () => {},
+    });
+  }
+  return ocrController;
+}
 
 // DOM 元素缓存
 let elements = {};
@@ -371,6 +386,14 @@ export function setupEventListeners() {
     showTempMessage('平台显示设置已更新');
     updateSelectAllButton();
   });
+
+  // 图片拖放 + 粘贴
+  if (elements.messageInput) {
+    setupImageDragDrop({
+      chatInput: elements.messageInput,
+      onImage: ({ dataUrl, fileName }) => getOcrController().addImage({ dataUrl, fileName }),
+    });
+  }
 
   // 输入框内容变化时实时保存 + 自动调整高度 + 发送按钮状态
   elements.messageInput.addEventListener("input", () => {
@@ -2413,7 +2436,12 @@ async function dispatchMessageToPlatforms(originalMessage, platformIds, { skipHi
   let finalMessage = originalMessage;
   if (templateKey && templateContent) {
     // applyPromptTemplate 决策树统一处理 %s / %v / good_eg / bad_eg / 提取文本兜底
-    finalMessage = applyPromptTemplate(templateContent, { userMessage: originalMessage, extractedText: extracted });
+    const imageInfo = getOcrController().buildImageInfo();
+    finalMessage = applyPromptTemplate(templateContent, {
+      userMessage: originalMessage,
+      extractedText: extracted,
+      imageInfo,
+    });
   } else if (extracted) {
     finalMessage = extracted + "\n\n" + originalMessage;
   }
