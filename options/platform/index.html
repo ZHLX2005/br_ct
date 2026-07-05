@@ -17,6 +17,21 @@
       </header>
 
       <section class="section section--compact">
+        <div class="section-divider">
+          <div class="section-title">图片 OCR 提示词</div>
+        </div>
+        <div class="ocr-prompt-config">
+          <label for="ocr-prompt" class="ocr-prompt-label">
+            粘贴图片后，OCR 接口调用的提示词。识别结果将以 <code>[相关图片信息]</code> 段注入到用户输入框。
+          </label>
+          <textarea
+            id="ocr-prompt"
+            class="ocr-prompt-textarea"
+            rows="3"
+            placeholder="请识别这张图片中的所有文字内容"
+          ></textarea>
+        </div>
+
         <div class="platform-grid" id="platform-grid">
           <!-- 平台选项将由 JavaScript 动态生成 -->
         </div>

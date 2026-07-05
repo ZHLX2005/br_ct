@@ -6,6 +6,8 @@
 import { PLATFORM_CONFIG } from '../../config/platformConfig.js';
 
 const PLATFORM_VISIBILITY_KEY = 'platformVisibilitySettings';
+const OCR_PROMPT_KEY = 'platformOcrPrompt';
+const DEFAULT_OCR_PROMPT = '请识别这张图片中的所有文字内容';
 
 // DOM 元素
 let platformGrid;
@@ -23,6 +25,7 @@ function initializePlatformSettings() {
 
   // 加载保存的设置
   loadPlatformVisibilitySettings();
+  loadOcrPrompt();
 
   // 绑定事件监听器
   bindEventListeners();
@@ -127,6 +130,29 @@ function savePlatformVisibilitySettings() {
 }
 
 /**
+ * 加载 OCR 提示词
+ */
+function loadOcrPrompt() {
+  chrome.storage.local.get([OCR_PROMPT_KEY], (result) => {
+    const textarea = document.getElementById('ocr-prompt');
+    if (textarea) {
+      textarea.value = result[OCR_PROMPT_KEY] || DEFAULT_OCR_PROMPT;
+    }
+  });
+}
+
+/**
+ * 保存 OCR 提示词
+ */
+function saveOcrPrompt() {
+  const textarea = document.getElementById('ocr-prompt');
+  if (!textarea) return;
+  chrome.storage.local.set({ [OCR_PROMPT_KEY]: textarea.value.trim() || DEFAULT_OCR_PROMPT }, () => {
+    showStatusMessage('OCR 提示词已保存', 'success');
+  });
+}
+
+/**
  * 重置为默认设置
  */
 function resetToDefaults() {
@@ -165,6 +191,9 @@ function bindEventListeners() {
 
   // 重置设置按钮
   document.getElementById('reset-settings').addEventListener('click', resetToDefaults);
+
+  // OCR 提示词 - blur 时自动保存
+  document.getElementById('ocr-prompt').addEventListener('blur', saveOcrPrompt);
 
   // 监听来自 popup 的消息
   chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
