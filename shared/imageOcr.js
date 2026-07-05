@@ -137,18 +137,6 @@ export function createImageOcrController(deps) {
         removeImage(id);
       });
     });
-
-    // 绑定卡片点击触发识别
-    container.querySelectorAll('.image-preview-item').forEach((item) => {
-      item.addEventListener('click', (e) => {
-        if (e.target.dataset && e.target.dataset.action === 'remove') return;
-        const id = item.dataset.imageId;
-        const img = pendingImages.find((i) => i.id === id);
-        if (img && img.status === 'pending') {
-          recognizeImageById(id);
-        }
-      });
-    });
   }
 
   function addImage({ dataUrl, fileName }) {
@@ -163,6 +151,8 @@ export function createImageOcrController(deps) {
     pendingImages.push(imageItem);
     render();
     if (typeof onChange === 'function') onChange();
+    // v2: 自动触发识别（无需用户点击）
+    recognizeImageById(imageId);
     return imageId;
   }
 
@@ -223,7 +213,6 @@ export function createImageOcrController(deps) {
   return {
     addImage,
     removeImage,
-    recognizeImage: recognizeImageById,
     buildImageInfo,
     clear,
     getImages,
