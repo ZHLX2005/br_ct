@@ -1,8 +1,13 @@
 // mainUtils.js - 核心popup功能模块
 import { populateOptimizer, initAliasShortcut } from "./prompts/promptsUI.js";
 import { PROMPT_TEMPLATES } from "./prompts/prompts.js";
-import { applyPromptTemplate } from "./prompts/promptsCore.js";
 import { createImageOcrController } from "../../shared/imageOcr.js";
+import {
+  buildFinalMessage,
+  getSelectedPlatformIds,
+  closeAllAITabs as closeAllAITabsShared,
+  saveMessageHistory,
+} from "../../shared/sendMessage.js";
 import {
   STORAGE_KEYS,
   saveMessageContent,
@@ -357,15 +362,13 @@ function closeAllAITabs() {
   setButtonLoadingState(elements.closeTabsButton, "关闭中...");
   elements.closeTabsButton.style.cursor = 'not-allowed';
 
-  chrome.runtime.sendMessage({ action: "closeAllAITabs" }, (response) => {
-    if (chrome.runtime.lastError) {
-      console.error("关闭AI标签页时出错:", chrome.runtime.lastError.message);
+  closeAllAITabsShared((status, payload) => {
+    if (status === "failed") {
+      console.error("关闭AI标签页时出错:", payload);
       showTempMessage("关闭标签页失败");
     } else {
       showTempMessage("正在关闭AI标签页");
     }
-
-    // 短暂延迟后重置按钮状态
     setTimeout(() => {
       resetButtonState(elements.closeTabsButton, "关闭AI标签页");
       elements.closeTabsButton.style.cursor = 'pointer';
@@ -394,25 +397,23 @@ async function startSending() {
     let finalMessage = originalMessage;
 
     if (templateKey && templateContent) {
-        // 走 promptsCore.applyPromptTemplate：决策树统一处理 %s / %v / good_eg / bad_eg
+        // 走 shared/sendMessage.buildFinalMessage
         const imageInfo = getOcrController().buildImageInfo();
-        if (templateContent.includes("%s") || templateContent.includes("%i")) {
-            finalMessage = applyPromptTemplate(templateContent, {
-                userMessage: originalMessage,
-                imageInfo,
-            });
-        } else if (imageInfo) {
-            // 模板不含 %s 也不含 %i，但有 imageInfo：仍走 applyPromptTemplate 让其兜底前置
-            finalMessage = applyPromptTemplate(templateContent, {
-                userMessage: originalMessage,
-                imageInfo,
-            });
-        } else {
-            // 无 %s 无 %i 无 imageInfo：直接使用模板作为短指令（保留 popup 原有 UX 策略）
+        const composed = buildFinalMessage({
+            templateContent,
+            hasTemplate: true,
+            userMessage: originalMessage,
+            imageInfo,
+        });
+        // popup UX 特殊：模板无占位符且无图片时，直接使用模板作为短指令
+        const hasSOrI = templateContent.includes("%s") || templateContent.includes("%i");
+        if (!hasSOrI && !imageInfo) {
             finalMessage = templateContent;
             if (originalMessage.trim()) {
                 showTempMessage(`使用模板: ${templateContent.substring(0, 20)}...`);
             }
+        } else {
+            finalMessage = composed;
         }
     } else {
         // 无模板，用户输入不能为空
@@ -422,13 +423,8 @@ async function startSending() {
         }
     }
 
-    // 只获取可见且被勾选的平台
-    const selectedPlatforms = Array.from(elements.platformCheckboxes)
-        .filter((checkbox) => {
-            const option = checkbox.closest('.platform-icon-option');
-            return option && option.style.display !== 'none' && checkbox.checked;
-        })
-        .map((checkbox) => checkbox.dataset.platform);
+    // 只获取可见且被勾选的平台（shared 原语）
+    const selectedPlatforms = getSelectedPlatformIds(elements.platformCheckboxes);
 
     if (!validatePlatformSelection(selectedPlatforms)) {
         return;
@@ -460,7 +456,7 @@ async function startSending() {
         // 1. 并行保存数据
         await Promise.all([
             savePlatformStates(elements.platformCheckboxes),
-            addToHistory(originalMessage)
+            saveMessageHistory(originalMessage, addToHistory)
         ]);
 
         // 2. 构造任务队列
