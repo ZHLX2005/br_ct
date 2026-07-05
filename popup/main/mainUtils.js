@@ -199,10 +199,12 @@ async function recognizeImage(imageId) {
     } else {
       img.status = "error";
       img.recognizedText = response?.error || "识别失败";
+      showTempMessage(`图片识别失败: ${img.recognizedText}`);
     }
   } catch (err) {
     img.status = "error";
     img.recognizedText = err.message;
+    showTempMessage(`图片识别失败: ${err.message}`);
   }
 
   renderImagePreviews();
