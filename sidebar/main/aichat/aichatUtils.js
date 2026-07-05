@@ -3,10 +3,13 @@
 import { populateOptimizer, initAliasShortcut } from "../../../popup/main/prompts/promptsUI.js";
 import { PROMPT_TEMPLATES } from "../../../popup/main/prompts/prompts.js";
 import { createImageOcrController } from "../../../shared/imageOcr.js";
+import { createDebouncedSaver } from "../../../shared/debouncedSave.js";
+import { attachMessageInputPersistence } from "../../../shared/inputPersistence.js";
 import {
   buildFinalMessage,
   closeAllAITabs as closeAllAITabsShared,
   saveMessageHistory,
+  getSelectedPlatformIds as getSelectedPlatformIdsShared,
 } from "../../../shared/sendMessage.js";
 import { setupImageDragDrop } from "./dragDropImageHandler.js";
 import * as promptEditor from "./promptEditor.js";
@@ -59,11 +62,6 @@ function getOcrController() {
 // DOM 元素缓存
 let elements = {};
 
-// 保存相关变量
-let saveTimeout;
-let lastSavedContent = "";
-let isSaving = false;
-
 // 提取页面文本相关变量
 let extractButton;
 let extractResult;
@@ -96,6 +94,17 @@ let aichatSettings = { captureOnSend: false, addTabToWorkspaceOnSend: false, blo
 // 待发送消息队列（问题阻塞模式）
 let pendingMessages = [];
 const PENDING_STORAGE_KEY = "aichat_pending_messages";
+
+// 输入框防抖保存器（依赖注入 shared/debouncedSave.js）
+let messageSaver = null;
+function getMessageSaver() {
+  if (!messageSaver) {
+    messageSaver = createDebouncedSaver(async (text) => {
+      await saveMessageContent(text);
+    });
+  }
+  return messageSaver;
+}
 
 async function loadAichatSettings() {
   try {
@@ -202,33 +211,6 @@ let savedPlatformStates = {};
 let isSelectionMode = false;
 
 /**
- * 防抖保存消息内容
- */
-async function debouncedSaveMessage(content) {
-  if (content === lastSavedContent) return;
-  if (isSaving) {
-    return new Promise((resolve) => {
-      const checkSaving = setInterval(() => {
-        if (!isSaving) {
-          clearInterval(checkSaving);
-          debouncedSaveMessage(content).then(resolve);
-        }
-      }, 50);
-    });
-  }
-
-  isSaving = true;
-  try {
-    await saveMessageContent(content);
-    lastSavedContent = content;
-  } catch (error) {
-    console.error("保存消息内容失败:", error);
-  } finally {
-    isSaving = false;
-  }
-}
-
-/**
  * 初始化弹窗，获取并缓存 DOM 元素
  */
 export async function initializePopup() {
@@ -238,6 +220,9 @@ export async function initializePopup() {
     sendButton: document.getElementById("chat-btn-send"),
     closeTabsButton: document.getElementById("toolbar-close-ai"),
     selectAllButton: document.getElementById("panel-select-all"),
+    platformCheckboxes: document.querySelectorAll(
+      '.platform-icon-option input[type="checkbox"]'
+    ),
     promptOptimizerSelect: document.getElementById("prompt-optimizer-select"),
     workspaceTabAdd: document.getElementById("workspace-tab-add"),
     pagePills: document.getElementById("page-pills"),
@@ -326,7 +311,6 @@ export async function loadStoredData() {
     // 恢复最后输入的消息
     if (result[STORAGE_KEYS.LAST_MESSAGE]) {
       elements.messageInput.value = result[STORAGE_KEYS.LAST_MESSAGE];
-      lastSavedContent = result[STORAGE_KEYS.LAST_MESSAGE];
       console.log("已恢复历史输入内容，长度:", result[STORAGE_KEYS.LAST_MESSAGE].length);
       autoResizeInput(elements.messageInput);
       updateSendButton();
@@ -399,27 +383,22 @@ export function setupEventListeners() {
     });
   }
 
-  // 输入框内容变化时实时保存 + 自动调整高度 + 发送按钮状态
-  elements.messageInput.addEventListener("input", () => {
-    const currentContent = elements.messageInput.value;
-
-    autoResizeInput(elements.messageInput);
-    updateSendButton();
-
-    if (saveTimeout) clearTimeout(saveTimeout);
-    const delay = currentContent.length > 1000 ? 300 : 500;
-    saveTimeout = setTimeout(async () => {
-      await debouncedSaveMessage(currentContent);
-    }, delay);
-  });
-
-  // 输入框失去焦点
-  elements.messageInput.addEventListener("blur", async () => {
-    if (saveTimeout) {
-      clearTimeout(saveTimeout);
-      saveTimeout = null;
-    }
-    await debouncedSaveMessage(elements.messageInput.value);
+  // 输入框持久化（shared 原语）：input 防抖 / blur flush / Ctrl+S 手动保存 / beforeunload flush
+  attachMessageInputPersistence(elements.messageInput, getMessageSaver(), {
+    onInput: () => {
+      // sidebar 特有：autoResize + updateSendButton
+      if (typeof autoResizeInput === 'function') autoResizeInput(elements.messageInput);
+      if (typeof updateSendButton === 'function') updateSendButton();
+    },
+    onShowMessage: (msg) => showTempMessage(msg),
+    getStoredValue: async () => {
+      try {
+        const result = await chrome.storage.local.get(STORAGE_KEYS.LAST_MESSAGE);
+        return result[STORAGE_KEYS.LAST_MESSAGE] || "";
+      } catch {
+        return null;
+      }
+    },
   });
 
   // Ctrl+Enter 发送
@@ -428,18 +407,6 @@ export function setupEventListeners() {
       e.preventDefault();
       startSending();
     }
-    if (e.ctrlKey && e.key === "s") {
-      e.preventDefault();
-      if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
-      await debouncedSaveMessage(elements.messageInput.value);
-      showTempMessage("内容已手动保存");
-    }
-  });
-
-  // 页面关闭前保存
-  window.addEventListener("beforeunload", async () => {
-    if (saveTimeout) clearTimeout(saveTimeout);
-    await debouncedSaveMessage(elements.messageInput.value);
   });
 
   // 平台复选框变化（在 platform panel 里）
@@ -1303,16 +1270,12 @@ async function startSending() {
     return;
   }
 
-  if (saveTimeout) {
-    clearTimeout(saveTimeout);
-    saveTimeout = null;
-  }
-  await debouncedSaveMessage(elements.messageInput.value);
+  await getMessageSaver().flush(elements.messageInput.value);
 
   const originalMessage = validateMessageInput(elements.messageInput.value);
   if (!originalMessage) return;
 
-  const selectedPlatforms = getSelectedPlatformIds();
+  const selectedPlatforms = getSelectedPlatformIdsShared(elements.platformCheckboxes);
   if (!validatePlatformSelection(selectedPlatforms)) return;
 
   const sendTimestamp = Date.now();
@@ -1513,17 +1476,8 @@ function renderMessageBody(message) {
 /**
  * 计算当前平台下所有被阻塞的消息总数
  */
-function getSelectedPlatformIds() {
-  return Array.from(document.querySelectorAll('.platform-icon-option input[type="checkbox"]'))
-    .filter((checkbox) => {
-      const option = checkbox.closest('.platform-icon-option');
-      return option && option.style.display !== 'none' && checkbox.checked;
-    })
-    .map((checkbox) => checkbox.dataset.platform);
-}
-
 function countBlockedMessages() {
-  const selectedPlatforms = new Set(getSelectedPlatformIds());
+  const selectedPlatforms = new Set(getSelectedPlatformIdsShared(elements.platformCheckboxes));
   let count = 0;
   platformStates.forEach((ps, platformId) => {
     if (!selectedPlatforms.has(platformId)) return;
@@ -1541,7 +1495,7 @@ function countBlockedMessages() {
  * @returns {{ refs: object[], queue: {content:string,timestamp:number,extractedText:string}[] }}
  */
 function collectBlockedMessages() {
-  const selectedSet = new Set(getSelectedPlatformIds());
+  const selectedSet = new Set(getSelectedPlatformIdsShared(elements.platformCheckboxes));
   const refs = [];
   const uniqueByContent = new Map();
   platformStates.forEach((ps, platformId) => {
@@ -1900,7 +1854,7 @@ async function toggleSelectAll() {
 
   updatePlatformCount();
 
-  const platforms = getSelectedPlatformIds();
+  const platforms = getSelectedPlatformIdsShared(elements.platformCheckboxes);
   if (platforms.length) {
     activePlatformId = platforms[0];
     renderCurrentPlatform();
@@ -2249,12 +2203,8 @@ function handleContextMenuAction(action, index) {
  * - 阻塞模式（presetMessage 为空时）：仅展示阻塞气泡，等待用户点击发送
  */
 async function startDirectSend(presetMessage = null, forcedPlatformIds = null) {
-  if (saveTimeout) {
-    clearTimeout(saveTimeout);
-    saveTimeout = null;
-  }
   if (!presetMessage) {
-    await debouncedSaveMessage(elements.messageInput.value);
+    await getMessageSaver().flush(elements.messageInput.value);
   }
 
   const originalMessage = presetMessage || validateMessageInput(elements.messageInput.value);
@@ -2262,7 +2212,7 @@ async function startDirectSend(presetMessage = null, forcedPlatformIds = null) {
 
   const selectedPlatforms = (forcedPlatformIds && forcedPlatformIds.length > 0)
     ? forcedPlatformIds
-    : getSelectedPlatformIds();
+    : getSelectedPlatformIdsShared(elements.platformCheckboxes);
 
   if (!validatePlatformSelection(selectedPlatforms)) return;
 
@@ -2361,7 +2311,7 @@ async function getCurrentActiveTabUrl() {
 async function sendBlockedMessage(message) {
   if (!message || !message.blocked) return;
 
-  const selectedPlatforms = getSelectedPlatformIds();
+  const selectedPlatforms = getSelectedPlatformIdsShared(elements.platformCheckboxes);
   if (selectedPlatforms.length === 0) return;
 
   // 在选中平台中找出所有同内容的阻塞消息，统一取消阻塞样式
@@ -2383,7 +2333,7 @@ async function sendBlockedMessage(message) {
  * 而不是发到消息阻塞时所属的平台——这样用户在阻塞期间调整平台勾选也能即时生效。
  */
 async function flushPendingMessages() {
-  const selectedPlatforms = getSelectedPlatformIds();
+  const selectedPlatforms = getSelectedPlatformIdsShared(elements.platformCheckboxes);
   if (selectedPlatforms.length === 0) return;
 
   const { refs, queue } = collectBlockedMessages();
@@ -2405,7 +2355,7 @@ async function flushPendingMessages() {
  * （每条一行）。用于把阻塞下来的问题快速粘贴进笔记软件做双向链接。
  */
 async function copyBlockedAsLinks() {
-  const selectedPlatforms = getSelectedPlatformIds();
+  const selectedPlatforms = getSelectedPlatformIdsShared(elements.platformCheckboxes);
   if (selectedPlatforms.length === 0) {
     showTempMessage("未选中平台");
     return;

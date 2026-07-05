@@ -2,6 +2,8 @@
 import { populateOptimizer, initAliasShortcut } from "./prompts/promptsUI.js";
 import { PROMPT_TEMPLATES } from "./prompts/prompts.js";
 import { createImageOcrController } from "../../shared/imageOcr.js";
+import { createDebouncedSaver } from "../../shared/debouncedSave.js";
+import { attachMessageInputPersistence } from "../../shared/inputPersistence.js";
 import {
   buildFinalMessage,
   getSelectedPlatformIds,
@@ -52,43 +54,8 @@ function getOcrController() {
 // DOM 元素缓存
 let elements = {};
 
-// 保存相关变量
-let saveTimeout;
-let lastSavedContent = "";
-let isSaving = false;
-
-/**
- * 防抖保存消息内容
- */
-async function debouncedSaveMessage(content) {
-  // 避免重复保存相同内容
-  if (content === lastSavedContent) {
-    return;
-  }
-
-  // 如果正在保存，等待完成
-  if (isSaving) {
-    return new Promise((resolve) => {
-      const checkSaving = setInterval(() => {
-        if (!isSaving) {
-          clearInterval(checkSaving);
-          debouncedSaveMessage(content).then(resolve);
-        }
-      }, 50);
-    });
-  }
-
-  isSaving = true;
-
-  try {
-    await saveMessageContent(content);
-    lastSavedContent = content;
-  } catch (error) {
-    console.error("保存消息内容失败:", error);
-  } finally {
-    isSaving = false;
-  }
-}
+// 输入持久化 saver（shared 原语；module-level 以便 startSending 调用 flush）
+let messageSaver = null;
 
 /**
  * 注册全局回调（dragDropHandler 调用）
@@ -137,7 +104,6 @@ export async function loadStoredData() {
     // 恢复最后输入的消息
     if (result[STORAGE_KEYS.LAST_MESSAGE]) {
       elements.messageInput.value = result[STORAGE_KEYS.LAST_MESSAGE];
-      lastSavedContent = result[STORAGE_KEYS.LAST_MESSAGE];
       console.log("已恢复历史输入内容，长度:", result[STORAGE_KEYS.LAST_MESSAGE].length);
     }
 
@@ -194,69 +160,16 @@ export function setupEventListeners() {
     updateSelectAllButton();
   });
 
-  // 输入框内容变化时实时保存
-  elements.messageInput.addEventListener("input", () => {
-    const currentContent = elements.messageInput.value;
-
-    // 清除之前的定时器
-    if (saveTimeout) {
-      clearTimeout(saveTimeout);
-    }
-
-    // 根据文本长度动态调整保存延迟
-    const delay = currentContent.length > 1000 ? 300 : 500;
-
-    // 设置新的定时器
-    saveTimeout = setTimeout(async () => {
-      await debouncedSaveMessage(currentContent);
-    }, delay);
+  // 输入框持久化（shared 原语）
+  messageSaver = createDebouncedSaver(async (text) => {
+    await saveMessageContent(text);
   });
-
-  // 监听输入框失去焦点事件，立即保存
-  elements.messageInput.addEventListener("blur", async () => {
-    // 立即清除定时器并保存
-    if (saveTimeout) {
-      clearTimeout(saveTimeout);
-      saveTimeout = null;
-    }
-    await debouncedSaveMessage(elements.messageInput.value);
-  });
-
-  // 监听输入框获得焦点事件，确保内容同步
-  elements.messageInput.addEventListener("focus", async () => {
-    try {
+  attachMessageInputPersistence(elements.messageInput, messageSaver, {
+    onShowMessage: (msg) => showTempMessage(msg),
+    getStoredValue: async () => {
       const result = await loadData(STORAGE_KEYS.LAST_MESSAGE);
-      if (
-        result[STORAGE_KEYS.LAST_MESSAGE] &&
-        result[STORAGE_KEYS.LAST_MESSAGE] !== elements.messageInput.value
-      ) {
-        elements.messageInput.value = result[STORAGE_KEYS.LAST_MESSAGE];
-        lastSavedContent = result[STORAGE_KEYS.LAST_MESSAGE];
-      }
-    } catch (error) {
-      console.error("同步消息内容失败:", error);
-    }
-  });
-
-  // 监听键盘快捷键（Ctrl+S 手动保存）
-  elements.messageInput.addEventListener("keydown", async (e) => {
-    if (e.ctrlKey && e.key === "s") {
-      e.preventDefault();
-      if (saveTimeout) {
-        clearTimeout(saveTimeout);
-        saveTimeout = null;
-      }
-      await debouncedSaveMessage(elements.messageInput.value);
-      showTempMessage("内容已手动保存");
-    }
-  });
-
-  // 监听页面关闭前保存
-  window.addEventListener("beforeunload", async () => {
-    if (saveTimeout) {
-      clearTimeout(saveTimeout);
-    }
-    await debouncedSaveMessage(elements.messageInput.value);
+      return result[STORAGE_KEYS.LAST_MESSAGE] || "";
+    },
   });
 
   // 历史记录选择
@@ -381,11 +294,9 @@ function closeAllAITabs() {
  */
 async function startSending() {
     // 确保最新的输入被保存
-    if (saveTimeout) {
-        clearTimeout(saveTimeout);
-        saveTimeout = null;
+    if (messageSaver) {
+        await messageSaver.flush(elements.messageInput.value);
     }
-    await debouncedSaveMessage(elements.messageInput.value);
 
     // 从selectedValue中直接获取当前选中的模板
     const selectedValue =
@@ -500,7 +411,6 @@ async function startSending() {
 
             // 清空输入框并清除持久化的 lastMessage，避免下次打开弹窗时旧消息回来
             elements.messageInput.value = "";
-            lastSavedContent = "";
             try { chrome.storage.local.remove(STORAGE_KEYS.LAST_MESSAGE); } catch (e) { /* ignore */ }
 
             // 如果有失败的任务，显示详细信息
