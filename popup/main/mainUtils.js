@@ -2,6 +2,7 @@
 import { populateOptimizer, initAliasShortcut } from "./prompts/promptsUI.js";
 import { PROMPT_TEMPLATES } from "./prompts/prompts.js";
 import { applyPromptTemplate } from "./prompts/promptsCore.js";
+import { createImageOcrController } from "../../shared/imageOcr.js";
 import {
   STORAGE_KEYS,
   saveMessageContent,
@@ -30,9 +31,18 @@ import {
   validatePlatformSelection
 } from "./modules/uiHelpers.js";
 
-// 待识别图片队列
-let pendingImages = [];
-let nextImageId = 1;
+// 图片 OCR 控制器（依赖注入 shared/imageOcr.js）
+let ocrController = null;
+function getOcrController() {
+  if (!ocrController) {
+    ocrController = createImageOcrController({
+      getPreviewContainer: () => document.getElementById("image-preview-area"),
+      showTempMessage: (msg) => showTempMessage(msg),
+      onChange: () => {},
+    });
+  }
+  return ocrController;
+}
 
 // DOM 元素缓存
 let elements = {};
@@ -76,155 +86,11 @@ async function debouncedSaveMessage(content) {
 }
 
 /**
- * 处理粘贴/拖入图片（由 dragDropHandler 调用）
- */
-function handleImagePasted({ dataUrl, fileName }) {
-  const imageId = `img_${nextImageId++}`;
-  const imageItem = {
-    id: imageId,
-    dataUrl,
-    fileName,
-    status: "pending", // pending | recognizing | success | error
-    recognizedText: "",
-  };
-  pendingImages.push(imageItem);
-  renderImagePreviews();
-}
-
-/**
- * 渲染图片预览区
- */
-function renderImagePreviews() {
-  const container = document.getElementById("image-preview-area");
-  if (!container) return;
-
-  if (pendingImages.length === 0) {
-    container.hidden = true;
-    container.innerHTML = "";
-    return;
-  }
-
-  container.hidden = false;
-  container.innerHTML = pendingImages
-    .map(
-      (img) => `
-        <div class="image-preview-item" data-image-id="${img.id}">
-          <img src="${img.dataUrl}" alt="${img.fileName}" />
-          <button class="image-preview-remove" data-action="remove" data-image-id="${img.id}">×</button>
-          <div class="image-preview-status ${img.status}">${getStatusText(img.status)}</div>
-        </div>
-      `
-    )
-    .join("");
-
-  // 绑定删除按钮
-  container.querySelectorAll('[data-action="remove"]').forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const id = e.target.dataset.imageId;
-      removeImage(id);
-    });
-  });
-
-  // 绑定卡片点击触发识别
-  container.querySelectorAll('.image-preview-item').forEach((item) => {
-    item.addEventListener('click', (e) => {
-      if (e.target.dataset.action === 'remove') return;
-      const id = item.dataset.imageId;
-      const img = pendingImages.find((i) => i.id === id);
-      if (img && img.status === 'pending') {
-        recognizeImage(id);
-      }
-    });
-  });
-}
-
-function getStatusText(status) {
-  const map = {
-    pending: "点击识别",
-    recognizing: "识别中...",
-    success: "已识别",
-    error: "失败",
-  };
-  return map[status] || status;
-}
-
-/**
- * 移除图片
- */
-function removeImage(imageId) {
-  pendingImages = pendingImages.filter((img) => img.id !== imageId);
-  renderImagePreviews();
-}
-
-/**
- * 手动触发单张图片 OCR 识别
- */
-async function recognizeImage(imageId) {
-  const img = pendingImages.find((i) => i.id === imageId);
-  if (!img || img.status === "recognizing") return;
-
-  // 读取 OCR 提示词
-  const storage = await new Promise((resolve) => {
-    chrome.storage.local.get(["platformOcrPrompt"], resolve);
-  });
-  const prompt = storage.platformOcrPrompt || "请识别这张图片中的所有文字内容";
-
-  img.status = "recognizing";
-  renderImagePreviews();
-
-  try {
-    const response = await new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage(
-        {
-          action: "popup.ocr.recognize",
-          payload: {
-            imageDataUrl: img.dataUrl,
-            prompt,
-          },
-        },
-        (resp) => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-          } else {
-            resolve(resp);
-          }
-        }
-      );
-    });
-
-    if (response && response.success) {
-      img.status = "success";
-      img.recognizedText = response.text || "";
-    } else {
-      img.status = "error";
-      img.recognizedText = response?.error || "识别失败";
-      showTempMessage(`图片识别失败: ${img.recognizedText}`);
-    }
-  } catch (err) {
-    img.status = "error";
-    img.recognizedText = err.message;
-    showTempMessage(`图片识别失败: ${err.message}`);
-  }
-
-  renderImagePreviews();
-}
-
-/**
- * 拼接所有已识别图片的文本（用于 promptsCore.imageInfo）
- */
-function buildImageInfo() {
-  const successImages = pendingImages.filter((img) => img.status === "success");
-  if (successImages.length === 0) return "";
-  return successImages
-    .map((img) => `[${img.fileName}]\n${img.recognizedText}`)
-    .join("\n\n");
-}
-
-/**
  * 注册全局回调（dragDropHandler 调用）
  */
-window.__onImagePasted = handleImagePasted;
+window.__onImagePasted = ({ dataUrl, fileName }) => {
+  getOcrController().addImage({ dataUrl, fileName });
+};
 
 /**
  * 初始化弹窗，获取并缓存 DOM 元素
@@ -529,7 +395,7 @@ async function startSending() {
 
     if (templateKey && templateContent) {
         // 走 promptsCore.applyPromptTemplate：决策树统一处理 %s / %v / good_eg / bad_eg
-        const imageInfo = buildImageInfo();
+        const imageInfo = getOcrController().buildImageInfo();
         if (templateContent.includes("%s") || templateContent.includes("%i")) {
             finalMessage = applyPromptTemplate(templateContent, {
                 userMessage: originalMessage,
