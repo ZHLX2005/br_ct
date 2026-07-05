@@ -346,7 +346,6 @@ bro_chat/
 ├── options/                         # 设置页面
 │   ├── options.html/js/css         # 主页面 + 导航
 │   ├── platform/                   # 平台可见性配置
-│   ├── api/                        # API 配置
 │   ├── storage/                    # 存储管理
 │   ├── menu/                       # 圆形菜单配置
 │   ├── notes/                      # 随手笔记
