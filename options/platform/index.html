@@ -11,11 +11,96 @@
         <div class="page-header-row">
           <h1 class="page-title page-title--compact">平台显示设置</h1>
           <p class="page-description page-description--compact">
-            选择您希望在主界面中显示的 AI 平台。取消勾选将被隐藏，但不会影响已打开的标签页。
+            选择您希望在主界面中显示的 AI 平台、管理 API 配置与图片 OCR 提示词。
           </p>
         </div>
       </header>
 
+      <!-- 区块 1: 平台可见性 -->
+      <section class="section section--compact">
+        <div class="section-divider">
+          <div class="section-title">平台可见性</div>
+        </div>
+        <div class="platform-grid" id="platform-grid">
+          <!-- 平台选项将由 JavaScript 动态生成 -->
+        </div>
+        <div class="button-group">
+          <button class="btn btn-primary" id="save-settings">保存设置</button>
+          <button class="btn btn-secondary" id="reset-settings">重置为默认</button>
+        </div>
+      </section>
+
+      <!-- 区块 2: API 配置 -->
+      <section class="section section--compact">
+        <div class="section-divider">
+          <div class="section-title">API 配置</div>
+        </div>
+        <div class="api-form">
+          <!-- API Base URL -->
+          <div class="form-group">
+            <div class="url-title">
+              <label class="form-label">
+                API Base URL
+                <span id="baseurl-status" class="api-status not-configured">未配置</span>
+              </label>
+              <div class="button-row">
+                <button class="btn btn-test" id="test-btn">测试连接</button>
+              </div>
+            </div>
+            <input
+              type="text"
+              id="baseurl-input"
+              class="form-input"
+              placeholder="https://open.bigmodel.cn/api/paas/v4"
+            >
+            <p class="form-hint">智谱 AI API 的基础地址，通常为 https://open.bigmodel.cn/api/paas/v4</p>
+          </div>
+
+          <!-- API Key -->
+          <div class="form-group">
+            <label class="form-label">
+              API Key
+              <span id="apikey-status" class="api-status not-configured">未配置</span>
+            </label>
+            <input
+              type="password"
+              id="apikey-input"
+              class="form-input"
+              placeholder="请输入您的 API Key"
+            >
+            <p class="form-hint">在智谱 AI 开放平台获取您的 API Key</p>
+            <p class="form-warning">API Key 将安全存储在浏览器本地，不会被上传到任何服务器</p>
+          </div>
+
+          <!-- Model -->
+          <div class="form-group">
+            <label class="form-label">
+              模型名称
+              <span id="model-status" class="api-status not-configured">未配置</span>
+            </label>
+            <input
+              type="text"
+              id="model-input"
+              class="form-input"
+              placeholder="glm-4.5v"
+            >
+            <p class="form-hint">推荐使用 glm-4.5v 进行 OCR 和文本处理</p>
+          </div>
+
+          <!-- 测试结果 -->
+          <div id="test-result" class="test-result"></div>
+
+          <!-- 按钮组 -->
+          <div class="button-group">
+            <button class="btn btn-primary" id="save-btn">保存设置</button>
+            <button class="btn btn-secondary" id="reset-btn">重置为默认</button>
+          </div>
+
+          <div id="api-status-message" class="status-message"></div>
+        </div>
+      </section>
+
+      <!-- 区块 3: 图片 OCR 提示词 -->
       <section class="section section--compact">
         <div class="section-divider">
           <div class="section-title">图片 OCR 提示词</div>
@@ -31,18 +116,9 @@
             placeholder="请识别这张图片中的所有文字内容"
           ></textarea>
         </div>
-
-        <div class="platform-grid" id="platform-grid">
-          <!-- 平台选项将由 JavaScript 动态生成 -->
-        </div>
-
-        <div class="button-group">
-          <button class="btn btn-primary" id="save-settings">保存设置</button>
-          <button class="btn btn-secondary" id="reset-settings">重置为默认</button>
-        </div>
-
-        <div id="status-message" class="status-message"></div>
       </section>
+
+      <div id="status-message" class="status-message"></div>
     </div>
 
     <script src="platform.js" type="module"></script>
