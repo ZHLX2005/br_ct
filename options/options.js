@@ -40,7 +40,6 @@ const NAV_ITEMS = [
   { icon: 'API', name: 'API 配置', page: 'api/index.html' },
   { icon: 'DB', name: '存储管理', page: 'storage/index.html' },
   { icon: 'NT', name: '随手笔记', page: 'notes/index.html' },
-  { icon: 'OC', name: 'OCR 批量识别', page: 'ocr/index.html' },
   { icon: 'PR', name: '提示词编辑', page: 'prompts_editor/prompts_editor.html' },
   { icon: 'CMD', name: '本地命令管理', page: 'local_cmd/index.html' },
 ];
