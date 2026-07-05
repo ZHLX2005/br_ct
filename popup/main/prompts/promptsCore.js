@@ -45,9 +45,9 @@ const BAD_EG_RE = /(?:^|\n)bad_eg:\n([\s\S]*?)(?=\n\s*image_info:|$)/;
 const IMAGE_INFO_RE = /(?:^|\n)image_info:\n([\s\S]*?)(?=\n\s*(?:good_eg|bad_eg|image_info):|$)/;
 
 /**
- * 把 template 字符串拆成 { body, good_eg, bad_eg }
- * - body 不含 good_eg: / bad_eg: 段
- * - 自动剥离 good_eg: / bad_eg: 段首的系统注释行，让编辑器只看到用户内容
+ * 把 template 字符串拆成 { body, good_eg, bad_eg, image_info }
+ * - body 不含 good_eg: / bad_eg: / image_info: 段
+ * - 自动剥离上述段首的系统注释行，让编辑器只看到用户内容
  * - 用户自写的 `[...]` 行不被剥离（仅命中关键字格式才剥）
  */
 export function parseTemplate(template) {
