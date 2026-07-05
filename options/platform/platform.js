@@ -9,9 +9,22 @@ const PLATFORM_VISIBILITY_KEY = 'platformVisibilitySettings';
 const OCR_PROMPT_KEY = 'platformOcrPrompt';
 const DEFAULT_OCR_PROMPT = '请识别这张图片中的所有文字内容';
 
+// API 配置存储
+const STORAGE_KEY = 'translation.api.config';
+const DEFAULT_CONFIG = {
+  baseURL: 'https://open.bigmodel.cn/api/paas/v4',
+  apiKey: '',
+  model: 'glm-4.5v'
+};
+
 // DOM 元素
 let platformGrid;
 let statusMessage;
+
+// API 配置 DOM 元素
+let baseURLInput, apiKeyInput, modelInput;
+let baseURLStatus, apiKeyStatus, modelStatus;
+let testResultDiv, apiStatusMessageDiv;
 
 /**
  * 初始化平台设置页面
@@ -29,6 +42,11 @@ function initializePlatformSettings() {
 
   // 绑定事件监听器
   bindEventListeners();
+
+  // API 配置
+  bindAPIDomElements();
+  loadAPISettings();
+  bindAPIEventListeners();
 }
 
 /**
@@ -206,8 +224,202 @@ function bindEventListeners() {
         }
       });
       sendResponse({ settings });
+    } else if (request.action === 'getAPISettings') {
+      const config = {
+        baseURL: baseURLInput.value.trim(),
+        apiKey: apiKeyInput.value.trim(),
+        model: modelInput.value.trim()
+      };
+      sendResponse({ config });
     }
   });
+}
+
+/**
+ * 获取 API 配置相关 DOM 元素引用
+ */
+function bindAPIDomElements() {
+  baseURLInput = document.getElementById('baseurl-input');
+  apiKeyInput = document.getElementById('apikey-input');
+  modelInput = document.getElementById('model-input');
+  baseURLStatus = document.getElementById('baseurl-status');
+  apiKeyStatus = document.getElementById('apikey-status');
+  modelStatus = document.getElementById('model-status');
+  testResultDiv = document.getElementById('test-result');
+  apiStatusMessageDiv = document.getElementById('api-status-message');
+}
+
+/**
+ * 加载 API 设置到表单
+ */
+function loadAPISettings() {
+  chrome.storage.local.get([STORAGE_KEY], (result) => {
+    const config = result[STORAGE_KEY] || { ...DEFAULT_CONFIG };
+
+    baseURLInput.value = config.baseURL || DEFAULT_CONFIG.baseURL;
+    apiKeyInput.value = config.apiKey || '';
+    modelInput.value = config.model || DEFAULT_CONFIG.model;
+
+    updateStatusDisplay();
+  });
+}
+
+/**
+ * 更新 API 输入框旁的「已配置/默认值/未配置」状态显示
+ */
+function updateStatusDisplay() {
+  // Base URL 状态
+  if (baseURLInput.value && baseURLInput.value !== DEFAULT_CONFIG.baseURL) {
+    baseURLStatus.textContent = '已配置';
+    baseURLStatus.className = 'api-status configured';
+  } else if (baseURLInput.value === DEFAULT_CONFIG.baseURL) {
+    baseURLStatus.textContent = '默认值';
+    baseURLStatus.className = 'api-status configured';
+  } else {
+    baseURLStatus.textContent = '未配置';
+    baseURLStatus.className = 'api-status not-configured';
+  }
+
+  // API Key 状态
+  if (apiKeyInput.value) {
+    apiKeyStatus.textContent = '已配置';
+    apiKeyStatus.className = 'api-status configured';
+  } else {
+    apiKeyStatus.textContent = '未配置';
+    apiKeyStatus.className = 'api-status not-configured';
+  }
+
+  // Model 状态
+  if (modelInput.value) {
+    modelStatus.textContent = '已配置';
+    modelStatus.className = 'api-status configured';
+  } else {
+    modelStatus.textContent = '未配置';
+    modelStatus.className = 'api-status not-configured';
+  }
+}
+
+/**
+ * 保存 API 设置
+ */
+function saveAPISettings() {
+  const config = {
+    baseURL: baseURLInput.value.trim(),
+    apiKey: apiKeyInput.value.trim(),
+    model: modelInput.value.trim()
+  };
+
+  if (!config.baseURL) {
+    showAPIStatusMessage('请输入 API Base URL', 'error');
+    return;
+  }
+  if (!config.apiKey) {
+    showAPIStatusMessage('请输入 API Key', 'error');
+    return;
+  }
+  if (!config.model) {
+    showAPIStatusMessage('请输入模型名称', 'error');
+    return;
+  }
+
+  chrome.storage.local.set({ [STORAGE_KEY]: config }, () => {
+    showAPIStatusMessage('设置已保存', 'success');
+    updateStatusDisplay();
+    testResultDiv.style.display = 'none';
+  });
+}
+
+/**
+ * 重置为默认 API 设置（不自动保存）
+ */
+function resetAPIToDefaults() {
+  baseURLInput.value = DEFAULT_CONFIG.baseURL;
+  apiKeyInput.value = '';
+  modelInput.value = DEFAULT_CONFIG.model;
+
+  showAPIStatusMessage('已重置为默认设置，请点击保存', 'success');
+  updateStatusDisplay();
+}
+
+/**
+ * 测试 API 连接
+ */
+async function testAPIConnection() {
+  const config = {
+    baseURL: baseURLInput.value.trim(),
+    apiKey: apiKeyInput.value.trim(),
+    model: modelInput.value.trim()
+  };
+
+  if (!config.baseURL || !config.apiKey || !config.model) {
+    showAPITestResult('请先填写完整的 API 配置信息', 'error');
+    return;
+  }
+
+  showAPITestResult('正在测试连接...', 'info');
+
+  try {
+    const response = await fetch(`${config.baseURL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages: [{ role: 'user', content: 'Hi' }],
+        max_tokens: 10
+      })
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.choices && data.choices.length > 0) {
+        showAPITestResult('连接成功，API 配置有效', 'success');
+      } else {
+        showAPITestResult('连接成功，但返回格式异常', 'error');
+      }
+    } else {
+      const errorData = await response.json().catch(() => ({}));
+      showAPITestResult(`连接失败：${errorData.error?.message || response.statusText}`, 'error');
+    }
+  } catch (error) {
+    showAPITestResult(`连接失败：${error.message}`, 'error');
+  }
+}
+
+/**
+ * 显示 API 测试结果
+ */
+function showAPITestResult(message, type) {
+  testResultDiv.textContent = message;
+  testResultDiv.className = `test-result ${type}`;
+  testResultDiv.style.display = 'block';
+}
+
+/**
+ * 显示 API 区域状态消息（独立于平台可见性的页面级 #status-message）
+ */
+function showAPIStatusMessage(message, type = 'success') {
+  apiStatusMessageDiv.textContent = message;
+  apiStatusMessageDiv.className = `status-message show ${type}`;
+
+  setTimeout(() => {
+    apiStatusMessageDiv.classList.remove('show');
+  }, 3000);
+}
+
+/**
+ * 绑定 API 配置相关事件监听器
+ */
+function bindAPIEventListeners() {
+  document.getElementById('save-btn').addEventListener('click', saveAPISettings);
+  document.getElementById('reset-btn').addEventListener('click', resetAPIToDefaults);
+  document.getElementById('test-btn').addEventListener('click', testAPIConnection);
+
+  baseURLInput.addEventListener('input', updateStatusDisplay);
+  apiKeyInput.addEventListener('input', updateStatusDisplay);
+  modelInput.addEventListener('input', updateStatusDisplay);
 }
 
 // 页面加载时初始化
