@@ -2,8 +2,12 @@
 // 100% AI Chat 代码，无任何 Claude Code 逻辑
 import { populateOptimizer, initAliasShortcut } from "../../../popup/main/prompts/promptsUI.js";
 import { PROMPT_TEMPLATES } from "../../../popup/main/prompts/prompts.js";
-import { applyPromptTemplate } from "../../../popup/main/prompts/promptsCore.js";
 import { createImageOcrController } from "../../../shared/imageOcr.js";
+import {
+  buildFinalMessage,
+  closeAllAITabs as closeAllAITabsShared,
+  saveMessageHistory,
+} from "../../../shared/sendMessage.js";
 import { setupImageDragDrop } from "./dragDropImageHandler.js";
 import * as promptEditor from "./promptEditor.js";
 import {
@@ -1909,9 +1913,9 @@ function closeAllAITabs() {
   setButtonLoadingState(elements.closeTabsButton, "关闭中...");
   elements.closeTabsButton.style.cursor = 'not-allowed';
 
-  chrome.runtime.sendMessage({ action: "closeAllAITabs" }, (response) => {
-    if (chrome.runtime.lastError) {
-      console.error("关闭AI标签页时出错:", chrome.runtime.lastError.message);
+  closeAllAITabsShared((status, payload) => {
+    if (status === "failed") {
+      console.error("关闭AI标签页时出错:", payload);
       showTempMessage("关闭标签页失败");
     } else {
       showTempMessage("正在关闭AI标签页");
@@ -2434,15 +2438,16 @@ async function dispatchMessageToPlatforms(originalMessage, platformIds, { skipHi
   const extracted = extractedText !== null ? extractedText : getExtractedContentText();
 
   let finalMessage = originalMessage;
-  if (templateKey && templateContent) {
-    // applyPromptTemplate 决策树统一处理 %s / %v / good_eg / bad_eg / 提取文本兜底
-    const imageInfo = getOcrController().buildImageInfo();
-    finalMessage = applyPromptTemplate(templateContent, {
-      userMessage: originalMessage,
-      extractedText: extracted,
-      imageInfo,
-    });
-  } else if (extracted) {
+  const imageInfo = getOcrController().buildImageInfo();
+  finalMessage = buildFinalMessage({
+    templateContent,
+    hasTemplate: Boolean(templateKey && templateContent),
+    userMessage: originalMessage,
+    extractedText: extracted,
+    imageInfo,
+  });
+  // sidebar 特有：无模板但有提取文本时，前置拼接提取内容
+  if (!templateKey && extracted) {
     finalMessage = extracted + "\n\n" + originalMessage;
   }
 
@@ -2450,7 +2455,7 @@ async function dispatchMessageToPlatforms(originalMessage, platformIds, { skipHi
 
   // 阻塞路径在阻塞阶段已存历史；非阻塞路径在这里补存
   if (!skipHistory) {
-    try { await addToHistory(originalMessage); } catch(e) {}
+    await saveMessageHistory(originalMessage, addToHistory);
     refreshHistoryCache();
   }
 
