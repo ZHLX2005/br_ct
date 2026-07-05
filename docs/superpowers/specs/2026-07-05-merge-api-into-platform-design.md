@@ -84,6 +84,7 @@
       <button class="btn btn-primary" id="save-btn">保存设置</button>
       <button class="btn btn-secondary" id="reset-btn">重置为默认</button>
     </div>
+    <div id="api-status-message" class="status-message"></div>
   </div>
 </section>
 
@@ -97,6 +98,10 @@
 
 <div id="status-message" class="status-message"></div>
 ```
+
+**说明**：
+- DOM 示例里 API 配置区块内部已经包含 `#test-result` 和 `#api-status-message`，结构为「BaseURL/Key/Model 三个 form-group → test-result → button-group → api-status-message」，所以该区块无需单独的 `<div id="api-status-message">` 在 button-group 之外 — 它就嵌在 `.api-form` 内、紧跟 button-group 之后。
+- OCR 提示词区块**不再**有自己专属的 status-message —— 沿用页面级 `#status-message` 即可（设计段已说明）。
 
 ### JavaScript 行为 (`options/platform/platform.js`)
 
