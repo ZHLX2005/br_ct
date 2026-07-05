@@ -25,6 +25,9 @@ export function setupDragDropEvents() {
 
   // 处理拖放文件
   messageInput.addEventListener("drop", handleDrop, false);
+
+  // 监听粘贴事件（仅处理图片）
+  messageInput.addEventListener("paste", handlePaste);
 }
 
 /**
@@ -95,6 +98,16 @@ async function handleDrop(e) {
         // 如果是文件，直接获取文件并读取内容
         const file = item.getAsFile();
         if (file) {
+          // 检测是否为图片文件
+          if (file && file.type && file.type.startsWith("image/")) {
+            readImageAsDataUrl(file).then((dataUrl) => {
+              if (typeof window.__onImagePasted === "function") {
+                window.__onImagePasted({ dataUrl, fileName: file.name || "dropped-image.png" });
+              }
+            });
+            resolve();
+            return;
+          }
           readFileContentWithPromise(file, "", fileContents)
             .then(resolve)
             .catch((error) => {
@@ -261,4 +274,40 @@ function appendFileContentsToInput(inputElement, fileContents) {
 
   inputElement.value += contentText;
   inputElement.focus();
+}
+
+/**
+ * 处理粘贴事件 — 仅识别图片
+ */
+function handlePaste(e) {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+
+  for (const item of items) {
+    if (item.type && item.type.startsWith("image/")) {
+      e.preventDefault();
+      const file = item.getAsFile();
+      if (file) {
+        readImageAsDataUrl(file).then((dataUrl) => {
+          // 通知外部（mainUtils.js）有新图片
+          if (typeof window.__onImagePasted === "function") {
+            window.__onImagePasted({ dataUrl, fileName: file.name || "pasted-image.png" });
+          }
+        });
+      }
+      break;
+    }
+  }
+}
+
+/**
+ * 读取图片文件为 base64 data URL
+ */
+function readImageAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target.result);
+    reader.onerror = () => reject(new Error("读取图片失败"));
+    reader.readAsDataURL(file);
+  });
 }
