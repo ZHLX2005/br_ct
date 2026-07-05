@@ -4,7 +4,7 @@
  */
 
 import { updateContextMenuVisibility } from './contextMenu.js';
-import { handleOCRRequest } from './ocr.js';
+import { handleOCRRequest, recognizeImageOCR } from './ocr.js';
 import transPrompts from '../../popup/main/prompts/groups/xxxx_trans.js';
 import askPrompts from '../../popup/main/prompts/groups/xxxx_ask.js';
 
@@ -95,6 +95,20 @@ export function setupMessageHandler() {
       case 'translation.ocr.perform':
         isAsync = true;
         handleOCRRequest(request).then(sendResponse);
+        break;
+
+      case 'popup.ocr.recognize':
+        // 弹窗发起的单张图片 OCR 请求
+        // request.payload = { imageDataUrl: 'data:image/...', prompt?: string }
+        isAsync = true;
+        recognizeImageOCR({
+          imageDataUrl: request.payload && request.payload.imageDataUrl,
+          prompt: request.payload && request.payload.prompt
+        }).then((result) => {
+          sendResponse(result);
+        }).catch((err) => {
+          sendResponse({ success: false, error: err.message });
+        });
         break;
 
       case 'translation.addToFavorites':
