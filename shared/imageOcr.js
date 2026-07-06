@@ -52,6 +52,20 @@ export function recognizeImage({ dataUrl, prompt }) {
 }
 
 /**
+ * 清理 LLM 识别结果：移除 <think>...</think> 思考段（含多行/嵌套/贪婪匹配）
+ * LLM 在返回主结果前可能输出内部思考，污染用户可见的 imageInfo
+ */
+export function stripThinkTags(text) {
+  if (!text || typeof text !== 'string') return text || '';
+  return text
+    .replace(/<think>[\s\S]*?<\/think>/g, '')   // 非贪婪：成对删除
+    .replace(/<think>[\s\S]*/g, '')              // 未配对的开标签（含到末尾）
+    .replace(/<\/think>/g, '')                   // 未配对的闭标签
+    .replace(/^\s+|\s+$/g, '')                   // trim
+    .replace(/\n{3,}/g, '\n\n');                 // 多余空行压缩
+}
+
+/**
  * HTML 属性值转义：避免 fileName 等用户可控字符串直接拼到 alt / title 等属性里导致 XSS。
  * @param {string} value
  * @returns {string}
@@ -118,15 +132,22 @@ export function createImageOcrController(deps) {
 
     container.hidden = false;
     container.innerHTML = pendingImages
-      .map(
-        (img) => `
-          <div class="image-preview-item" data-image-id="${escapeAttr(img.id)}">
+      .map((img) => {
+        // hover tooltip：成功时显示已识别文本，失败时显示错误信息，其他状态显示文件名
+        const tooltip =
+          img.status === 'success' && img.recognizedText
+            ? img.recognizedText
+            : img.status === 'error'
+              ? `识别失败: ${img.recognizedText}`
+              : img.fileName;
+        return `
+          <div class="image-preview-item" data-image-id="${escapeAttr(img.id)}" title="${escapeAttr(tooltip)}">
             <img src="${escapeAttr(img.dataUrl)}" alt="${escapeAttr(img.fileName)}" />
             <button class="image-preview-remove" data-action="remove" data-image-id="${escapeAttr(img.id)}">×</button>
             <div class="image-preview-status ${escapeAttr(img.status)}">${escapeAttr(getStatusText(img.status))}</div>
           </div>
-        `
-      )
+        `;
+      })
       .join('');
 
     // 绑定删除按钮
@@ -175,7 +196,8 @@ export function createImageOcrController(deps) {
       const response = await recognizeImage({ dataUrl: img.dataUrl, prompt });
       if (response && response.success) {
         img.status = 'success';
-        img.recognizedText = response.text || '';
+        // 过滤 LLM 内部思考段（如 <think>...</think>）避免污染 imageInfo
+        img.recognizedText = stripThinkTags(response.text || '');
       } else {
         img.status = 'error';
         img.recognizedText = (response && response.error) || '识别失败';

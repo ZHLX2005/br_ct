@@ -1154,7 +1154,7 @@ async function callOCRApiNonStream(imageBase64, prompt = '请识别图片中的�
         {
           type: 'image_url',
           image_url: {
-            url: base64Data
+            url: `data:image/png;base64,${base64Data}`
           }
         },
         {
@@ -1350,7 +1350,7 @@ async function callOCRApiStream(imageBase64, prompt = '请识别图片中的所�
         {
           type: 'image_url',
           image_url: {
-            url: base64Data
+            url: `data:image/png;base64,${base64Data}`
           }
         },
         {
