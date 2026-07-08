@@ -229,7 +229,7 @@ let tooltipHideTimer = null;  // 延迟隐藏定时器（用于在出现反馈�
 | `navigator.clipboard` 不可用 | fallback 到 `textarea + execCommand('copy')`；若都失败 → tooltip 顶部显示「复制失败」2 秒 |
 | 多次 hover 不同 item | 复用 tooltip，更新内容 + 重定位 |
 | mouseleave 触发瞬间点 click | `click` 在 `mouseenter`/`mouseleave` 之后由事件循环触发；`hideTooltip` 后仍可点中 tooltip（即使被隐藏） → 实际不会（隐藏后 `pointer-events: auto` 但坐标 `-9999px`，不可点）。**安全。** |
-| mouseleave 时反馈条仍显示 | 当前实现：mouseleave 立即隐藏（`delay: 0`）；反馈条视觉上未消失就 hide → 视觉不佳但**功能正常**。如需改进：mouseleave 改为 `delay: 200`，并取消未触发的 hide 定时器。**实施时按简单方案先行，必要时再优化。** |
+| mouseleave 时反馈条仍显示 | 鼠标快速移开时绿条可能没消失 tooltip 就被隐藏 —— **接受**此 trade-off。功能上正确（剪贴板已写入），仅是绿条未呈现足够时长。YAGNI 留待后续按需优化。 |
 
 ### 6. 测试要点
 
@@ -257,4 +257,5 @@ let tooltipHideTimer = null;  // 延迟隐藏定时器（用于在出现反馈�
 - 不改 `sidebar/main/aichat/aichat.html` / `aichat.js`（aichat.js 已自注入 `aichat.css`，新 CSS 由 `imageOcr.js` 自注入）
 - 不改 `manifest.json`（chrome-extension scheme 同源）
 - 不引入 npm 依赖
-- 不监听 scroll/resize 重新定位 tooltip（YAGNI 简化版）
+- 不监听 scroll/resize 重新定位 tooltip（YAGNI 简化版；用户 hover 期间 scroll 不常见）
+- 不延迟 hide tooltip 以让反馈条可见（接受快移开时绿条可能未呈现的视觉 trade-off）
