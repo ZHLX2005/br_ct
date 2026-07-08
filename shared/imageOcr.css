@@ -1,0 +1,53 @@
+/* shared/imageOcr.css
+ *
+ * 自定义 hover tooltip 样式，用于图片 OCR 缩略图上的识别结果显示。
+ * 由 shared/imageOcr.js 在模块首次加载时自注入。
+ */
+
+.image-ocr-tooltip {
+  position: fixed;
+  z-index: 2147483000;
+  max-width: 320px;
+  max-height: 200px;
+  background: rgba(33, 33, 33, 0.95);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 8px 10px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  user-select: none;
+  pointer-events: auto;
+  word-break: break-word;
+  white-space: pre-wrap;
+  overflow: auto;
+  transition: opacity 0.12s ease-in-out;
+  opacity: 0;
+  left: -9999px;
+  top: -9999px;
+}
+
+.image-ocr-tooltip[data-state="visible"] {
+  opacity: 1;
+}
+
+.image-ocr-tooltip-feedback {
+  display: none;
+  background: #4caf50;
+  color: #fff;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-bottom: 6px;
+  text-align: center;
+}
+
+.image-ocr-tooltip-feedback[data-visible="true"] {
+  display: block;
+}
+
+.image-ocr-tooltip-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
