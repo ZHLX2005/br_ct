@@ -90,6 +90,193 @@ function getStatusText(status) {
   return STATUS_TEXT[status] || status;
 }
 
+// 模块首次加载时自注入样式（仅一次；aichat/popup 加载路径均会触发）
+if (typeof document !== 'undefined' && !document.querySelector('link[data-image-ocr-css]')) {
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = './imageOcr.css';
+  link.dataset.imageOcrCss = '1';
+  document.head.appendChild(link);
+}
+
+// 自定义 hover tooltip 状态（单例）
+let tooltipEl = null;
+let tooltipFeedbackTimer = null;
+let tooltipHideTimer = null;
+let tooltipEnable = true;
+
+/**
+ * 确保 tooltip 元素存在并挂到 body。失败时（无 document.body）返回 null。
+ */
+function ensureTooltip() {
+  if (tooltipEl) return tooltipEl;
+  if (typeof document === 'undefined' || !document.body) return null;
+
+  const root = document.createElement('div');
+  root.className = 'image-ocr-tooltip';
+  root.setAttribute('role', 'tooltip');
+  root.setAttribute('data-state', 'hidden');
+
+  const feedback = document.createElement('div');
+  feedback.className = 'image-ocr-tooltip-feedback';
+  feedback.setAttribute('data-role', 'feedback');
+
+  const body = document.createElement('div');
+  body.className = 'image-ocr-tooltip-body';
+
+  root.appendChild(feedback);
+  root.appendChild(body);
+
+  root.addEventListener('click', copyTooltipBody);
+  document.body.appendChild(root);
+
+  tooltipEl = root;
+  return tooltipEl;
+}
+
+/**
+ * 根据 image 状态返回 hover 显示的文本。
+ * status: pending / recognizing / success / error
+ */
+function getTooltipTextForItem(img) {
+  if (img.status === 'success' && img.recognizedText) return img.recognizedText;
+  if (img.status === 'error' && img.recognizedText) return `识别失败: ${img.recognizedText}`;
+  if (img.status === 'recognizing') return '识别中...';
+  return img.fileName || '';
+}
+
+/**
+ * 显示 tooltip 在 item 上方居中，超出视口时自动调整。
+ */
+function showTooltip(itemEl, text) {
+  if (!tooltipEnable) return;
+  const tip = ensureTooltip();
+  if (!tip) return;
+
+  const body = tip.querySelector('.image-ocr-tooltip-body');
+  body.textContent = text; // 必须 textContent，避免 XSS
+
+  // 重置反馈条
+  const feedback = tip.querySelector('.image-ocr-tooltip-feedback');
+  feedback.textContent = '';
+  feedback.removeAttribute('data-visible');
+  if (tooltipFeedbackTimer) {
+    clearTimeout(tooltipFeedbackTimer);
+    tooltipFeedbackTimer = null;
+  }
+
+  // 取消延迟隐藏
+  if (tooltipHideTimer) {
+    clearTimeout(tooltipHideTimer);
+    tooltipHideTimer = null;
+  }
+
+  // 先显示在屏幕外以测量尺寸
+  tip.setAttribute('data-state', 'visible');
+  tip.style.left = '0px';
+  tip.style.top = '0px';
+
+  const itemRect = itemEl.getBoundingClientRect();
+  const tipRect = tip.getBoundingClientRect();
+  const margin = 8;
+
+  let left = itemRect.left + itemRect.width / 2 - tipRect.width / 2;
+  let top = itemRect.top - tipRect.height - margin;
+
+  // 边界保护
+  if (left < margin) left = margin;
+  if (left + tipRect.width > window.innerWidth - margin) {
+    left = window.innerWidth - tipRect.width - margin;
+  }
+  if (top < margin) {
+    // 上方空间不足，改为下方
+    top = itemRect.bottom + margin;
+  }
+
+  tip.style.left = `${left}px`;
+  tip.style.top = `${top}px`;
+}
+
+/**
+ * 隐藏 tooltip。
+ * opts.delay > 0 时延迟隐藏（毫秒）
+ */
+function hideTooltip(opts) {
+  if (!tooltipEl) return;
+  const delay = (opts && opts.delay) || 0;
+  if (tooltipHideTimer) {
+    clearTimeout(tooltipHideTimer);
+    tooltipHideTimer = null;
+  }
+  const doHide = () => {
+    if (!tooltipEl) return;
+    tooltipEl.setAttribute('data-state', 'hidden');
+    tooltipEl.style.left = '-9999px';
+    tooltipEl.style.top = '-9999px';
+  };
+  if (delay > 0) {
+    tooltipHideTimer = setTimeout(doHide, delay);
+  } else {
+    doHide();
+  }
+}
+
+/**
+ * 在 tooltip 顶部展示一条 2 秒的反馈条（绿底白字），用于「已复制」等提示。
+ */
+function showTooltipFeedback(msg) {
+  const tip = ensureTooltip();
+  if (!tip) return;
+  const feedback = tip.querySelector('.image-ocr-tooltip-feedback');
+  feedback.textContent = msg;
+  feedback.setAttribute('data-visible', 'true');
+  if (tooltipFeedbackTimer) clearTimeout(tooltipFeedbackTimer);
+  tooltipFeedbackTimer = setTimeout(() => {
+    feedback.textContent = '';
+    feedback.removeAttribute('data-visible');
+    tooltipFeedbackTimer = null;
+  }, 2000);
+}
+
+/**
+ * 复制 tooltip body 文本到剪贴板。
+ * 优先 navigator.clipboard，失败时 fallback 到 textarea + execCommand。
+ */
+async function copyTooltipBody(e) {
+  if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+  const tip = ensureTooltip();
+  if (!tip) return;
+  const text = tip.querySelector('.image-ocr-tooltip-body').textContent || '';
+  if (!text) return;
+
+  let ok = false;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      ok = true;
+    }
+  } catch (_) {
+    // fallthrough to execCommand fallback
+  }
+
+  if (!ok) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch (_) {
+      ok = false;
+    }
+  }
+
+  showTooltipFeedback(ok ? '已复制' : '复制失败');
+}
+
 /**
  * 创建图片 OCR 控制器。
  *
@@ -115,7 +302,9 @@ function getStatusText(status) {
  * }} deps
  */
 export function createImageOcrController(deps) {
-  const { getPreviewContainer, showTempMessage, onChange } = deps;
+  const { getPreviewContainer, showTempMessage, onChange, enableTooltip } = deps;
+  // 模块级 enableTooltip 在该 controller 创建时设置（最后一个创建者生效）
+  tooltipEnable = enableTooltip !== false; // 默认 true
 
   let pendingImages = [];
   let nextImageId = 1;
@@ -133,15 +322,10 @@ export function createImageOcrController(deps) {
     container.hidden = false;
     container.innerHTML = pendingImages
       .map((img) => {
-        // hover tooltip：成功时显示已识别文本，失败时显示错误信息，其他状态显示文件名
-        const tooltip =
-          img.status === 'success' && img.recognizedText
-            ? img.recognizedText
-            : img.status === 'error'
-              ? `识别失败: ${img.recognizedText}`
-              : img.fileName;
+        const fallbackTitle = tooltipEnable ? '' : escapeAttr(getTooltipTextForItem(img));
+        const titleAttr = fallbackTitle ? ` title="${fallbackTitle}"` : '';
         return `
-          <div class="image-preview-item" data-image-id="${escapeAttr(img.id)}" title="${escapeAttr(tooltip)}">
+          <div class="image-preview-item" data-image-id="${escapeAttr(img.id)}"${titleAttr}>
             <img src="${escapeAttr(img.dataUrl)}" alt="${escapeAttr(img.fileName)}" />
             <button class="image-preview-remove" data-action="remove" data-image-id="${escapeAttr(img.id)}">×</button>
             <div class="image-preview-status ${escapeAttr(img.status)}">${escapeAttr(getStatusText(img.status))}</div>
@@ -158,6 +342,21 @@ export function createImageOcrController(deps) {
         removeImage(id);
       });
     });
+
+    // 绑定 hover tooltip（mouseenter/leave 委托到每个 item）
+    if (tooltipEnable) {
+      container.querySelectorAll('.image-preview-item').forEach((item) => {
+        item.addEventListener('mouseenter', () => {
+          const id = item.dataset.imageId;
+          const img = pendingImages.find((i) => i.id === id);
+          if (!img) return;
+          showTooltip(item, getTooltipTextForItem(img));
+        });
+        item.addEventListener('mouseleave', () => {
+          hideTooltip({ delay: 0 });
+        });
+      });
+    }
   }
 
   function addImage({ dataUrl, fileName }) {
