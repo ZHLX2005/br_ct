@@ -38,5 +38,10 @@ export default [
     "label": "reflect",
     "alias": "ref",
     "template": "请反思我们的对话 用户在重复提问当中体现出了语言习惯和倾向 前面的回答面向作为不过关的回答\n你现在需要给出\ngood_eg和bad_eg, 整理出spec\n\n用户补充: \n%s"
+  },
+  {
+    "label": "exp2",
+    "alias": "exp2",
+    "template": "%s\ngood_eg:\n[以下是推荐的示例 / 期望你采用 — good_eg = good example]\n1. 底层的调用栈和设计\n2. 使用表格讲解时序变化 每一个step对系统的变量产生的影响"
   }
 ];
