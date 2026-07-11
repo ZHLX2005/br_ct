@@ -618,15 +618,6 @@ body:has(.page-container)::-webkit-scrollbar-thumb {
   line-height: 1.8;
 }
 
-.section-kicker,
-.notes-kicker {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
 .button-group,
 .debug-controls {
   display: flex;
@@ -641,7 +632,6 @@ body:has(.page-container)::-webkit-scrollbar-thumb {
     margin-bottom: 20px;
 }
 .btn,
-.note-action,
 .btn-icon,
 .delete-key-btn,
 .timer-action-btn {
@@ -662,7 +652,6 @@ body:has(.page-container)::-webkit-scrollbar-thumb {
 }
 
 .btn:hover,
-.note-action:hover,
 .btn-icon:hover {
   background: var(--btn-bg-hover);
   border-color: var(--accent);
@@ -670,7 +659,6 @@ body:has(.page-container)::-webkit-scrollbar-thumb {
 }
 
 .btn:focus-visible,
-.note-action:focus-visible,
 .btn-icon:focus-visible,
 .delete-key-btn:focus-visible {
   outline: none;

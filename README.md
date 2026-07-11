@@ -110,7 +110,6 @@
 | `Alt+D` | imgs_picker | 图片选择器，批量选取页面图片 |
 | `Alt+F` | copy_file | 剪贴板内容保存为文件 |
 | `Alt+B` | binddom | DOM 元素绑定点击事件 |
-| `三击空格` | tripleSpace | 快速调用 AI 助手 |
 | `Ctrl+S` | (输入框) | 手动保存当前输入 |
 
 ### 圆形导航菜单 🎯
@@ -198,10 +197,6 @@
 | **会话追踪** | 按平台 + 会话 ID 追踪，确保捕获正确对话 |
 | **一键复制** | 点击按钮复制完整回复内容 |
 | **折叠/展开** | 大段回复可折叠，节省空间 |
-
-### 随手笔记 📌
-
-快速记录临时笔记，持久化存储，支持 Markdown 格式。
 
 ### 倒计时面板 ⏱️
 
@@ -348,7 +343,6 @@ bro_chat/
 │   ├── platform/                   # 平台可见性配置
 │   ├── storage/                    # 存储管理
 │   ├── menu/                       # 圆形菜单配置
-│   ├── notes/                      # 随手笔记
 │   ├── ocr/                        # OCR 批量识别
 │   ├── countdown/                   # 倒计时面板
 │   │   ├── countdown.js            # 倒计时逻辑
@@ -397,8 +391,6 @@ bro_chat/
 ├── runjs/                          # 页面注入脚本
 │   ├── goto/                       # 圆形菜单
 │   │   └── goto.js
-│   ├── tripleSpace/                # 三击激活
-│   │   └── tripleSpace.js
 │   ├── translation/                # 翻译覆盖层
 │   │   ├── content.js             # 翻译主脚本
 │   │   ├── content-ocr.js         # OCR 脚本
@@ -549,7 +541,6 @@ export default [
 - 新增侧边栏支持
 - 新增 AI 响应监听功能
 - 新增本地命令管理（Git监控、Skill管理、命令模板）
-- 新增随手笔记功能
 - 新增 OCR 批量识别
 - 新增倒计时面板
 - 新增视频片段标注功能

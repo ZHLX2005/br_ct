@@ -38,7 +38,6 @@ function syncCurrentFrameGlobals() {
 const NAV_ITEMS = [
   { icon: 'PL', name: '平台显示', page: 'platform/index.html' },
   { icon: 'DB', name: '存储管理', page: 'storage/index.html' },
-  { icon: 'NT', name: '随手笔记', page: 'notes/index.html' },
   { icon: 'PR', name: '提示词编辑', page: 'prompts_editor/prompts_editor.html' },
   { icon: 'CMD', name: '本地命令管理', page: 'local_cmd/index.html' },
 ];

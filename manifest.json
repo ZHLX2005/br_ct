@@ -69,7 +69,6 @@
     {
       "matches": ["<all_urls>"],
       "js": [
-        "runjs/tripleSpace/tripleSpace.js",
         "runjs/translation/lib/marked.min.js",
         "runjs/translation/lib/katex.min.js",
         "runjs/translation/content.js",
@@ -78,7 +77,6 @@
         "runjs/translation/sidebar-selection-content.js"
       ],
       "css": [
-        "runjs/tripleSpace/tripleSpace.css",
         "runjs/translation/content.css",
         "runjs/translation/selection-ask.css",
         "runjs/translation/content-ocr.css",
