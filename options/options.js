@@ -196,6 +196,7 @@ function initializeOptions() {
 function initNavRing() {
   const container = document.getElementById('dot-nav');
   const itemsContainer = document.getElementById('dot-nav-items');
+  const dotsContainer = document.getElementById('dot-nav-dots');
 
   // 第一个导航项为退出按钮（专注模式下显示）
   const exitItem = document.createElement('div');
@@ -213,6 +214,13 @@ function initNavRing() {
   });
 
   itemsContainer.appendChild(exitItem);
+
+  // 根据 NAV_ITEMS 生成右侧圆点
+  NAV_ITEMS.forEach(() => {
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    dotsContainer.appendChild(dot);
+  });
 
   // 创建导航项
   NAV_ITEMS.forEach((item) => {
