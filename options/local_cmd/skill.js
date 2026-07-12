@@ -636,11 +636,22 @@ function renderCentralSkillList(skills, projectSkills) {
         <div class="skill-card-actions">
           ${!projectSkill ? `<button class="btn btn-success btn-pull" data-action="skill-push-central-to-project" data-name="${escapeHtml(s.name)}">→ 推送到项目</button>` : ''}
           ${projectSkill && !synced ? `<button class="btn btn-warning" data-action="skill-push-central-to-project" data-name="${escapeHtml(s.name)}">↻ 同步</button>` : ''}
-          <div style="position: relative; display: inline-block;">
-            <button class="btn btn-secondary" data-action="skill-more" data-name="${escapeHtml(s.name)}" title="更多操作">+</button>
-            <div class="skill-more-dropdown" id="dropdown-${escapeHtml(s.name)}" style="display:none; position:absolute; right:0; bottom:100%; background:var(--paper); border:1px solid var(--line); border-radius:8px; padding:4px; min-width:160px; z-index:100; box-shadow:var(--shadow);">
-              <button class="btn" style="width:100%; text-align:left; padding:8px 12px; background:none; border:none; cursor:pointer;" data-action="skill-sync-to-all" data-name="${escapeHtml(s.name)}">↻ 同步到所有项目</button>
-              <button class="btn btn-danger" style="width:100%; text-align:left; padding:8px 12px; background:none; border:none; cursor:pointer; color: var(--danger);" data-action="skill-delete-central" data-name="${escapeHtml(s.name)}">🗑 删除 Skill</button>
+          <div class="skill-more-wrap">
+            <button class="btn btn-secondary skill-more-trigger" data-action="skill-more" data-name="${escapeHtml(s.name)}" title="更多操作" aria-label="更多操作">⋯</button>
+            <div class="skill-more-dropdown" id="dropdown-${escapeHtml(s.name)}" role="menu">
+              <button class="skill-menu-item" data-action="skill-sync-to-all" data-name="${escapeHtml(s.name)}" role="menuitem">
+                <span class="skill-menu-icon">↻</span>
+                <span>同步到所有项目</span>
+              </button>
+              <div class="skill-menu-divider"></div>
+              <button class="skill-menu-item skill-menu-danger" data-action="skill-delete-from-all" data-name="${escapeHtml(s.name)}" role="menuitem">
+                <span class="skill-menu-icon">🗑</span>
+                <span>从所有项目删除</span>
+              </button>
+              <button class="skill-menu-item skill-menu-danger" data-action="skill-delete-central" data-name="${escapeHtml(s.name)}" role="menuitem">
+                <span class="skill-menu-icon">🗑</span>
+                <span>删除 Skill</span>
+              </button>
             </div>
           </div>
         </div>
@@ -798,27 +809,72 @@ async function skillPushToProject(skillName) {
   }
 }
 
-// 切换更多操作下拉菜单
+// 切换更多操作下拉菜单（fixed 定位，跳出 overflow 容器）
 function toggleSkillMoreDropdown(btn) {
   const name = btn.dataset.name;
   const dropdown = document.getElementById('dropdown-' + name);
   if (!dropdown) return;
 
   // 关闭其他所有下拉
-  document.querySelectorAll('.skill-more-dropdown').forEach(d => {
-    if (d !== dropdown) d.style.display = 'none';
+  document.querySelectorAll('.skill-more-dropdown.is-open').forEach(d => {
+    if (d !== dropdown) d.classList.remove('is-open');
   });
 
-  dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+  // 已打开则关闭
+  if (dropdown.classList.contains('is-open')) {
+    dropdown.classList.remove('is-open');
+    return;
+  }
+
+  // 根据 trigger 的视口位置定位 dropdown（向下展开，溢出时反向）
+  const rect = btn.getBoundingClientRect();
+  const menuHeight = dropdown.offsetHeight || 200; // 估算未显示高度
+  const margin = 6;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+
+  // 横向：右对齐 trigger，但确保不超出视口右边界
+  const desiredWidth = 168;
+  let left = rect.right - desiredWidth;
+  if (left < 8) left = 8;
+  if (left + desiredWidth > vw - 8) left = vw - 8 - desiredWidth;
+  dropdown.style.left = left + 'px';
+  dropdown.style.width = desiredWidth + 'px';
+
+  // 纵向：默认向下；若下方空间不足则向上
+  const spaceBelow = vh - rect.bottom - margin;
+  const spaceAbove = rect.top - margin;
+  if (spaceBelow >= menuHeight || spaceBelow >= spaceAbove) {
+    dropdown.style.top = (rect.bottom + margin) + 'px';
+    dropdown.style.transformOrigin = 'top right';
+  } else {
+    dropdown.style.top = '';
+    dropdown.style.bottom = (vh - rect.top + margin) + 'px';
+    dropdown.style.transformOrigin = 'bottom right';
+  }
+
+  dropdown.classList.add('is-open');
 }
 
 // 点击其他地方关闭下拉
 document.addEventListener('click', (e) => {
-  if (!e.target.closest('.skill-card-actions')) {
-    document.querySelectorAll('.skill-more-dropdown').forEach(d => {
-      d.style.display = 'none';
+  if (!e.target.closest('.skill-card-actions') && !e.target.closest('.skill-more-dropdown')) {
+    document.querySelectorAll('.skill-more-dropdown.is-open').forEach(d => {
+      d.classList.remove('is-open');
     });
   }
+});
+
+// 滚动 / 窗口大小变化时关闭所有下拉（fixed 定位需要重新计算）
+window.addEventListener('scroll', () => {
+  document.querySelectorAll('.skill-more-dropdown.is-open').forEach(d => {
+    d.classList.remove('is-open');
+  });
+}, true);
+window.addEventListener('resize', () => {
+  document.querySelectorAll('.skill-more-dropdown.is-open').forEach(d => {
+    d.classList.remove('is-open');
+  });
 });
 
 // 中心仓库 → 所有已存在该项目中的 skill（进度同步，只覆盖已有）
@@ -874,4 +930,53 @@ async function syncSkillToAllProjects(skillName) {
   if (skipCount > 0) msg += '，跳过 ' + skipCount + ' 个（项目无此 Skill）';
   toast(msg);
   loadSkills();
+}
+
+// 中心仓库 → 从所有项目中删除此 skill（中心仓库保留）
+async function deleteSkillFromAllProjects(skillName) {
+  const centralPath = await loadStorage(STORAGE_KEYS.skillCentralPath);
+  const projects = await loadStorage(STORAGE_KEYS.skillMonitoredProjects);
+
+  if (!centralPath) { toast('请先配置中心仓库路径', 'error'); return; }
+  if (projects.length === 0) { toast('没有可删除的项目', 'warning'); return; }
+
+  const count = projects.length;
+  if (!confirm(`确定要从所有 ${count} 个项目中删除 Skill「${skillName}」吗？\n中心仓库中的 Skill 不会受影响。`)) return;
+
+  toast('正在删除...', 'info');
+  const projectPaths = projects.map(p => p.path);
+
+  try {
+    const resp = await sendNativeMessage({
+      command: 'batchDeleteSkills',
+      dirs: projectPaths,
+      name: skillName,
+    });
+
+    const results = resp.data || [];
+    let successCount = 0;
+    let failCount = 0;
+    const failDetails = [];
+
+    for (const r of results) {
+      if (r.success) {
+        successCount++;
+      } else {
+        failCount++;
+        const project = projects.find(p => p.path === r.path);
+        const name = project ? project.name : r.path;
+        failDetails.push(`${name}: ${r.error}`);
+      }
+    }
+
+    let msg = `删除完成：成功 ${successCount} 个`;
+    if (failCount > 0) msg += `，失败 ${failCount} 个`;
+    toast(msg);
+    if (failDetails.length > 0) {
+      console.warn('删除失败详情:', failDetails.join('\n'));
+    }
+    loadSkills();
+  } catch (err) {
+    toast('批量删除失败: ' + err.message, 'error');
+  }
 }

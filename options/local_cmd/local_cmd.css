@@ -706,6 +706,112 @@
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+  align-items: center;
+}
+
+/* === Skill 卡片 · 更多操作下拉（现代化 · 简约） === */
+.skill-more-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.skill-more-trigger {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
+  letter-spacing: 1px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+}
+
+.skill-more-dropdown {
+  position: fixed;
+  visibility: hidden;
+  opacity: 0;
+  min-width: 168px;
+  max-width: min(240px, calc(100vw - 24px));
+  padding: 4px;
+  background: var(--paper-soft);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow:
+    0 1px 2px rgba(48, 32, 20, 0.04),
+    0 8px 24px rgba(48, 32, 20, 0.10);
+  z-index: 10000;
+  transform-origin: top right;
+  transition: opacity 120ms ease, transform 120ms ease;
+  transform: translateY(-4px) scale(0.96);
+  pointer-events: none;
+}
+
+.skill-more-dropdown.is-open {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.skill-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 100ms ease, color 100ms ease;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.skill-menu-item:hover,
+.skill-menu-item:focus-visible {
+  background: rgba(93, 67, 43, 0.06);
+  outline: none;
+}
+
+.skill-menu-item:active {
+  background: rgba(93, 67, 43, 0.10);
+}
+
+.skill-menu-icon {
+  width: 16px;
+  font-size: 13px;
+  line-height: 1;
+  text-align: center;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.skill-menu-item.skill-menu-danger {
+  color: var(--danger);
+}
+
+.skill-menu-item.skill-menu-danger:hover,
+.skill-menu-item.skill-menu-danger:focus-visible {
+  background: rgba(154, 79, 64, 0.08);
+}
+
+.skill-menu-item.skill-menu-danger .skill-menu-icon {
+  opacity: 1;
+}
+
+.skill-menu-divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--line);
 }
 
 .skill-empty {

@@ -656,3 +656,47 @@ func removeSkillFromSlice(slice []string, item string) []string {
 	}
 	return result
 }
+
+// BatchDeleteSkills 批量从多个项目目录删除指定 skill
+// 接收 req.Dirs（项目路径数组）和 req.Name（skill 名称）
+// 逐个项目删除，返回每个项目的删除结果
+func BatchDeleteSkills(req protocol.Request) protocol.Response {
+	if len(req.Dirs) == 0 || req.Name == "" {
+		return protocol.Response{Status: "error", Message: "dirs 和 name 不能为空"}
+	}
+
+	type DeleteResult struct {
+		Path    string `json:"path"`
+		Success bool   `json:"success"`
+		Error   string `json:"error,omitempty"`
+	}
+
+	var results []DeleteResult
+
+	for _, projectPath := range req.Dirs {
+		result := DeleteResult{Path: projectPath}
+
+		// 尝试 .claude/skills/{name}
+		skillDir := filepath.Join(projectPath, ".claude", "skills", req.Name)
+		if _, err := os.Stat(skillDir); err != nil {
+			// 也尝试 skills/{name}
+			skillDir = filepath.Join(projectPath, "skills", req.Name)
+			if _, err := os.Stat(skillDir); err != nil {
+				result.Error = "skill 不存在"
+				results = append(results, result)
+				continue
+			}
+		}
+
+		if err := os.RemoveAll(skillDir); err != nil {
+			result.Error = err.Error()
+			results = append(results, result)
+			continue
+		}
+
+		result.Success = true
+		results = append(results, result)
+	}
+
+	return protocol.Response{Status: "ok", Data: results}
+}
