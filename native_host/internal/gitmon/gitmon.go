@@ -66,14 +66,88 @@ func GitPull(req protocol.Request) protocol.Response {
 }
 
 func GitPush(req protocol.Request) protocol.Response {
-	out, err := runGitCombined(req.Path, "push")
-	result := GitOperationResult{Dir: req.Path, Output: out}
-	if err != nil {
-		result.Error = err.Error()
+	dir := req.Path
+	result := GitOperationResult{Dir: dir}
+
+	status := gitStatusForDir(dir)
+	if status.Error != "" {
+		result.Error = "无法读取状态: " + status.Error
+		return protocol.Response{Status: "ok", Data: result}
+	}
+
+	// 1. 本地有未提交变更 → 拒绝
+	if !status.Clean && status.Ahead == 0 && status.Behind == 0 {
+		result.Error = "本地有未提交的变更，请先提交或丢弃后再推送"
+		result.Output = formatStatusForUser(status)
+		return protocol.Response{Status: "ok", Data: result}
+	}
+
+	// 2. 本地 ahead > 0 且 behind == 0 → 直接 push
+	if status.Ahead > 0 {
+		if status.Behind > 0 {
+			// 双方都有提交：拒绝，要求手动处理
+			result.Error = "本地和远程都有未同步的提交，请手动处理分歧后再推送"
+			result.Output = formatStatusForUser(status)
+			return protocol.Response{Status: "ok", Data: result}
+		}
+		out, err := runGitCombined(dir, "push")
+		result.Output = out
+		if err != nil {
+			result.Error = err.Error()
+		} else {
+			result.Success = true
+		}
+		return protocol.Response{Status: "ok", Data: result}
+	}
+
+	// 3. ahead == 0 && behind == 0 → 无事可做
+	if status.Behind == 0 {
+		result.Output = "工作区干净，无需推送"
+		result.Success = true
+		return protocol.Response{Status: "ok", Data: result}
+	}
+
+	// 4. 远程有新 commit（behind > 0）→ 先 fetch + pull 自动合并，再 push
+	fetchOut, fetchErr := runGitCombined(dir, "fetch")
+	if fetchErr != nil {
+		result.Error = "git fetch 失败: " + fetchErr.Error() + "\n" + fetchOut
+		return protocol.Response{Status: "ok", Data: result}
+	}
+
+	pullOut, pullErr := runGitCombined(dir, "pull", "--no-edit")
+	if pullErr != nil {
+		// merge 冲突：abort 还原
+		runGit(dir, "merge", "--abort")
+		result.Error = "自动合并远程更新失败（可能存在冲突），已放弃合并。请手动处理后重试。\n" + pullOut
+		return protocol.Response{Status: "ok", Data: result}
+	}
+
+	pushOut, pushErr := runGitCombined(dir, "push")
+	result.Output = "已自动同步远程更新：\n" + pullOut + "\n\n推送结果：\n" + pushOut
+	if pushErr != nil {
+		result.Error = pushErr.Error()
 	} else {
 		result.Success = true
 	}
 	return protocol.Response{Status: "ok", Data: result}
+}
+
+// formatStatusForUser 把 gitStatus 格式化为用户友好的字符串
+func formatStatusForUser(status GitStatusInfo) string {
+	lines := []string{
+		fmt.Sprintf("分支：%s", status.Branch),
+		fmt.Sprintf("领先远程：%d，落后远程：%d", status.Ahead, status.Behind),
+	}
+	if len(status.Staged) > 0 {
+		lines = append(lines, fmt.Sprintf("已暂存 (%d)：%s", len(status.Staged), strings.Join(status.Staged, ", ")))
+	}
+	if len(status.Modified) > 0 {
+		lines = append(lines, fmt.Sprintf("已修改 (%d)：%s", len(status.Modified), strings.Join(status.Modified, ", ")))
+	}
+	if len(status.Untracked) > 0 {
+		lines = append(lines, fmt.Sprintf("未跟踪 (%d)：%s", len(status.Untracked), strings.Join(status.Untracked, ", ")))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func GitBatchStatus(req protocol.Request) protocol.Response {
@@ -170,12 +244,12 @@ func GitBatchPush(req protocol.Request) protocol.Response {
 					mu.Unlock()
 				}
 			}()
-			out, err := runGitCombined(d, "push")
-			result := GitOperationResult{Dir: d, Output: out}
-			if err != nil {
-				result.Error = err.Error()
-			} else {
-				result.Success = true
+			// 复用 GitPush 逻辑（单目录智能 push：干净 → push；远程落后 → 自动合并）
+			subReq := protocol.Request{Command: "gitPush", Path: d}
+			resp := GitPush(subReq)
+			result := GitOperationResult{Dir: d}
+			if data, ok := resp.Data.(GitOperationResult); ok {
+				result = data
 			}
 			mu.Lock()
 			results[idx] = result
@@ -190,7 +264,7 @@ func GitBatchPush(req protocol.Request) protocol.Response {
 	}()
 	select {
 	case <-done:
-	case <-time.After(60 * time.Second):
+	case <-time.After(120 * time.Second):
 	}
 	return protocol.Response{Status: "ok", Data: results}
 }

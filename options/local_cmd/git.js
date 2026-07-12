@@ -219,9 +219,10 @@ async function gitPushDir(id) {
   if (!dir) return;
 
   try {
+    // 智能 push：本地必须干净；远程落后时自动 fetch+pull 合并后再 push；冲突则放弃
     const resp = await sendNativeMessage({ command: 'gitPush', path: dir.path });
     const result = resp.data;
-    toast(result.success ? `Push 成功\n${result.output}` : `Push 失败\n${result.error}\n${result.output}`,
+    toast(result.success ? `Push 成功\n${result.output}` : `Push 失败\n${result.error || ''}\n${result.output || ''}`,
           result.success ? 'success' : 'error');
     gitRefreshDir(id);
   } catch (err) {
