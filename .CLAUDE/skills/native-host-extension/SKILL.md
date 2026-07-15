@@ -188,6 +188,10 @@ cmd.SysProcAttr = &syscall.SysProcAttr{
 | 直接读写 stdin/stdout | 破坏 4 字节长度协议，消息解析失败 | 只用 `protocol.ReadMessage/SendResponse` |
 | Windows registry 操作用 HKLM | 需要管理员权限，UAC 弹窗 | 用 `registry.CURRENT_USER`（HKCU），无需提权 |
 
+## 调试 Windows 进程 / IPC 问题
+
+排查 native_host 子进程「莫名连坐自杀」、Service Worker 30s idle 链路、单例锁、CreateProcess CreationFlags 选错等问题时，详见 [[windows-process-ipc]]（完整诊断手册 + 心智模型 + 失败模式速查 + 仓库代码索引）。
+
 ## 扩展检查清单
 
 - [ ] 确定命令名（camelCase）和包名（lowercase）
@@ -199,3 +203,9 @@ cmd.SysProcAttr = &syscall.SysProcAttr{
 - [ ] main.go 中 `registry.Register()` 注册
 - [ ] `go build` 编译通过
 - [ ] 前端 JS 调用 `chrome.runtime.sendNativeMessage` 验证
+
+## 参考资料（按需加载）
+
+| ref | 何时读取 | 路径 |
+|-----|---------|------|
+| [[windows-process-ipc]] | 排查 Windows 子进程连坐、Service Worker 30s 链路、单例锁多开、CreateProcess CreationFlags 选错等问题 | references/windows-process-ipc.md |

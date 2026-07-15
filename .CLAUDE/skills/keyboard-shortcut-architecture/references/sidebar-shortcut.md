@@ -1,9 +1,11 @@
 ---
-name: chrome-sidebar-shortcut
-description: Chrome 扩展边栏快捷键切换模块实现
+name: sidebar-shortcut-reference
+description: Reference — Chrome 扩展边栏快捷键切换模块完整实现（Chrome Side Panel API）。覆盖伪关闭 vs 真关闭、tabId vs windowId 选择、状态持久化、多标签页管理、完整 sidebar_toggle.js 代码。原 chrome-sidebar-shortcut skill 归档版本。
 ---
 
-# Chrome Sidebar 快捷键切换模块
+# Chrome Sidebar 快捷键切换模块（参考文档）
+
+> 本文档为历史独立 skill `chrome-sidebar-shortcut` 的归档版本，已沉淀为 `keyboard-shortcut-architecture` 的 ref。阅读时机：需要新增或调试边栏切换快捷键、了解 Chrome Side Panel API 的细节（伪关闭陷阱、tabId 生命周期、状态持久化）。
 
 ## ⚠️ 难度警告
 

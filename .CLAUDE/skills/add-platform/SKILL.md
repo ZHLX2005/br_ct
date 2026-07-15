@@ -364,6 +364,12 @@ return [`contentScripts/${platform}.js`];
 5. backgroudtask/platformScriptFiles.js  → 注册脚本列表
 ```
 
+## 相关 skill（协作参考）
+
+- 内容脚本的代码规范（IIFE 模式、注入顺序、模块注册）见 [[code-standards-guide]]（特别是 `references/runjs-module-standards.md` 与 `references/chrome-bg-module-pattern.md`）
+- 各平台剪贴板捕获原理（路径 A 原型链替换 / simulateCopy / `mainWorldHook.js` 行为差异）详见独立 skill **clipboard-capture-architecture**
+- 平台侧栏入口的快捷键切换、伪关闭 vs 真关闭、tabId 生命周期见 **keyboard-shortcut-architecture**（新增/修改本 skill 的边栏入口时读）
+
 ## 调试清单
 
 - [ ] Sidebar 中能勾选平台，图标/颜色正确
