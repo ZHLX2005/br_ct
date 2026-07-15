@@ -83,10 +83,6 @@ let workspaceTabCounter = 0;
 // 右键菜单
 let contextMenuTarget = null;   // 当前右键点击的目标索引
 
-// 直接发送模式（默认启用，可切换）
-let isDirectMode = true;
-const MODE_STORAGE_KEY = "sidebar_send_mode";
-
 // AI Chat 设置（存储在 chrome.storage.sync，支持跨会话同步）
 const AICHAT_SETTINGS_KEY = "aichat_settings";
 let aichatSettings = { captureOnSend: false, addTabToWorkspaceOnSend: false, blockOnSend: false, selectionMode: false };
@@ -176,31 +172,6 @@ function closeSettingsModal() {
   if (modal) modal.style.display = "none";
 }
 
-async function loadSendMode() {
-  try {
-    const result = await chrome.storage.session?.get(MODE_STORAGE_KEY);
-    if (result?.[MODE_STORAGE_KEY] !== undefined) {
-      isDirectMode = result[MODE_STORAGE_KEY];
-      updateModeToggleUI();
-    }
-  } catch (e) { /* ignore */ }
-}
-
-function toggleSendMode() {
-  isDirectMode = !isDirectMode;
-  updateModeToggleUI();
-  try {
-    chrome.storage.session?.set({ [MODE_STORAGE_KEY]: isDirectMode });
-  } catch (e) { /* ignore */ }
-  showTempMessage(isDirectMode ? "已切换为直发模式" : "已切换为复制模式");
-}
-
-function updateModeToggleUI() {
-  if (!elements.modeToggle) return;
-  elements.modeToggle.textContent = isDirectMode ? "直发" : "复制";
-  elements.modeToggle.classList.toggle("active", isDirectMode);
-}
-
 // AI 平台 -> 真实标签页映射缓存
 let platformTabCache = {};      // platform -> { tabId, title, url }
 
@@ -245,7 +216,6 @@ export async function initializePopup() {
     sourcePanel: document.getElementById("source-panel"),
     sourcePanelClose: document.getElementById("source-panel-close"),
     sourcePanelBody: document.getElementById("source-panel-body"),
-    modeToggle: document.getElementById("mode-toggle"),
     pendingSendBar: document.getElementById("pending-send-bar"),
     pendingSendCount: document.getElementById("pending-send-count"),
     pendingSendBtn: document.getElementById("pending-send-btn"),
@@ -282,9 +252,6 @@ export async function initializePopup() {
 
   // 同步平台计数
   updatePlatformCount();
-
-  // 恢复发送模式
-  loadSendMode();
 
   // 加载 AI Chat 设置
   await loadAichatSettings();
@@ -624,9 +591,6 @@ export function setupEventListeners() {
 
   // 统一发送按钮
   elements.pendingSendBtn?.addEventListener("click", copyBlockedAsLinks);
-
-  // 直发/复制模式切换
-  elements.modeToggle?.addEventListener("click", toggleSendMode);
 
   // 顶部 + 按钮 → 添加工作区
   elements.workspaceTabAdd?.addEventListener("click", () => {
@@ -1258,17 +1222,11 @@ async function runPreSendHooks() {
 
 /**
  * 统一发送入口
- * - 直接发送模式（isDirectMode=true）：不展示阻塞态，直接发
- * - 阻塞模式：仅展示，不真正发送（等点击黄色气泡或点击统一发送时再走 dispatchMessageToPlatforms）
+ * 阻塞模式下：仅展示阻塞气泡，等待用户点击发送
+ * 非阻塞模式：直接发送
  */
 async function startSending() {
   await runPreSendHooks();
-
-  // 直接发送模式：不捕获回复，发送后跳转到 AI 页面
-  if (isDirectMode) {
-    await startDirectSend();
-    return;
-  }
 
   await getMessageSaver().flush(elements.messageInput.value);
 
@@ -1703,64 +1661,6 @@ function updateResponseStatus(isComplete) {
 }
 
 /**
- * 处理平台回复（流式）
- */
-function handlePlatformResponse(platformId, data) {
-  const { content, messageId, isComplete, timestamp, conversationId } = data || {};
-  if (!messageId) return;
-
-  const ps = getPlatformState(platformId);
-  const key = conversationId || DEFAULT_CONVERSATION_ID;
-
-  if (!activePlatformId || activePlatformId === platformId) {
-    activePlatformId = platformId;
-  }
-
-  moveDefaultConversationTo(platformId, key);
-  ps.activeConvId = key;
-  upsertAssistantMessage(platformId, key, {
-    messageId,
-    content,
-    isComplete,
-    timestamp,
-  });
-
-  if (activePlatformId === platformId) {
-    updateResponseStatus(isComplete);
-    renderCurrentPlatform();
-    scrollToBottom();
-  }
-
-  renderPlatformTabs();
-}
-
-/**
- * 处理平台 copy capture
- */
-function handlePlatformCapture(platformId, data) {
-  if (!data) return;
-
-  const ps = getPlatformState(platformId);
-  const key = data.conversationId || DEFAULT_CONVERSATION_ID;
-  moveDefaultConversationTo(platformId, key);
-  ps.activeConvId = key;
-  upsertAssistantMessage(platformId, key, {
-    messageId: data.messageId,
-    content: data.text || "",
-    html: data.html || null,
-    htmlMissing: data.htmlMissing,
-    isComplete: true,
-    timestamp: data.timestamp || Date.now(),
-  });
-
-  activePlatformId = platformId;
-
-  renderCurrentPlatform();
-  scrollToBottom();
-  renderPlatformTabs();
-}
-
-/**
  * 初始化多平台回复展示
  */
 export function initializeResponseDisplay() {
@@ -1781,20 +1681,6 @@ export function initializeResponseDisplay() {
   });
 
   chrome.runtime.onMessage.addListener((request) => {
-    const responseMatch = request.action?.match(/^(\w+)Response$/);
-    if (responseMatch) {
-      const platformId = responseMatch[1];
-      console.log(`[Sidebar] ${platformId}Response received`, request.data);
-      handlePlatformResponse(platformId, request.data);
-    }
-
-    const captureMatch = request.action?.match(/^(\w+)CopyCapture$/);
-    if (captureMatch) {
-      const platformId = captureMatch[1];
-      console.log(`[Sidebar] ${platformId}CopyCapture received`, request.data);
-      handlePlatformCapture(platformId, request.data);
-    }
-
     // 划词选择结果
     if (request.action === "sidebarSelectionResult") {
       handleSidebarSelection(request.text, request.title, request.url);
@@ -2197,67 +2083,6 @@ function handleContextMenuAction(action, index) {
   }
 }
 
-/**
- * 直接发送入口 — 不捕获回复，发送后把消息展示到聊天框、切换到 AI 标签页
- * - 非阻塞模式：直接走 dispatchMessageToPlatforms 发送
- * - 阻塞模式（presetMessage 为空时）：仅展示阻塞气泡，等待用户点击发送
- */
-async function startDirectSend(presetMessage = null, forcedPlatformIds = null) {
-  if (!presetMessage) {
-    await getMessageSaver().flush(elements.messageInput.value);
-  }
-
-  const originalMessage = presetMessage || validateMessageInput(elements.messageInput.value);
-  if (!originalMessage) return;
-
-  const selectedPlatforms = (forcedPlatformIds && forcedPlatformIds.length > 0)
-    ? forcedPlatformIds
-    : getSelectedPlatformIdsShared(elements.platformCheckboxes);
-
-  if (!validatePlatformSelection(selectedPlatforms)) return;
-
-  // 先把用户消息写入聊天框（仅展示用，不等待回复）
-  const sendTimestamp = Date.now();
-  if (!activePlatformId || !selectedPlatforms.includes(activePlatformId)) {
-    activePlatformId = selectedPlatforms[0];
-  }
-
-  // 如果是手动触发的新输入（非点击已阻塞消息），且开启了阻塞模式：仅展示，不真正发送
-  const isNewInput = !presetMessage;
-  const isBlocked = isNewInput && aichatSettings.blockOnSend;
-  // 阻塞提交时把当前提取/划词内容绑定到消息上，重发时带上
-  const boundExtracted = isBlocked ? getExtractedContentText() : "";
-
-  selectedPlatforms.forEach((platformId) => {
-    const ps = getPlatformState(platformId);
-    const conversationId = ps.activeConvId || DEFAULT_CONVERSATION_ID;
-    appendUserMessage(platformId, conversationId, originalMessage, sendTimestamp, isBlocked, boundExtracted);
-  });
-  renderCurrentPlatform();
-  updatePendingSendBar();
-  scrollToBottom(true);
-
-  // 清空输入框（提取内容延迟到发送读取后再清空，避免 dispatchMessageToPlatforms 读不到）
-  if (isNewInput) {
-    elements.messageInput.value = "";
-    autoResizeInput(elements.messageInput);
-    updateSendButton();
-  }
-
-  if (isBlocked) {
-    if (isNewInput) clearExtractedContent();
-    try { await addToHistory(originalMessage); } catch (e) { /* ignore */ }
-    try { await addMessageTabContext(originalMessage, await getCurrentActiveTabUrl()); } catch (e) { /* ignore */ }
-    refreshHistoryCache();
-    showTempMessage(`已阻塞 ${selectedPlatforms.length} 个平台的消息，点击消息发送`);
-    return;
-  }
-
-  // 非阻塞：直接发，逻辑收敛到 dispatchMessageToPlatforms（携带提取文本和提示词模板）
-  await dispatchMessageToPlatforms(originalMessage, selectedPlatforms);
-  if (isNewInput) clearExtractedContent();
-}
-
 // ==================== 问题阻塞（待发送队列） ====================
 
 async function loadPendingMessages() {
@@ -2270,7 +2095,7 @@ async function savePendingMessages() {
 }
 
 function enqueuePendingMessage(message) {
-  // 已废弃：由 startDirectSend/startSending 直接写入 blocked user 消息
+  // 已废弃：由 startSending 直接写入 blocked user 消息
 }
 
 function removePendingMessage(id) {
@@ -2401,7 +2226,7 @@ async function dispatchMessageToPlatforms(originalMessage, platformIds, { skipHi
     finalMessage = extracted + "\n\n" + originalMessage;
   }
 
-  setSidebarSendButtonState("busy", "直发");
+  setSidebarSendButtonState("busy", "发送");
 
   // 阻塞路径在阻塞阶段已存历史；非阻塞路径在这里补存
   if (!skipHistory) {
