@@ -144,7 +144,6 @@ input-area
 │   ├── chat-input            ← textarea 输入框
 │   └── chat-input-foot
 │       ├── foot-history-btn  ← 历史消息下拉
-│       ├── mode-toggle       ← 直发/复制模式切换
 │       └── send-btn          ← 发送按钮
 └── history-dropdown          ← 历史消息列表
 ```
@@ -163,7 +162,6 @@ input-area
 | `isPlatformPanelOpen` | boolean | 平台面板展开状态 |
 | `workspaceTabs` | array | 工作区标签列表 |
 | `contextMenuTarget` | number | 右键菜单目标索引 |
-| `isDirectMode` | boolean | 发送模式 true=直发 false=复制 |
 | `platformTabCache` | object | AI 平台 → 真实标签页映射 |
 | `savedPlatformStates` | object | 平台 checkbox 状态 |
 | `isHistoryOpen` | boolean | 历史下拉状态 |
@@ -202,28 +200,20 @@ setupEventListeners()
   ├── 提示词栏清除
   ├── 提示词栏点击 → 弹出提示词选择面板（分组左栏 + 模板右栏）
   ├── 历史按钮
-  ├── 模式切换（直发/复制）
   ├── 工作区标签 +/-
   ├── 右键菜单
   └── 每 15s → refreshPlatformTabStatus() + updatePlatformCount()
 
 startSending()
-  ├── isDirectMode → startDirectSend()（直发：不等待回复，跳转到 AI 页面）
-  └── 复制模式（捕获回复）：
-      1. 验证输入 + 收集所选平台
-      2. applyPromptTemplate → finalMessage（%s/%v 占位符替换）
-      3. appendUserMessage（本地写回显）
-      4. 长文本（>400字符）→ copyToClipboard
-      5. chrome.runtime.sendMessage({ action: "processTaskQueue" })
-      6. 等待 background 处理完成
-      7. 清空输入框 + clearExtractedContent()
+  ├── runPreSendHooks()（捕获页面文本 / 添加到工作区）
+  ├── flush input + 验证 + 收集所选平台
+  ├── isBlocked（问题阻塞）= true → appendUserMessage 并 return，等待点击发送
+  └── 非阻塞 → dispatchMessageToPlatforms → chrome.runtime.sendMessage({ action: "directSend" })
 
 initializeResponseDisplay()
   ├── 缓存 response-content / response-status DOM
   ├── 监听 scroll → shouldAutoScroll
   ├── chrome.runtime.onMessage
-  │   ├── /^(\w+)Response$/  → handlePlatformResponse() 流式更新
-  │   ├── /^(\w+)CopyCapture$/ → handlePlatformCapture() 复制捕获
   │   └── sidebarSelectionResult → handleSidebarSelection()
   └── 检查 pendingSelection（跨页面关闭时的划词结果中转）
 ```
@@ -312,8 +302,6 @@ sidebar (content_script)
   │
   ├── chrome.runtime.sendMessage({ action: "processTaskQueue", ... })
   │   → background: 处理队列，逐平台打开标签页 + 注入脚本 + 发送消息
-  │   → background → sidebar: { action: "platformIdResponse", data }
-  │   → sidebar: handlePlatformResponse() 流式更新 UI
   │
   ├── chrome.runtime.sendMessage({ action: "directSend", ... })
   │   → background: 直接跳转到 AI 标签页，发送消息
@@ -327,9 +315,7 @@ sidebar (content_script)
   ├── chrome.runtime.sendMessage({ action: "switchToTab" | "openPlatformTab" })
   │   → background: 浏览器标签页切换/创建
   │
-  └── chrome.runtime.onMessage（监听回复和划词结果）
-      ├── /^(\w+)Response$/ — 流式回复
-      ├── /^(\w+)CopyCapture$/ — 复制捕获
+  └── chrome.runtime.onMessage（监听划词结果）
       └── sidebarSelectionResult — 划词结果
 ```
 
@@ -423,7 +409,6 @@ promptPicker 浮层挂载到 document.body，点击外部自动关闭。
 | 坑点 | 说明 | 修复 |
 |------|------|------|
 | 长文本复制后等待 1s 才发送 | `await new Promise(r => setTimeout(r, 1000))` | 考虑用 clipboard API 的 then 代替 hard wait |
-| 直发模式下不清空提取内容 | `startDirectSend()` 缺少 `clearExtractedContent()` | 已在新版 aichatUtils 中修复 |
 | `applyPromptTemplate` 提取内容 URL 前缀 | `getExtractedContentText()` 返回 `[来自: url]\n文本` | 注意 URL 不可信 |
 | enter 键发送与中文输入法冲突 | `keydown` + `!e.shiftKey` | 不带 `isComposing` 检查，中文输入法按 enter 会误触发送 |
 

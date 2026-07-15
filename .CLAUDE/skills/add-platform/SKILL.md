@@ -137,231 +137,32 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 参考 `contentScripts/platform.template.js` 获取完整选项说明。
 
-## 3. 创建剪贴板捕获配置
-
-**文件**: `contentScripts/clipboardCapture/configs/{platform}.js`
-
-IIFE 模式，挂载到 `window.{platform}CaptureConfig`。
-
-```javascript
-(function() {
-  if (window.{platform}CaptureConfig) return;
-
-  window.{platform}CaptureConfig = {
-    name: '{platform}',
-    action: '{platform}CopyCapture',
-
-    // ============= 复制按钮 =============
-    copyBtnPrimarySelector: 'button[data-testid="copy-button"]',
-    copyBtnSelectors: [
-      'button[data-testid="copy-button"]',
-      'button[aria-label*="复制"]',
-      'button[aria-label*="Copy"]',
-    ],
-
-    // ============= 内容定位 =============
-    getContentRoot: function(turnRoot) {
-      return turnRoot.querySelector('.markdown') ||
-             turnRoot.querySelector('.prose') ||
-             turnRoot;
-    },
-
-    getConversationId: function() {
-      // 从 URL 提取对话 ID
-      try {
-        var url = new URL(window.location.href);
-        // 平台特定逻辑...
-      } catch(e) {}
-      return '__default__';
-    },
-
-    getMessageId: function(element) {
-      // 从元素或父元素提取消息 ID
-      return null;
-    },
-
-    // ============= 事件检测 =============
-    detectTurn: function(target) {
-      if (!(target instanceof Element)) return null;
-      // 返回包含当前消息的容器元素
-      // 必须同时包含内容和复制按钮
-    },
-
-    isCopyControl: function(element) {
-      if (!(element instanceof Element)) return false;
-      // 检查元素是否匹配复制按钮
-      return false;
-    },
-
-    // ============= 可选 =============
-    skipTags: new Set(['BUTTON', 'SCRIPT', 'STYLE', 'SVG', 'PATH', 'MathJAX']),
-    contextWindowMs: 2500,
-    debug: true,
-  };
-})();
-```
-
-### 关键配置说明
-
-| 字段 | 说明 |
-|------|------|
-| `copyBtnPrimarySelector` | 用于生成作用域选择器的复制按钮 CSS |
-| `getContentRoot` | 从 turnRoot 中定位内容容器（不含操作栏） |
-| `detectTurn` | 找到包裹整条消息（含内容+复制按钮）的当前 turn 容器 |
-| `getMessageId` | 提取消息唯一 ID，用于去重 |
-| `skipTags` | 文本提取时跳过这些标签 |
-
-**重要**: `detectTurn` 返回的容器必须 **同时包含内容区和复制按钮**，否则 `autoCapture` 无法找到复制按钮。
-
-### turnSelectors 与 copyBtn 的关系
-
-`findTurnRootFromContainer` 使用 `turnSelectors` 从 response 容器向上找到 turn 根元素。turn 根元素要够宽（包含按钮），这是 `findCopyBtn` 能正常工作前提。
-
-常见 DOM 模式与 turn root 选择：
-
-| 模式 | 内容选择器 | turn 选择器 | 说明 |
-|------|-----------|-------------|------|
-| ChatGPT data-testid 层级 | `[data-message-author-role="assistant"]` | `[data-testid^="conversation-turn-"]` | 内容含变量 |
-| 豆包消息盒子 | `[data-target-id="message-box-target-id"]` | 同上 | 容器即 turn |
-| Gemini Angular 组件 | `structured-content-container` | `model-response` | 按钮在 content 外部 sibling 的 footer 中 |
-| 内容内联按钮 | `article.message` | 同内容选择器 | 按钮在内容容器内 |
-
-### 程序化点击注意事项
-
-- **普通平台**: `btn.click()` 即可
-- **检查 isTrusted 的平台**（如豆包）: 需用完整 mouse event 序列（`pointerdown→mousedown→pointerup→mouseup→click`）+ focus + 坐标
-- **Angular Material 平台**（如 Gemini）: 用 `btn.click()` 避免 Angular 内部错误；dispatchEvent 会触发 "No ID or name found in config"
-- 对应逻辑在 `contentScripts/clipboardCapture/mainWorldHook.js` 的 `__ccSimulateCopy` 中处理
-
-### 复制按钮定位常见陷阱
-
-1. **aria-label 模糊匹配**: `aria-label*="复制"` 可能匹配"复制表格"等子按钮 → 使用精确匹配 `aria-label="复制"`
-2. **按钮不在 turn 容器内**: 按钮在内容容器的兄弟元素中（如 Gemini）→ turn root 必须选到公共父容器
-3. **data-testid 被 Angular 清除**: Angular 异步渲染会清除程序设置的 dataset → 使用 unscoped fallback（`querySelectorAll` + 最后一个匹配）
-4. **选择器匹配到嵌套按钮**: `button:first-child` 可能匹配到 dropdown menu 内的嵌套按钮 → 使用更精确的作用域选择器
-
-## 4. 创建回复监听模块
-
-**文件**: `contentScripts/chatResponse/{platform}ResponseListener.js`
-
-IIFE 模式，依赖 `window.ResponseListenerCore`。
-
-```javascript
-(function() {
-  if (window.__{platform}ResponseListenerInjected) return;
-  window.__{platform}ResponseListenerInjected = true;
-
-  if (!window.ResponseListenerCore) {
-    console.warn('[Platform Response Listener] ResponseListenerCore not found');
-    return;
-  }
-
-  window.ResponseListenerCore.createResponseListener({
-    platform: '{platform}',
-    hostnames: ['example.com'],
-
-    // 查找最新回复的选择器，按优先级排列
-    responseSelectors: [
-      'selector-for-response-container',
-    ],
-
-    // 找到包裹完整 turn（含操作栏）的容器选择器
-    turnSelectors: [
-      'selector-for-turn-root',
-    ],
-
-    skipTags: new Set(['BUTTON', 'SCRIPT', 'STYLE', 'SVG', 'PATH', 'MathJAX']),
-
-    // 对应上面第 3 步的全局变量名
-    captureConfig: '{platform}CaptureConfig',
-
-    getConversationId: function() {
-      // 从 URL 提取，必须和 clipboard config 的 getConversationId 一致
-    },
-
-    getMessageId: function(element) {
-      // 从元素提取，必须和 clipboard config 的 getMessageId 一致
-    },
-
-    isGenerating: function() {
-      // 检查页面是否正在生成回复（有无启用态的停止按钮）
-    },
-  });
-})();
-```
-
-### 核心逻辑说明
-
-`responseListenerCore.js` 实现自动检测新回复：
-
-1. `MutationObserver` 监听 `document.body` 变化
-2. 找到最新的 response 容器（`responseSelectors` 最后一个匹配）
-3. 提取文本内容，与上次快照比较
-4. 内容变化时发送 `{platform}Response` 消息到 sidebar
-5. 生成完成（`!isGenerating()`）时调用 `autoCapture` 触发剪贴板捕获
-6. `autoCapture` → `findTurnRootFromContainer`（用 `turnSelectors`）→ 定位 turn 根 → 尝试模拟点击复制按钮 → `dom.auto` 兜底
-
-### responseSelectors 与 turnSelectors 的关系
-
-- `responseSelectors`: 定位**内容容器**（最新回复的文本区），主要用于文本提取
-- `turnSelectors`: 定位**完整 turn**（需包含操作栏/复制按钮），用于剪贴板捕获的 scope
-
-```javascript
-// responseListenerCore.js 中：
-var container = getLatestResponseContainer();     // ← responseSelectors
-var turnRoot = findTurnRootFromContainer(container); // ← turnSelectors (element.closest)
-```
-
-`responseSelectors` 一般比 `turnSelectors` 窄（只含内容），`turnSelectors` 要更宽（含按钮）。
-
-### isGenerating 检测
-
-用于判断回复是否生成完成：
-
-- **通用**: 查找页面中的"停止"按钮（`button[aria-label*="stop"]`）
-- **ChatGPT**: 检查按钮的 aria-label 是否包含 "stop"、"stopping" 等关键词
-- **豆包**: 查找 `[data-testid="stop-generation-button"]`
-- **如果没找到停止按钮**: 默认返回 `false`（认为没在生成）
-
-## 5. 更新脚本文件列表
+## 3. 注册脚本列表
 
 **文件**: `backgroudtask/platformScriptFiles.js`
 
-在 `getPlatformScriptFiles` 中添加：
+在 `getPlatformScriptFiles` 中添加新分支：
 
 ```javascript
 if (platform === "{platform}") {
-  return [
-    "contentScripts/clipboardCapture/core.js",
-    "contentScripts/clipboardCapture/configs/{platform}.js",
-    "contentScripts/{platform}.js",
-    "contentScripts/chatResponse/responseListenerCore.js",
-    "contentScripts/chatResponse/{platform}ResponseListener.js",
-  ];
+  return ["contentScripts/{platform}.js"];
 }
 ```
 
-注入顺序有依赖关系：
-1. `core.js` — 必须先加载，定义 `window.ClipboardCapture`
-2. `configs/{platform}.js` — 定义 `window.{platform}CaptureConfig`
-3. `{platform}.js` — 处理 `sendMessage`（输入发送）
-4. `responseListenerCore.js` — 定义 `window.ResponseListenerCore`
-5. `{platform}ResponseListener.js` — 创建 listener，依赖上面的所有全局变量
-
-**如果平台只有基础发送功能，没有剪贴板捕获**，可以简化为：
+或依赖默认分支：
 
 ```javascript
 return [`contentScripts/${platform}.js`];
 ```
+
+如果平台在某些情况下需要 `openPlatformTab`（仅打开不发送），还需要在 `backgroudtask/ai_platform_processor.js` 中确认 `handleDirectSend` 路径可用。
 
 ## 完整步骤汇总
 
 ```
 1. config/platformConfig.js         → 注册平台（显示名、图标、URL）
 2. contentScripts/{platform}.js     → 输入发送逻辑（sendMessage）
-3. contentScripts/clipboardCapture/configs/{platform}.js  → 剪贴板捕获配置
-4. contentScripts/chatResponse/{platform}ResponseListener.js  → 回复监听
-5. backgroudtask/platformScriptFiles.js  → 注册脚本列表
+3. backgroudtask/platformScriptFiles.js  → 注册脚本列表（可省略，走默认分支）
 ```
 
 ## 相关 skill（协作参考）
@@ -376,10 +177,6 @@ return [`contentScripts/${platform}.js`];
 - [ ] 点击"发送消息"后，平台 Tab 自动打开/复用
 - [ ] 控制台看到 `[Platform] ... 内容脚本已加载并激活`
 - [ ] 消息成功输入并发送
-- [ ] Sidebar 收到回复并渲染
-- [ ] 剪贴板捕获自动触发（控制台 `[platform Copy Capture] capture`）
-- [ ] 手动点击复制按钮也能捕获
-- [ ] `dom.auto` 兜底生效（有 HTML 回退内容）
 
 ## 常见问题
 
