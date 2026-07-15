@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Skill(zdocx)",
-      "Skill(zdocx:*)",
-      "Bash(npm init:*)"
-    ]
-  }
-}
