@@ -146,3 +146,7 @@ nativePort.onDisconnect.addListener(() => {
 | P0 | No system dialogs | Extension UI must feel native |
 | P1 | Singleton relay | One native host process per browser |
 | P2 | User intent > auto-retry | Users control when they want to disconnect |
+
+## 相关 skill（协作参考）
+
+本 skill 覆盖**行为层**规范（JS 模式、通信架构、确认流程）。视觉层规范见 **options-style-standards**（按钮配色、字号层级、HTML link 顺序、共享 token）；options/popup/iframe 滚动条溢出问题的 CSS 解决方案见 **options-style-standards/references/hide-scrollbar.md**（`options-style-standards` 的 ref，已归档）。

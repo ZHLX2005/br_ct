@@ -418,9 +418,11 @@ grep -A2 "^\.btn-primary\s*\{" options/options.css | head -5
 - 抽取内联 `<style>` 块到独立 CSS
 - 修复 CSS 类名冲突（如 `.form-group` 在 modal 里和全局不一致）
 - 调整 `.nav-item` / `.nav-icon` 样式或侧边栏 hover/active 状态 → 读完本 skill 后再读 [[nav-item-styling]]
+- options/popup/iframe 子页面或任何溢出页面出现不想要的滚动条 → 读完本 skill 后再读 [[hide-scrollbar]]（含 `:has(.page-container)` 锚点 vs 直接 `html`/`body` 的作用域决策树 + `max-height`/`overflow-y` 根因修复模式）
 
 ## 12. references 索引
 
 | ref | 何时读取 | 路径 |
 |-----|---------|------|
 | [[nav-item-styling]] | 调整 `.nav-item`、`.nav-icon` 边框或 hover/active 配色时 | `references/nav-item-styling.md` |
+| [[hide-scrollbar]] | options/popup/iframe 子页面或任何溢出页面需要隐藏 WebKit 滚动条时；需区分共享 CSS（`:has` 锚点）vs 页面独有 CSS（直接 `html`/`body`）时 | `references/hide-scrollbar.md` |
