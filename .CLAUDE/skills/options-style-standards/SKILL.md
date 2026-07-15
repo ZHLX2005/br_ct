@@ -1,6 +1,6 @@
 ---
 name: options-style-standards
-description: 在 options/ 模块下编写或修改 CSS / HTML / JS 时的开发规范。当用户提到"options 样式"、"options 按钮"、"去浮岛"、"边框强调"、"options 子页面 CSS"、新增 options 子页面、修改 .btn-primary/.btn-secondary/.btn-danger 颜色时触发。覆盖 8 个子页面（platform/api/storage/notes/ocr/countdown/prompts_editor/local_cmd）的样式统一、共享 token 使用、HTML link 顺序、内联 style 反模式。
+description: 在 options/ 模块下编写或修改 CSS / HTML / JS 时的开发规范。当用户提到"options 样式"、"options 按钮"、"去浮岛"、"边框强调"、"options 子页面 CSS"、新增 options 子页面、修改 .btn-primary/.btn-secondary/.btn-danger 颜色、或调整 .nav-item/.nav-icon 边框与 hover/active 状态时触发。覆盖 8 个子页面（platform/api/storage/notes/ocr/countdown/prompts_editor/local_cmd）的样式统一、共享 token 使用、HTML link 顺序、内联 style 反模式。侧边栏 nav 的细化样式见 references/nav-item-styling.md。
 ---
 
 # options/ 模块样式开发规范
@@ -403,7 +403,7 @@ grep -A2 "^\.btn-primary\s*\{" options/options.css | head -5
 | 弹窗标题用 `font-size: 24px` | 视觉权重压过页面 h1 | 用 `var(--font-h2)` (16px) |
 | input 用 `border: 2px solid #e9ecef` | 跟全局 input 风格不一致 | `border: 1px solid var(--line-strong)` |
 | section 用 `background: rgba(255,255,255,0.7); border-radius: 12px; box-shadow: 0 2px 8px` | 三件套 = 浮岛，破坏去浮岛原则 | 透明背景 + 1px border-bottom 横线 |
-| `options.html` 的 nav-item 用 `background: var(--accent); color: white` | 激活态变成实心棕色块 | 继承 `.nav-item.active` 的 `rgba(255,255,255,0.85)` 浅色块 + 边框强调 |
+| `options.html` 的 nav-item 用 `background: var(--accent); color: white` | 激活态变成实心棕色块 | 继承 `.nav-item.active` 的 `rgba(255,255,255,0.85)` 浅色块 + 边框强调。详见 [[nav-item-styling]] |
 | 引入新页面后忘了加 `../options.css` 引用 | 该页面所有按钮变成浏览器默认样式 | 检查 `<link rel="stylesheet" href="../options.css" />` 是否在第一行 |
 
 ## 11. 触发本 skill 的场景
@@ -417,3 +417,10 @@ grep -A2 "^\.btn-primary\s*\{" options/options.css | head -5
 - 把某个组件从"浮岛"改成"去浮岛"（或反之）
 - 抽取内联 `<style>` 块到独立 CSS
 - 修复 CSS 类名冲突（如 `.form-group` 在 modal 里和全局不一致）
+- 调整 `.nav-item` / `.nav-icon` 样式或侧边栏 hover/active 状态 → 读完本 skill 后再读 [[nav-item-styling]]
+
+## 12. references 索引
+
+| ref | 何时读取 | 路径 |
+|-----|---------|------|
+| [[nav-item-styling]] | 调整 `.nav-item`、`.nav-icon` 边框或 hover/active 配色时 | `references/nav-item-styling.md` |
