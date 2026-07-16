@@ -3,7 +3,6 @@ name: add-func-script
 description: 当用户要求"添加脚本到函数库"、"加一个新功能脚本"、"把这个脚本加到popup"、"新增函数执行"、或提到 funcs/ 目录下的脚本接入时触发。指导用户按分层、main() 包装、统一头标注的规范，将新脚本接入 bro_chat 扩展的函数执行系统（含 popup 注册、快捷键绑定、注入限制三大链路）。
 reference: code-standards-guide — funcs/ 脚本接入规范（归档版，与代码规范主 skill 分离）
 ---
-
 # 添加函数执行脚本
 
 ## 触发场景
@@ -20,6 +19,7 @@ reference: code-standards-guide — funcs/ 脚本接入规范（归档版，与�
 **本仓库里 45 个 funcs 脚本中，只有 3 个绑定了快捷键**（`div_copy_wrapper`、`div_Img_wrapper`、`copy2file`，对应 `Alt+C`/`Alt+D`/`Alt+F`）。其余 42 个全部走 popup 点击执行。
 
 所以**新脚本默认只需要做三件事**：
+
 1. 放到 `funcs/` 正确子目录
 2. 用 `main()` 包装 + 加统一头标注
 3. 在 `popup/func_execute/functioncall.js` 的 `scriptFiles` 数组里加一行
@@ -46,15 +46,15 @@ reference: code-standards-guide — funcs/ 脚本接入规范（归档版，与�
 
 **现有分层参考：**
 
-| 层级 | 路径 | 已有示例 |
-|------|------|----------|
-| 平台专属 | `funcs/平台专属/boss直聘/` | `boss_job.js`, `boss_job_pull.js` |
-| 平台专属 | `funcs/平台专属/bili/` | `extract_bilibili_favlist.js`, `专栏kan/专栏2md.js` |
-| 平台专属 | `funcs/平台专属/腾讯文档/` | `use.js`, `t.js` |
-| 通用元素 | `funcs/元素dom/` | `div_copy_wrapper.js`, `dom_visibility_controller.js` |
-| 视频 | `funcs/元素dom/video/` | `frame.js`, `videoop.js` |
-| 测试脚本 | `funcs/x/` | `typingMonitor/`, `watching_dom/` |
-| 底层模块 | `funcs/mods/` | `binddom/`, `html_text_reader/` |
+| 层级     | 路径                         | 已有示例                                                  |
+| -------- | ---------------------------- | --------------------------------------------------------- |
+| 平台专属 | `funcs/平台专属/boss直聘/` | `boss_job.js`, `boss_job_pull.js`                     |
+| 平台专属 | `funcs/平台专属/bili/`     | `extract_bilibili_favlist.js`, `专栏kan/专栏2md.js`   |
+| 平台专属 | `funcs/平台专属/腾讯文档/` | `use.js`, `t.js`                                      |
+| 通用元素 | `funcs/元素dom/`           | `div_copy_wrapper.js`, `dom_visibility_controller.js` |
+| 视频     | `funcs/元素dom/video/`     | `frame.js`, `videoop.js`                              |
+| 测试脚本 | `funcs/x/`                 | `typingMonitor/`, `watching_dom/`                     |
+| 底层模块 | `funcs/mods/`              | `binddom/`, `html_text_reader/`                       |
 
 > ⚠️ **目录命名约束**：平台名目录是中文（`boss直聘/` `bili/` `腾讯文档/`），但 `scriptFiles` 注册时也必须**原样使用中文**（见 Step 3）。
 
@@ -89,6 +89,7 @@ function main() {
 #### 2.2 统一头标注（必填，9 类别候选）
 
 参考本仓库已有的 45 个脚本，**所有新脚本必须在第 1 行插入统一 JSDoc 头**。该头用于：
+
 - popup 侧渲染脚本元信息（未来可扩展）
 - grep 按类别批量索引（`@category`）
 - 跨平台统一阅读体验
@@ -113,23 +114,24 @@ function main() {
 
 **9 个候选 `@category`（必须精确选一个，不要自创）：**
 
-| 类别 | 典型场景 |
-|---|---|
-| `DOM创建` | 悬浮 UI、面板、注入控件、Counter |
-| `数据提取` | 抓取 DOM 文本/图片/链接、读剪贴板转文件 |
-| `自动化点击` | 模拟点击、滚动、键盘、表单提交 |
-| `视觉展示` | 装饰动画（海浪、彩条、隐藏/全屏） |
-| `行为Hook` | hook 剪贴板、hook 页面事件、修改浏览器 API |
-| `文本处理` | 字符串转义、格式化、复制 |
-| `视频处理` | 视频帧捕获、播放控制、片段剪辑 |
-| `平台专属` | 仅当脚本同时是平台专用 + 跨类别（如 B站提取）时使用 |
-| `工具辅助` | 通用辅助，不创建 DOM、不抓数据、不点击 |
+| 类别           | 典型场景                                            |
+| -------------- | --------------------------------------------------- |
+| `DOM创建`    | 悬浮 UI、面板、注入控件、Counter                    |
+| `数据提取`   | 抓取 DOM 文本/图片/链接、读剪贴板转文件             |
+| `自动化点击` | 模拟点击、滚动、键盘、表单提交                      |
+| `视觉展示`   | 装饰动画（海浪、彩条、隐藏/全屏）                   |
+| `行为Hook`   | hook 剪贴板、hook 页面事件、修改浏览器 API          |
+| `文本处理`   | 字符串转义、格式化、复制                            |
+| `视频处理`   | 视频帧捕获、播放控制、片段剪辑                      |
+| `平台专属`   | 仅当脚本同时是平台专用 + 跨类别（如 B站提取）时使用 |
+| `工具辅助`   | 通用辅助，不创建 DOM、不抓数据、不点击              |
 
 **可选标签 `@test_url`（推荐平台专属脚本使用）：**
 
 平台专属脚本最容易因页面改版失效，**强烈建议**头部标注 1~N 个真实测试 URL，注明对应模式，方便后续回归测试。
 
 格式：
+
 ```
 @test_url    <模式名>：<完整URL>
 ```
@@ -232,20 +234,20 @@ function main() {
 
 ## 错误案例
 
-| 错误操作 | 实际后果 | 正确做法 |
-|---------|---------|---------|
-| 脚本用 IIFE `(async function(){...})()` 包装，不写 `main()` | 注入后 `typeof main === "function"` 为 false，报"未找到 main() 函数" | 始终使用 `function main() { ... }` 作为最外层包装 |
-| 把平台专属脚本放到 `funcs/元素dom/` | 目录混乱，平台脚本污染通用池 | Boss 放 `平台专属/boss直聘/`，B 站放 `平台专属/bili/` |
-| `scriptFiles` 中路径漏中文目录，如 `"boss直聘/boss_job.js"` | 脚本找不到，注入失败报"通用函数脚本注入失败" | 完整路径：`"平台专属/boss直聘/boss_job.js"` |
-| 在 funcs 脚本里用 `import { x } from './y.js'` | `executeScript({ files })` 不解析模块语法，运行时 `import is not defined` | 把依赖代码 copy 进同一个 main()，或改造注入链路 |
-| 脚本创建好但忘了在 `scriptFiles` 注册 | popup 列表里看不到，只能靠快捷键或手动 executeScript 触发 | 走默认三步即可，无需快捷键也能在 popup 用 |
-| 快捷键 ID 在 manifest 和 executor 不一致（如大小写） | 监听器永远收不到事件，命令失效 | 两处字符串完全一致（全小写下划线），且**只有需要快捷键时才配** |
-| `scriptFiles` 写了但 `funcs/` 下没文件 | "通用函数脚本注入失败: Could not load file" | 先创建文件再注册 |
-| 在 `x/` 目录下放生产级脚本 | 测试脚本和正式脚本混在一起，popup 中可能误展示 | 临时/实验脚本放 `x/`，完成后迁移到 `元素dom/` 或 `平台专属/` |
-| 自定义 `@category`（不在 9 个候选里） | grep 索引不到、后续分类脚本失效 | 必须从 9 个候选里精确选一个 |
-| 平台名用拼音（如 `tianna`）而不是 `yuanbao` | 跨脚本 grep 不到同平台脚本 | 平台名用 `yuanbao（腾讯元宝）` 这类标准名 |
-| 只加头标注不加 main() | 注入直接报"未找到 main() 函数" | 头标注 + main() 必须同时存在 |
-| 把已有 JSDoc 头注释整个删掉再换新的 | 丢失原作者的细节注释，新头又写不全 | 保留原注释块，在 `*/` 后追加独立新块 |
+| 错误操作                                                        | 实际后果                                                                      | 正确做法                                                             |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| 脚本用 IIFE`(async function(){...})()` 包装，不写 `main()`  | 注入后`typeof main === "function"` 为 false，报"未找到 main() 函数"         | 始终使用`function main() { ... }` 作为最外层包装                   |
+| 把平台专属脚本放到`funcs/元素dom/`                            | 目录混乱，平台脚本污染通用池                                                  | Boss 放`平台专属/boss直聘/`，B 站放 `平台专属/bili/`             |
+| `scriptFiles` 中路径漏中文目录，如 `"boss直聘/boss_job.js"` | 脚本找不到，注入失败报"通用函数脚本注入失败"                                  | 完整路径：`"平台专属/boss直聘/boss_job.js"`                        |
+| 在 funcs 脚本里用`import { x } from './y.js'`                 | `executeScript({ files })` 不解析模块语法，运行时 `import is not defined` | 把依赖代码 copy 进同一个 main()，或改造注入链路                      |
+| 脚本创建好但忘了在`scriptFiles` 注册                          | popup 列表里看不到，只能靠快捷键或手动 executeScript 触发                     | 走默认三步即可，无需快捷键也能在 popup 用                            |
+| 快捷键 ID 在 manifest 和 executor 不一致（如大小写）            | 监听器永远收不到事件，命令失效                                                | 两处字符串完全一致（全小写下划线），且**只有需要快捷键时才配** |
+| `scriptFiles` 写了但 `funcs/` 下没文件                      | "通用函数脚本注入失败: Could not load file"                                   | 先创建文件再注册                                                     |
+| 在`x/` 目录下放生产级脚本                                     | 测试脚本和正式脚本混在一起，popup 中可能误展示                                | 临时/实验脚本放`x/`，完成后迁移到 `元素dom/` 或 `平台专属/`    |
+| 自定义`@category`（不在 9 个候选里）                          | grep 索引不到、后续分类脚本失效                                               | 必须从 9 个候选里精确选一个                                          |
+| 平台名用拼音（如`tianna`）而不是 `yuanbao`                  | 跨脚本 grep 不到同平台脚本                                                    | 平台名用`yuanbao（腾讯元宝）` 这类标准名                           |
+| 只加头标注不加 main()                                           | 注入直接报"未找到 main() 函数"                                                | 头标注 + main() 必须同时存在                                         |
+| 把已有 JSDoc 头注释整个删掉再换新的                             | 丢失原作者的细节注释，新头又写不全                                            | 保留原注释块，在`*/` 后追加独立新块                                |
 
 ## 实战发现：当前架构的 3 个已知问题
 
@@ -274,3 +276,11 @@ function main() {
 3. subagent 任务里**显式给出** 9 个 `@category` 候选和 `@platform` 候选，避免自创
 4. 主线程对**已知的脚本**（之前 Read 过的）直接 Edit 处理，跳过 subagent
 5. 收到所有 subagent 完成后**校对一遍**，重点查 `tianna` 拼音目录、`x/` 自测脚本的 platform 标注
+
+## 相关 reference
+
+以下 ref 是本规范的特化延伸，按需加载：
+
+| ref | 何时读取 | 路径 |
+|-----|---------|------|
+| [[dev-panel]] | 新建"开发阶段调试面板"类脚本（悬浮 UI、hover 高亮、click 锁定、悬浮结果面板）时 | `references/dev-panel.md` |
