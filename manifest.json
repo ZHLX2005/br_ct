@@ -58,11 +58,6 @@
     "imgs_picker": {
       "suggested_key": { "default": "Alt+D" },
       "description": "执行 div Copy 脚本"
-    },
-
-    "binddom_execute": {
-      "suggested_key": { "default": "Alt+B" },
-      "description": "执行 BindDom 绑定点击"
     }
   },
   "content_scripts": [

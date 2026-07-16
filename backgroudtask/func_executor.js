@@ -87,7 +87,6 @@ export function setupMessageListener() {
       return true;
     }
 
-    // BindDom 相关消息已移至 backgroudtask/binddom/index.js
     return false;
   });
 }
