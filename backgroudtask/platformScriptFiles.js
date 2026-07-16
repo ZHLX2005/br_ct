@@ -32,7 +32,7 @@ export function getPlatformScriptFiles(platform) {
   }
 
   if (platform === "yuanbao") {
-    return ["contentScripts/yuanbao.js"];
+    return ["contentScripts/yuanbao.js", "contentScripts/nav/yuanbao.js"];
   }
 
   if (platform === "tongyi") {
