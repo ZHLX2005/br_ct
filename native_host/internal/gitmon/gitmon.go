@@ -315,7 +315,7 @@ func GitAutoCommitAndPush(req protocol.Request) protocol.Response {
 	result := GitOperationResult{Dir: dir}
 
 	// 1. 先 fetch 获取最新远程状态
-	fetchOut, fetchErr := runGitCombined(dir, "fetch")
+	_, fetchErr := runGitCombined(dir, "fetch")
 	if fetchErr != nil {
 		result.Error = "git fetch 失败: " + fetchErr.Error()
 		return protocol.Response{Status: "ok", Data: result}
