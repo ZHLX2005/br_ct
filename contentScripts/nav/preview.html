@@ -67,8 +67,9 @@
   .nav-row {
     display: flex; align-items: center; gap: 8px;
     padding: 6px 8px 6px 14px;
+    /* hover 行时背景保持透明，只加深 line + 文字颜色 */
   }
-  .nav-row:hover { background: var(--bubble-bg); }
+  .nav-row:hover { color: var(--text); }
 
   /* line：display: block，跟着 item 后面，margin-left: auto 推到 row 最右
      idle 时 item display: none，但 nav 自身 justify-content: flex-end 让所有 line 靠右 */
@@ -90,22 +91,21 @@
   .nav:hover .nav-line { background: rgba(15,17,21,0.5); }
   .nav:hover .nav-line.is-active { background: rgba(0, 50, 160, 0.95); }
 
-  /* item：默认隐藏，hover 整列时才显示（丝滑 fade） */
+  /* item：idle 时透明，hover 时 fade in + 右滑（容器展开后文字"凝结"在位置上） */
   .nav-item {
-    display: none;
     font-size: 13px;
     line-height: 18px;
     color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 100%;
+    max-width: 0;
     opacity: 0;
     transform: translateX(4px);
-    transition: opacity 0.3s ease, transform 0.3s ease;
+    transition: opacity 0.8s ease, transform 0.8s ease, max-width 0.8s ease;
   }
   .nav:hover .nav-item {
-    display: inline;
+    max-width: 320px;
     opacity: 1;
     transform: translateX(0);
   }
@@ -128,28 +128,28 @@
   <!-- 6 行 row，每行 line 在左、item 在右 -->
   <aside class="nav" id="nav">
     <div class="nav-row">
-      <span class="nav-line is-active"></span>
       <span class="nav-item">如何理解 Vite HMR 的文件监听机制？</span>
+          <span class="nav-line is-active"></span>
     </div>
     <div class="nav-row">
-      <span class="nav-line"></span>
       <span class="nav-item">可以再讲一下为什么需要 chokidar 而不是 fs.watch？</span>
+            <span class="nav-line"></span>
     </div>
     <div class="nav-row">
-      <span class="nav-line"></span>
       <span class="nav-item">HMR fallback 处理逻辑是什么？</span>
+            <span class="nav-line"></span>
     </div>
     <div class="nav-row">
-      <span class="nav-line"></span>
       <span class="nav-item">预构建的依赖怎么参与 HMR？</span>
+            <span class="nav-line"></span>
     </div>
     <div class="nav-row">
-      <span class="nav-line"></span>
       <span class="nav-item">esbuild 在这里做了哪些事？</span>
+            <span class="nav-line"></span>
     </div>
     <div class="nav-row">
-      <span class="nav-line"></span>
       <span class="nav-item">ws 协议握手详细讲一下</span>
+            <span class="nav-line"></span>
     </div>
   </aside>
 
