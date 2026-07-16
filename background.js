@@ -9,7 +9,6 @@ import { setupFuncCommandListener, setupMessageListener as setupFuncExecutorList
 import { init as initVideoPlaneServer } from './backgroudtask/video_plane_server.js';
 import { initBackupService, setupBackupMessageListener } from './backgroudtask/backupService.js';
 import { setupTranslationModule } from './backgroudtask/translation/index.js';
-import { setupBinddomCommandListener, setupBinddomMessageListener } from './backgroudtask/binddom/index.js';
 import { setupHtmlTextReaderListener } from './backgroudtask/html_text_reader/index.js';
 import { setupSidebarCommandListener } from './backgroudtask/sidebar_toggle.js';
 
@@ -38,11 +37,6 @@ setupBackupMessageListener();
 
 // 初始化翻译/OCR模块
 setupTranslationModule();
-
-// 初始化 BindDom 模块
-setupBinddomCommandListener();
-setupBinddomMessageListener();
-console.log('[Background] BindDom 模块初始化完成');
 
 // 初始化页面文本提取模块
 setupHtmlTextReaderListener();

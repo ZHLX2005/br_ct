@@ -1,9 +1,11 @@
 ---
-name: hide-scrollbar
-description: Use when a page's content overflows and an unwanted WebKit scrollbar appears on html/body — e.g. options iframe subpages, popups, or a dropdown/panel that pushes content beyond the viewport. Covers scoping for SHARED CSS files (use a :has() anchor to avoid leaking into the shell) vs PAGE-ONLY CSS (scope directly to html/body), and pairing the hidden scrollbar with max-height/overflow so content stays reachable.
+name: hide-scrollbar-reference
+description: Reference — WebKit 滚动条隐藏技术完整指南。覆盖共享 CSS vs 页面独有 CSS 的作用域选择（:has(.page-container) 锚点 vs 直接 html/body）、max-height + overflow-y 根因修复、典型案例（options iframe 子页面、popup 下拉）。原 hide-scrollbar skill 归档版本。
 ---
 
-# Hide Scrollbar
+# Hide Scrollbar（参考文档）
+
+> 本文档为历史独立 skill `hide-scrollbar` 的归档版本，已沉淀为 `options-style-standards` 的 ref。阅读时机：处理 options/popup/iframe 子页面或任何溢出页面的滚动条隐藏问题。
 
 ## Overview
 Hide the visible WebKit scrollbar on a page's scroll container while keeping it scrollable. `::-webkit-scrollbar { width: 0; height: 0 }` only hides it visually — the mouse wheel / trackpad still scrolls, so content does not become unreachable.

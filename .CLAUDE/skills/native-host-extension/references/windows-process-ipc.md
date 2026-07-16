@@ -1,7 +1,11 @@
 ---
-name: windows-process-ipc-pitfalls
-description: 调试 Windows 父子进程生命周期/IPC 问题时触发——子进程被「莫名连坐杀掉」、Chrome 扩展 native messaging host 的 child 30s 后自杀、`npm run` 弹出多余 cmd 黑窗、taskkill /T 误伤、单例锁导致无法多开。触发词：Windows 进程管理、信号量、native messaging、Service Worker idle、子进程连坐、pipe EOF、DETACHED_PROCESS、CREATE_NO_WINDOW、CREATE_BREAKAWAY_FROM_JOB、HideWindow、Job Object、taskkill /T、process.on('exit')、状态文件单例锁、stdin EOF 级联。
+name: windows-process-ipc-reference
+description: Reference — Windows 父子进程生命周期/IPC 诊断手册。覆盖 SIGINT/SIGTERM/Job Object/pipe EOF 级联、CreateProcess CreationFlags 翻译表、单例锁多开方案、Service Worker 30s idle 链路、taskkill 用法。原 windows-process-ipc-pitfalls skill 归档版本。
 ---
+
+# Windows 进程管理 & 信号量通信痛点速查（参考文档）
+
+> 本文档为历史独立 skill `windows-process-ipc-pitfalls` 的归档版本，已沉淀为 `native-host-extension` 的 ref。如需新增 Windows 进程调试相关的内容，请在主 skill 中加锚点 + 在本文档扩展。
 
 # Windows 进程管理 & 信号量通信痛点速查
 

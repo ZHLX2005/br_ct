@@ -109,7 +109,6 @@
 | `Alt+C` | div_copy | 复制页面 div 元素内容 |
 | `Alt+D` | imgs_picker | 图片选择器，批量选取页面图片 |
 | `Alt+F` | copy_file | 剪贴板内容保存为文件 |
-| `Alt+B` | binddom | DOM 元素绑定点击事件 |
 | `Ctrl+S` | (输入框) | 手动保存当前输入 |
 
 ### 圆形导航菜单 🎯
@@ -183,21 +182,6 @@
 | `复制操作的hook/` | 复制操作拦截 |
 | `展示效果/` | 页面特效（海浪等） |
 
-### 侧边栏 AI 响应捕获 🎯（核心亮点）
-
-**完全自研的 CDP 响应捕获系统**，无需 API key，实时监听各平台 AI 回复：
-
-| 功能 | 说明 |
-|------|------|
-| **CDP 实时捕获** | 通过 Chrome Debugger Protocol 捕获 ChatGPT 响应内容 |
-| **复制预览** | 自动显示最近一次复制操作的内容预览 |
-| **流式输出** | 支持流式响应实时显示，带打字机效果 |
-| **Markdown 渲染** | 自动渲染代码块、链接、表格等 |
-| **多平台适配** | 每个平台有独立的 ResponseListener |
-| **会话追踪** | 按平台 + 会话 ID 追踪，确保捕获正确对话 |
-| **一键复制** | 点击按钮复制完整回复内容 |
-| **折叠/展开** | 大段回复可折叠，节省空间 |
-
 ### 倒计时面板 ⏱️
 
 - 多种计时模式
@@ -257,15 +241,13 @@
 │  ├────────────────┤  ├────────────────┤               │
 │  │ gotoServer     │  │ backupService  │               │
 │  ├────────────────┤  ├────────────────┤               │
-│  │ translation     │  │ binddom        │               │
-│  ├────────────────┤  ├────────────────┤               │
-│  │ html_text_     │  │ native_relay   │               │
+│  │ translation     │  │ native_relay   │               │
+│  │ html_text_      │  │                │               │
 │  │ reader          │  │                │               │
 │  └────────────────┘  └────────────────┘               │
 ├─────────────────────────────────────────────────────────┤
 │                    适配层 (Content Scripts)            │
 │  yuanbao │ gemini │ chatgpt │ claude │ doubao │ ...   │
-│  chatResponse/ (AI响应监听)                            │
 ├─────────────────────────────────────────────────────────┤
 │                    运行层 (runjs/)                      │
 │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐ │
@@ -331,7 +313,6 @@ bro_chat/
 │               └── other.js        # 其他
 │   ├── func_execute/              # 函数执行 UI
 │   ├── translation/                # 翻译 UI
-│   └── binddom/                    # DOM绑定 UI
 │
 ├── sidebar/                         # 侧边栏
 │   └── main/
@@ -358,9 +339,6 @@ bro_chat/
 │
 ├── contentScripts/                  # AI 平台适配脚本
 │   ├── yuanbao.js ~ coze.js        # 15个平台适配
-│   └── chatResponse/               # AI 响应监听
-│       ├── responseListenerCore.js # 监听核心
-│       └── *ResponseListener.js    # 各平台适配
 │
 ├── backgroudtask/                   # 后台服务模块
 │   ├── ai_platform_processor.js    # AI 平台任务队列
@@ -371,7 +349,6 @@ bro_chat/
 │   ├── message_http_server.js       # 消息服务
 │   ├── video_plane_server.js       # 视频片段配置
 │   ├── platformScriptFiles.js      # 平台脚本管理
-│   ├── binddom/                    # DOM 绑定服务
 │   ├── translation/                # 翻译/OCR 模块
 │   ├── html_text_reader/           # HTML 文本提取
 │   └── native_relay/               # Native Host 中继

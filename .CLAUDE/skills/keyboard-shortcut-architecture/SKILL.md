@@ -249,4 +249,12 @@ finishXxxShortcutRecording(e)    抬键时
 - OCR 快捷键（拦截标杆）：`runjs/translation/content-ocr.js`（`isShortcutMatch` ~L1623、keydown ~L1636、`loadShortcut` ~L1603）
 - 收藏快捷键（修饰键+划词模式）：`runjs/translation/content.js`（`checkFavoritesShortcut` ~L1273、keydown ~L1298、selectionchange ~L1320）
 - 注入配置：`manifest.json` `content_scripts`（~L67）、`commands`（~L49）
-- 相关 skill：[[add-func-script]]、[[add-platform]]、[[page-requirements]]、[[content-script-reactive-config]]
+- 相关 skill：[[add-platform]]、[[page-requirements]]；funcs/ 脚本接入规范见 [[code-standards-guide/add-func-script]]；content_scripts 与 settings 响应式同步见全局 skill [[content-script-reactive-config]]（本项目 `.claude/skills/` 未单独收录，使用时通过全局路径加载）
+
+---
+
+## 九、参考文档（按需加载）
+
+| ref | 何时读取 | 路径 |
+|-----|---------|------|
+| [[sidebar-shortcut]] | 新增/调试边栏切换快捷键；排查 Chrome Side Panel API 行为差异（伪关闭 vs 真关闭、tabId 生命周期、状态持久化） | references/sidebar-shortcut.md |

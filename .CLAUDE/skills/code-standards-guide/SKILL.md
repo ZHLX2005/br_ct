@@ -78,4 +78,4 @@ description: 当需要在 bro_chat 扩展项目中的 funcs/、runjs/、backgrou
 ## 相关 Skill
 
 - [[keyboard-shortcut-architecture]] — 全扩展的快捷键分层架构（Chrome Commands / content script / 用户自定义）
-- [[content-script-reactive-config]] — content_scripts 与 settings 页面的响应式配置同步
+- **全局 skill** [[content-script-reactive-config]] — content_scripts 与 settings 页面的响应式配置同步（**该 skill 仅在 `~/.claude/skills/` 全局目录中存在**，本项目级 `.claude/skills/` 未收录，使用时通过全局路径加载）

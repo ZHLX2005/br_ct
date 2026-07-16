@@ -3,7 +3,7 @@
 // 2. processTaskQueueConcurrent: 扩展按钮触发发送时，复用或创建平台 Tab 并发送消息
 
 import { getPlatformUrls } from '../config/platformConfig.js';
-import { getPlatformScriptFiles, getResponseListenerFiles } from "./platformScriptFiles.js";
+import { getPlatformScriptFiles } from "./platformScriptFiles.js";
 
 export const platformUrls = getPlatformUrls();
 
@@ -69,37 +69,6 @@ function injectScript(tabId, platform) {
   });
 }
 
-function injectResponseListener(tabId, platform) {
-  return new Promise((resolve, reject) => {
-    const files = getResponseListenerFiles(platform);
-    if (!files || files.length === 0) {
-      resolve();
-      return;
-    }
-
-    console.log(`【回复监听注入】Tab ${tabId} 开始注入 ${platform} 回复监听脚本`);
-
-    chrome.scripting.executeScript(
-      { target: { tabId }, files },
-      () => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-          return;
-        }
-        console.log(`【回复监听注入】Tab ${tabId} 注入成功，发送启动消息`);
-        chrome.tabs.sendMessage(tabId, { action: "startResponseListener" }, () => {
-          if (chrome.runtime.lastError) {
-            console.warn(`[${platform}] 启动回复监听失败:`, chrome.runtime.lastError.message);
-          } else {
-            console.log(`【回复监听注入】Tab ${tabId} ${platform} 回复监听已启动`);
-          }
-          resolve();
-        });
-      }
-    );
-  });
-}
-
 function sendMessage(tabId, message, source = "popup") {
   return new Promise((resolve, reject) => {
     chrome.tabs.sendMessage(tabId, { action: "sendMessage", message, source }, (response) => {
@@ -112,20 +81,6 @@ function sendMessage(tabId, message, source = "popup") {
         return;
       }
       resolve(response);
-    });
-  });
-}
-
-function cleanupResponseListener(tabId, platform) {
-  return new Promise((resolve) => {
-    console.log(`【回复监听重置】Tab ${tabId} 重置 ${platform} 回复监听状态`);
-    chrome.tabs.sendMessage(tabId, { action: "resetResponseListener" }, () => {
-      if (chrome.runtime.lastError) {
-        console.warn(`[${platform}] 重置回复监听失败:`, chrome.runtime.lastError.message);
-      } else {
-        console.log(`【回复监听重置】Tab ${tabId} ${platform} 回复监听已重置`);
-      }
-      resolve();
     });
   });
 }
@@ -303,7 +258,6 @@ async function openPlatformTab(platform) {
 export async function processTaskQueueConcurrent(queue, options = {}, source = "popup") {
   const { maxConcurrent = 3, batchDelay = 300 } = options;
   const results = [];
-  const shouldListenResponses = source === "sidebar";
 
   const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const selectedPlatforms = queue.map(t => t.platform);
@@ -319,7 +273,6 @@ export async function processTaskQueueConcurrent(queue, options = {}, source = "
         isFirst: i === 0 && index === 0,
         shouldJump: !activeTabMatches,
         source,
-        shouldListenResponses,
       }))
     );
     results.push(...batchResults);
@@ -338,10 +291,6 @@ async function processSingleTask(task, opts = {}) {
   await waitForTabComplete(tab.id);
 
   await injectScript(tab.id, platform);
-  if (opts.shouldListenResponses) {
-    await cleanupResponseListener(tab.id, platform);
-    await injectResponseListener(tab.id, platform);
-  }
 
   try {
     const result = await trySend(tab.id, platform, message, opts.source, false);
@@ -352,10 +301,6 @@ async function processSingleTask(task, opts = {}) {
     try {
       injectedTabs.get(platform)?.delete(tab.id);
       await injectScript(tab.id, platform);
-      if (opts.shouldListenResponses) {
-        await cleanupResponseListener(tab.id, platform);
-        await injectResponseListener(tab.id, platform);
-      }
       const result = await trySend(tab.id, platform, message, opts.source, true);
       return result;
     } catch (finalErr) {
