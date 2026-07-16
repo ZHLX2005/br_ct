@@ -39,43 +39,58 @@
     right: 20px;
     top: 50%;
     transform: translateY(-50%);
-    background: #fff;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    box-shadow: 0 1px 2px rgba(15,17,21,0.06), 0 1px 3px rgba(15,17,21,0.1);
-    padding: 8px 0;
+    /* idle: 完全透明、无视觉边框（border 用 1px transparent 占位避免 hover 抖动） */
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 0;
+    box-shadow: 0 1px 2px transparent, 0 1px 3px transparent;
+    /* 加大 padding（上下更宽） */
+    padding: 16px 0;
     width: 28px;
-    transition: width 0.3s ease;
+    transition: width 0.3s ease, background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
     overflow: hidden;
-    display: flex; flex-direction: column;
+    display: flex; flex-direction: column; align-items: flex-end;  /* 行内容右对齐 */
+    /* 加大 row 之间的 gap */
+    gap: 10px;
   }
   .nav:hover {
     width: max-content;
     max-width: 360px;
+    /* hover 才显示容器（白底、圆角、弱阴影） */
+    background: #fff;
+    border-color: var(--border);
+    border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(15,17,21,0.06), 0 1px 3px rgba(15,17,21,0.1);
   }
 
-  /* ============ 每行：line 在最右（贴右 padding），文字在左 ============ */
-  /* 用 row-reverse 让 line 永远在右；hover 时容器变宽，line 紧贴右边不动 */
+  /* ============ 每行：display: flex，文字在前、line 在后（右边） ============ */
   .nav-row {
-    display: flex; flex-direction: row-reverse; align-items: center; gap: 8px;
-    padding: 4px 4px 4px 10px;
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px 6px 14px;
   }
   .nav-row:hover { background: var(--bubble-bg); }
 
-  /* line：永远在右，固定位置固定长度；hover 不动 */
+  /* line：display: block，跟着 item 后面，margin-left: auto 推到 row 最右
+     idle 时 item display: none，但 nav 自身 justify-content: flex-end 让所有 line 靠右 */
   .nav-line {
-    width: 20px;
-    height: 2px;
-    background: rgba(15,17,21,0.18);
-    border-radius: 1px;
+    display: block;
+    width: 12px;             /* 未激活：12px（更短） */
+    height: 4px;
+    background: rgba(15,17,21,0.35);
+    border-radius: 2px;
     flex-shrink: 0;
-    margin-left: auto;   /* 关键：让 line 始终贴右 */
+    transition: width 0.3s ease, background 0.3s ease;
   }
+  /* active: 20px（更长一点） */
   .nav-line.is-active {
+    width: 20px;
     background: rgba(0, 60, 179, 0.82);
   }
+  /* hover 整列时颜色加深 */
+  .nav:hover .nav-line { background: rgba(15,17,21,0.5); }
+  .nav:hover .nav-line.is-active { background: rgba(0, 50, 160, 0.95); }
 
-  /* item：默认隐藏，hover 整列时才显示 */
+  /* item：默认隐藏，hover 整列时才显示（丝滑 fade） */
   .nav-item {
     display: none;
     font-size: 13px;
@@ -85,8 +100,15 @@
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 100%;
+    opacity: 0;
+    transform: translateX(4px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
   }
-  .nav:hover .nav-item { display: inline; }
+  .nav:hover .nav-item {
+    display: inline;
+    opacity: 1;
+    transform: translateX(0);
+  }
 </style>
 </head>
 <body>
