@@ -109,7 +109,6 @@
 | `Alt+C` | div_copy | 复制页面 div 元素内容 |
 | `Alt+D` | imgs_picker | 图片选择器，批量选取页面图片 |
 | `Alt+F` | copy_file | 剪贴板内容保存为文件 |
-| `Alt+B` | binddom | DOM 元素绑定点击事件 |
 | `Ctrl+S` | (输入框) | 手动保存当前输入 |
 
 ### 圆形导航菜单 🎯
@@ -242,9 +241,8 @@
 │  ├────────────────┤  ├────────────────┤               │
 │  │ gotoServer     │  │ backupService  │               │
 │  ├────────────────┤  ├────────────────┤               │
-│  │ translation     │  │ binddom        │               │
-│  ├────────────────┤  ├────────────────┤               │
-│  │ html_text_     │  │ native_relay   │               │
+│  │ translation     │  │ native_relay   │               │
+│  │ html_text_      │  │                │               │
 │  │ reader          │  │                │               │
 │  └────────────────┘  └────────────────┘               │
 ├─────────────────────────────────────────────────────────┤
@@ -315,7 +313,6 @@ bro_chat/
 │               └── other.js        # 其他
 │   ├── func_execute/              # 函数执行 UI
 │   ├── translation/                # 翻译 UI
-│   └── binddom/                    # DOM绑定 UI
 │
 ├── sidebar/                         # 侧边栏
 │   └── main/
@@ -352,7 +349,6 @@ bro_chat/
 │   ├── message_http_server.js       # 消息服务
 │   ├── video_plane_server.js       # 视频片段配置
 │   ├── platformScriptFiles.js      # 平台脚本管理
-│   ├── binddom/                    # DOM 绑定服务
 │   ├── translation/                # 翻译/OCR 模块
 │   ├── html_text_reader/           # HTML 文本提取
 │   └── native_relay/               # Native Host 中继
