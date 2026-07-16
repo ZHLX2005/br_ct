@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Right-Edge Nav — line 全程 + item hover 显示</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #0f1115;
+    --bubble-bg: #edf3fe;
+    --border: rgba(15,17,21,0.06);
+  }
+  html, body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    min-height: 100vh;
+  }
+
+  /* ============ 左侧：仿 DeepSeek 主对话区 ============ */
+  .chat {
+    padding: 56px 88px;
+    display: flex; flex-direction: column;
+    max-width: 920px;
+  }
+  .heading { font-size: 12px; color: rgba(15,17,21,0.5); letter-spacing: .06em; text-transform: uppercase; font-weight: 600; margin-bottom: 12px; }
+  .ds-virtual-list { display: flex; flex-direction: column; padding: 0; gap: 0; }
+  .msg { display: flex; align-items: flex-end; padding: 0; margin: 0; }
+  .msg--user { justify-content: flex-end; }
+  .bubble { margin: 0 0 10px; }
+  .msg--user .bubble {
+    background: var(--bubble-bg); color: var(--text);
+    padding: 10px 16px; border-radius: 22px;
+    max-width: calc(100% - 88px); font-size: 16px; line-height: 24px;
+  }
+
+  /* ============ 右侧 nav 容器 ============ */
+  .nav {
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(15,17,21,0.06), 0 1px 3px rgba(15,17,21,0.1);
+    padding: 8px 0;
+    width: 28px;
+    transition: width 0.3s ease;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .nav:hover {
+    width: max-content;
+    max-width: 360px;
+  }
+
+  /* ============ 每行：line 在最右（贴右 padding），文字在左 ============ */
+  /* 用 row-reverse 让 line 永远在右；hover 时容器变宽，line 紧贴右边不动 */
+  .nav-row {
+    display: flex; flex-direction: row-reverse; align-items: center; gap: 8px;
+    padding: 4px 4px 4px 10px;
+  }
+  .nav-row:hover { background: var(--bubble-bg); }
+
+  /* line：永远在右，固定位置固定长度；hover 不动 */
+  .nav-line {
+    width: 20px;
+    height: 2px;
+    background: rgba(15,17,21,0.18);
+    border-radius: 1px;
+    flex-shrink: 0;
+    margin-left: auto;   /* 关键：让 line 始终贴右 */
+  }
+  .nav-line.is-active {
+    background: rgba(0, 60, 179, 0.82);
+  }
+
+  /* item：默认隐藏，hover 整列时才显示 */
+  .nav-item {
+    display: none;
+    font-size: 13px;
+    line-height: 18px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  .nav:hover .nav-item { display: inline; }
+</style>
+</head>
+<body>
+
+  <main class="chat">
+    <div class="heading">主对话 · ds-virtual-list</div>
+    <div class="ds-virtual-list">
+      <div class="msg msg--user"><div class="bubble">如何理解 Vite HMR 的文件监听机制？</div></div>
+      <div class="msg msg--user"><div class="bubble">可以再讲一下为什么需要 chokidar 而不是 fs.watch？</div></div>
+      <div class="msg msg--user"><div class="bubble">HMR fallback 处理逻辑是什么？</div></div>
+      <div class="msg msg--user"><div class="bubble">预构建的依赖怎么参与 HMR？</div></div>
+      <div class="msg msg--user"><div class="bubble">esbuild 在这里做了哪些事？</div></div>
+      <div class="msg msg--user"><div class="bubble">ws 协议握手详细讲一下</div></div>
+    </div>
+  </main>
+
+  <!-- 6 行 row，每行 line 在左、item 在右 -->
+  <aside class="nav" id="nav">
+    <div class="nav-row">
+      <span class="nav-line is-active"></span>
+      <span class="nav-item">如何理解 Vite HMR 的文件监听机制？</span>
+    </div>
+    <div class="nav-row">
+      <span class="nav-line"></span>
+      <span class="nav-item">可以再讲一下为什么需要 chokidar 而不是 fs.watch？</span>
+    </div>
+    <div class="nav-row">
+      <span class="nav-line"></span>
+      <span class="nav-item">HMR fallback 处理逻辑是什么？</span>
+    </div>
+    <div class="nav-row">
+      <span class="nav-line"></span>
+      <span class="nav-item">预构建的依赖怎么参与 HMR？</span>
+    </div>
+    <div class="nav-row">
+      <span class="nav-line"></span>
+      <span class="nav-item">esbuild 在这里做了哪些事？</span>
+    </div>
+    <div class="nav-row">
+      <span class="nav-line"></span>
+      <span class="nav-item">ws 协议握手详细讲一下</span>
+    </div>
+  </aside>
+
+</body>
+</html>
