@@ -94,7 +94,10 @@
     width: 20px;
     background: rgba(0, 60, 179, 0.82);
   }
-  /* hover 整列时颜色加深（加强对比让 hover 视觉变化明显） */
+  /* hover 整列时 line 颜色加深（行 hover 触发，让 6 条 line 分别对应自己的 row 高亮） */
+  .nav-row:hover .nav-line { background: rgba(15,17,21,0.7); }
+  .nav-row:hover .nav-line.is-active { background: rgba(0, 50, 160, 0.95); }
+  /* 兼容 nav 整体 hover（让单行加深的视觉一致） */
   .nav:hover .nav-line { background: rgba(15,17,21,0.7); }
   .nav:hover .nav-line.is-active { background: rgba(0, 50, 160, 0.95); }
 
@@ -102,7 +105,6 @@
   .nav-item {
     font-size: 13px;
     line-height: 18px;
-    color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
