@@ -67,8 +67,11 @@
   .nav-row {
     display: flex; align-items: center; gap: 8px;
     padding: 6px 8px 6px 14px;
-    /* hover 行时背景保持透明，只加深 line + 文字颜色 */
+    /* idle：继承统一浅色（让 hover 时颜色变化更明显） */
+    color: rgba(15,17,21,0.55);
+    transition: color 0.2s ease;
   }
+  /* hover 行时加深文字（与 line 颜色加深同步） */
   .nav-row:hover { color: var(--text); }
 
   /* line：display: block，跟着 item 后面，margin-left: auto 推到 row 最右
@@ -87,8 +90,8 @@
     width: 20px;
     background: rgba(0, 60, 179, 0.82);
   }
-  /* hover 整列时颜色加深 */
-  .nav:hover .nav-line { background: rgba(15,17,21,0.5); }
+  /* hover 整列时颜色加深（加强对比让 hover 视觉变化明显） */
+  .nav:hover .nav-line { background: rgba(15,17,21,0.7); }
   .nav:hover .nav-line.is-active { background: rgba(0, 50, 160, 0.95); }
 
   /* item：idle 时透明，hover 时 fade in + 右滑（容器展开后文字"凝结"在位置上） */
