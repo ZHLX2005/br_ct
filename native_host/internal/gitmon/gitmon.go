@@ -69,59 +69,56 @@ func GitPush(req protocol.Request) protocol.Response {
 	dir := req.Path
 	result := GitOperationResult{Dir: dir}
 
-	// 先 fetch 获取最新远程状态
-	fetchOut, fetchErr := runGitCombined(dir, "fetch")
+	// 1. fetch 获取最新远程状态
+	_, fetchErr := runGitCombined(dir, "fetch")
 	if fetchErr != nil {
 		result.Error = "git fetch 失败: " + fetchErr.Error()
-		if fetchOut != "" {
-			result.Error += "\n" + fetchOut
-		}
 		return protocol.Response{Status: "ok", Data: result}
 	}
 
-	// 获取 fetch 后的最新状态
-	status := gitStatusForDir(dir)
-	if status.Error != "" {
-		result.Error = "无法读取状态: " + status.Error
+	// 2. pull 同步远程（自动合并）
+	pullOut, pullErr := runGitCombined(dir, "pull", "--no-edit")
+	if pullErr != nil {
+		runGit(dir, "merge", "--abort")
+		result.Error = "同步远程更新失败（可能存在冲突），已放弃合并。请手动处理后重试。\n" + pullOut
 		return protocol.Response{Status: "ok", Data: result}
 	}
-
-	// 智能处理分支状态
-	// 场景1：ahead > 0 && behind > 0（双方都有新提交）→ 先 pull 合并，再 push
-	if status.Ahead > 0 && status.Behind > 0 {
-		pullOut, pullErr := runGitCombined(dir, "pull", "--no-edit")
-		if pullErr != nil {
-			// merge 失败：abort 还原
-			runGit(dir, "merge", "--abort")
-			result.Error = "自动合并远程更新失败（可能存在冲突），已放弃合并。请手动处理后重试。\n" + pullOut
-			result.Output = formatStatusForUser(status)
-			return protocol.Response{Status: "ok", Data: result}
-		}
-		result.Output = "已自动合并远程更新:\n" + pullOut + "\n"
-		// 继续执行 push
-	}
-
-	// 场景2：ahead == 0 && behind > 0（远程有新提交）→ 先 pull，再 push
-	if status.Ahead == 0 && status.Behind > 0 {
-		pullOut, pullErr := runGitCombined(dir, "pull", "--no-edit")
-		if pullErr != nil {
-			// merge 失败：abort 还原
-			runGit(dir, "merge", "--abort")
-			result.Error = "自动合并远程更新失败（可能存在冲突），已放弃合并。请手动处理后重试。\n" + pullOut
-			result.Output = formatStatusForUser(status)
-			return protocol.Response{Status: "ok", Data: result}
-		}
+	if pullOut != "" {
 		result.Output = "已同步远程更新:\n" + pullOut + "\n"
 	}
 
-	// 场景3：ahead > 0 && behind == 0 或 ahead == 0 && behind == 0（本地领先或完全同步）→ 直接 push
-	// 执行 push
-	pushOut, pushErr := runGitCombined(dir, "push")
-	if result.Output != "" {
-		result.Output += "\n"
+	// 3. add . 暂存所有变更
+	addOut, addErr := runGitCombined(dir, "add", ".")
+	if addErr != nil {
+		result.Error = fmt.Sprintf("git add 失败: %v\n%v", addErr, addOut)
+		return protocol.Response{Status: "ok", Data: result}
 	}
-	result.Output += "推送结果:\n" + pushOut
 
+	// 4. 检查是否有变更需要提交
+	statusOut, _ := runGit(dir, "status", "--porcelain")
+	if strings.TrimSpace(statusOut) == "" {
+		// 没有变更，直接 push
+		pushOut, pushErr := runGitCombined(dir, "push")
+		result.Output += "无变更，已推送最新远程状态\n推送结果:\n" + pushOut
+		if pushErr != nil {
+			result.Error = pushErr.Error()
+		} else {
+			result.Success = true
+		}
+		return protocol.Response{Status: "ok", Data: result}
+	}
+
+	// 5. commit（无消息，自动生成）
+	commitOut, commitErr := runGitCombined(dir, "commit", "-m", "auto sync")
+	if commitErr != nil {
+		result.Error = fmt.Sprintf("git commit 失败: %v\n%v", commitErr, commitOut)
+		return protocol.Response{Status: "ok", Data: result}
+	}
+	result.Output += "已提交本地变更\n"
+
+	// 6. push
+	pushOut, pushErr := runGitCombined(dir, "push")
+	result.Output += "推送结果:\n" + pushOut
 	if pushErr != nil {
 		result.Error = pushErr.Error()
 	} else {
