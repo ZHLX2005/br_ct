@@ -51,6 +51,26 @@
           <span class="aichat-settings-hint">在 AI 平台页面划词时显示快捷提示词模板</span>
         </span>
       </label>
+      <div class="aichat-settings-item aichat-settings-item--shortcut">
+        <div class="shortcut-header">
+          <label class="aichat-settings-label">Tab 切换快捷键</label>
+          <label class="switch-toggle">
+            <input type="checkbox" id="setting-sidebar-tab-switch-enabled" checked>
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+        <div class="shortcut-input-wrapper">
+          <input
+            type="text"
+            id="setting-sidebar-tab-switch-shortcut"
+            class="shortcut-input"
+            placeholder="默认: `"
+            readonly
+          >
+          <button id="clear-sidebar-tab-switch-shortcut" class="shortcut-clear-btn" title="清除">×</button>
+        </div>
+        <small class="aichat-settings-hint">在工作区和 AI 平台之间切换</small>
+      </div>
     </div>
   </div>
 </div>

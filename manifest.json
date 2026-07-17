@@ -69,7 +69,8 @@
         "runjs/translation/content.js",
         "runjs/translation/selection-ask.js",
         "runjs/translation/content-ocr.js",
-        "runjs/translation/sidebar-selection-content.js"
+        "runjs/sidebar/sidebar-selection-content.js",
+        "runjs/sidebar/sidebar-tab-switch.js"
       ],
       "css": [
         "runjs/translation/content.css",

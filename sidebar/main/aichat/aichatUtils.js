@@ -87,6 +87,12 @@ let contextMenuTarget = null;   // 当前右键点击的目标索引
 const AICHAT_SETTINGS_KEY = "aichat_settings";
 let aichatSettings = { captureOnSend: false, addTabToWorkspaceOnSend: false, blockOnSend: false, selectionMode: false };
 
+// 快捷键设置（存储在 chrome.storage.local，键名遵循 translation.xxx.shortcut 规范）
+const SIDEBAR_TAB_SWITCH_SHORTCUT_KEY = "translation.sidebarTabSwitch.shortcut";
+const SIDEBAR_TAB_SWITCH_ENABLED_KEY = "translation.sidebarTabSwitch.enabled";
+let sidebarTabSwitchShortcut = null;  // 当前快捷键配置
+let sidebarTabSwitchEnabled = true;   // 快捷键开关
+
 // 待发送消息队列（问题阻塞模式）
 let pendingMessages = [];
 const PENDING_STORAGE_KEY = "aichat_pending_messages";
@@ -249,6 +255,9 @@ export async function initializePopup() {
 
   // 初始化工作区标签
   initWorkspaceTabs();
+
+  // 初始化 Tab 轮询状态
+  await initTabCycleState();
 
   // 同步平台计数
   updatePlatformCount();
@@ -430,6 +439,9 @@ export function setupEventListeners() {
   document.getElementById("setting-selection-ask")?.addEventListener("change", (e) => {
     saveSelectionAskSetting(e.target.checked);
   });
+
+  // Sidebar Tab 切换快捷键设置
+  initSidebarTabSwitchShortcut();
 
   // 提取页面文本按钮
   if (extractButton) {
@@ -772,6 +784,9 @@ function renderPlatformPills() {
       renderCurrentPlatform();
       renderPlatformTabs();
       scrollToBottom(true);
+      // 更新轮询状态（platform 在最后）
+      currentTabIndex = workspaceTabs.length;
+      saveTabCycleState();
       // 再切浏览器标签页
       switchToPlatformTab(platformId);
     });
@@ -1688,6 +1703,11 @@ export function initializeResponseDisplay() {
       chrome.storage.session.remove("pendingSelection").catch(() => {});
     }
 
+    // Sidebar Tab 切换快捷键
+    if (request.action === "sidebarTabSwitch") {
+      switchSelectedTab();
+    }
+
     return false;
   });
 
@@ -1947,7 +1967,10 @@ function renderWorkspaceTabs() {
 
     el.addEventListener("click", (e) => {
       if (e.target.closest(".workspace-tab-close")) return;
-      switchToWorkspaceTab(i);
+      // 点击工作区时，更新轮询索引并切换
+      currentTabIndex = i;  // 记录当前在哪个位置
+      saveTabCycleState();
+      switchToWorkspaceTabByIndex(i);
     });
 
     el.querySelector(".workspace-tab-close").addEventListener("click", (e) => {
@@ -2007,21 +2030,14 @@ async function addCurrentPageToWorkspace() {
   }
 }
 
-async function switchToWorkspaceTab(index) {
-  const tab = workspaceTabs[index];
-  if (!tab) return;
-  try {
-    // 验证 tab 是否还存在
-    await chrome.tabs.get(tab.tabId);
-    await chrome.runtime.sendMessage({ action: "switchToTab", tabId: tab.tabId });
-  } catch (err) {
-    // tab 已关闭，移除
-    console.warn("工作区标签页已关闭，移除", tab.tabId);
-    workspaceTabs.splice(index, 1);
-    renderWorkspaceTabs();
-    saveWorkspaceTabs();
-    showTempMessage("该标签页已关闭");
-  }
+/**
+ * 高亮指定索引的工作区标签页
+ */
+function highlightWorkspaceTab(index) {
+  if (!elements.pagePills) return;
+  elements.pagePills.querySelectorAll('.workspace-tab').forEach((el, i) => {
+    el.classList.toggle('active', i === index);
+  });
 }
 
 async function removeWorkspaceTab(index) {
@@ -2047,10 +2063,142 @@ async function refreshWorkspaceTabs() {
   return workspaceTabs;
 }
 
+// ==================== 快捷键切换 Tab（轮询） ====================
+
+// Tab 切换状态（持久化）
+const TAB_CYCLE_STATE_KEY = "sidebar_tab_cycle_state";
+let currentTabIndex = -1;  // 当前选中的 tab 索引（-1 表示平台）
+
+/**
+ * 初始化 Tab 轮询状态
+ */
+async function initTabCycleState() {
+  try {
+    const result = await chrome.storage.local.get([TAB_CYCLE_STATE_KEY]);
+    if (result[TAB_CYCLE_STATE_KEY]) {
+      currentTabIndex = result[TAB_CYCLE_STATE_KEY].currentIndex ?? -1;
+    }
+  } catch (e) {
+    console.warn('[Sidebar] 加载Tab轮询状态失败:', e);
+  }
+}
+
+/**
+ * 保存 Tab 轮询状态
+ */
+async function saveTabCycleState() {
+  try {
+    await chrome.storage.local.set({
+      [TAB_CYCLE_STATE_KEY]: {
+        currentIndex: currentTabIndex,
+        timestamp: Date.now()
+      }
+    });
+  } catch (e) {
+    console.warn('[Sidebar] 保存Tab轮询状态失败:', e);
+  }
+}
+
+/**
+ * 获取所有可切换的 Tab 列表（工作区 + AI平台）
+ */
+function getAllTabs() {
+  const tabs = [];
+  // 添加工作区标签
+  workspaceTabs.forEach((tab, index) => {
+    tabs.push({ type: 'workspace', index, tab });
+  });
+  // 添加 AI 平台作为最后一个选项
+  tabs.push({ type: 'platform', index: -1, name: 'AI平台' });
+  return tabs;
+}
+
+/**
+ * Tab 轮询切换：依次在所有 tab 间切换
+ */
+async function switchSelectedTab() {
+  const allTabs = getAllTabs();
+  if (allTabs.length === 0) return;
+
+  // 计算下一个索引
+  const nextIndex = (currentTabIndex + 1) % allTabs.length;
+  const nextTab = allTabs[nextIndex];
+
+  // 更新当前索引并保存
+  currentTabIndex = nextIndex;
+  await saveTabCycleState();
+
+  // 执行切换
+  if (nextTab.type === 'workspace') {
+    // 切换到工作区标签
+    await switchToWorkspaceTabByIndex(nextTab.index);
+  } else {
+    // 切换到 AI 平台
+    await switchToNextPlatform();
+  }
+}
+
+/**
+ * 切换到指定索引的工作区标签
+ */
+async function switchToWorkspaceTabByIndex(index) {
+  if (index < 0 || index >= workspaceTabs.length) return;
+  const tab = workspaceTabs[index];
+
+  // 更新 UI 高亮
+  highlightWorkspaceTab(index);
+
+  try {
+    await chrome.tabs.get(tab.tabId);
+    await chrome.runtime.sendMessage({ action: "switchToTab", tabId: tab.tabId });
+    showTempMessage(`已切换到: ${tab.title || '工作区'}`);
+  } catch (err) {
+    // tab 已关闭，移除并重新渲染
+    console.warn("工作区标签页已关闭，移除", tab.tabId);
+    workspaceTabs.splice(index, 1);
+    renderWorkspaceTabs();
+    saveWorkspaceTabs();
+    showTempMessage("该标签页已关闭");
+  }
+}
+
+/**
+ * 切换到下一个平台（轮询）
+ */
+async function switchToNextPlatform() {
+  const platforms = Array.from(
+    document.querySelectorAll('#platform-panel .platform-icon-option input[type="checkbox"]:checked')
+  ).map(cb => cb.dataset.platform);
+
+  if (platforms.length === 0) {
+    showTempMessage('未选中任何平台');
+    return;
+  }
+
+  // 找到当前激活的平台索引
+  let currentIdx = platforms.indexOf(activePlatformId);
+  let nextIdx;
+
+  if (currentIdx < 0) {
+    // 没有激活的平台，切换到第一个
+    nextIdx = 0;
+  } else {
+    // 切换到下一个
+    nextIdx = (currentIdx + 1) % platforms.length;
+  }
+
+  const nextPlatform = platforms[nextIdx];
+  activePlatformId = nextPlatform;
+  renderCurrentPlatform();
+  renderPlatformTabs();
+  await switchToPlatformTab(nextPlatform);
+  showTempMessage(`已切换到: ${PLATFORM_CONFIG[nextPlatform]?.name || nextPlatform}`);
+}
+
 // ==================== 右键菜单 ====================
 
 function showContextMenu(x, y, index) {
-  if (!elements.contextMenu) return;
+  if (!elements.pagePills) return;
   contextMenuTarget = index;
   elements.contextMenu.style.left = x + "px";
   elements.contextMenu.style.top = y + "px";
@@ -2324,6 +2472,255 @@ async function refreshPlatformTabStatus() {
   } catch (e) {
     // background may not be ready
   }
+}
+
+// ==================== Sidebar Tab 切换快捷键设置 ====================
+
+// 快捷键录制状态
+let isRecordingSidebarTabSwitch = false;
+
+/**
+ * 初始化快捷键设置：加载快捷键、绑定事件
+ */
+async function initSidebarTabSwitchShortcut() {
+  // 加载已保存的快捷键和开关状态
+  await loadSidebarTabSwitchShortcut();
+  await loadSidebarTabSwitchEnabled();
+
+  // 绑定开关事件
+  const enabledToggle = document.getElementById("setting-sidebar-tab-switch-enabled");
+  enabledToggle?.addEventListener("change", (e) => {
+    sidebarTabSwitchEnabled = e.target.checked;
+    saveSidebarTabSwitchEnabled(sidebarTabSwitchEnabled);
+  });
+
+  // 绑定输入框点击事件（开始录制）
+  const shortcutInput = document.getElementById("setting-sidebar-tab-switch-shortcut");
+  const clearBtn = document.getElementById("clear-sidebar-tab-switch-shortcut");
+
+  shortcutInput?.addEventListener("click", startSidebarTabSwitchRecording);
+  clearBtn?.addEventListener("click", clearSidebarTabSwitchShortcut);
+}
+
+/**
+ * 开始录制快捷键
+ */
+function startSidebarTabSwitchRecording(e) {
+  if (isRecordingSidebarTabSwitch) return;
+  isRecordingSidebarTabSwitch = true;
+
+  const input = e.currentTarget;
+  input.classList.add("recording");
+  input.value = "请按下快捷键...";
+  input.disabled = true;
+
+  document.addEventListener("keydown", recordSidebarTabSwitch, { capture: true });
+  document.addEventListener("keyup", finishSidebarTabSwitchRecording, { capture: true });
+}
+
+/**
+ * 录制中：记录按键
+ */
+function recordSidebarTabSwitch(e) {
+  e.preventDefault();
+  e.stopPropagation();
+
+  // 特殊按键不允许作为快捷键
+  const forbiddenKeys = ['Control', 'Alt', 'Shift', 'Meta', 'CapsLock', 'Tab', 'Escape', 'Enter', 'Backspace', 'Delete'];
+  if (forbiddenKeys.includes(e.key)) {
+    document.getElementById("setting-sidebar-tab-switch-shortcut").value = `不支持 ${e.key} 键`;
+    return;
+  }
+
+  const modifiers = [];
+  if (e.ctrlKey) modifiers.push("Ctrl");
+  if (e.altKey) modifiers.push("Alt");
+  if (e.shiftKey) modifiers.push("Shift");
+  if (e.metaKey) modifiers.push("Meta");
+
+  const mainKey = e.key;
+
+  const shortcutString = [...modifiers, mainKey].join("+");
+  document.getElementById("setting-sidebar-tab-switch-shortcut").value = shortcutString;
+}
+
+/**
+ * 结束录制
+ */
+function finishSidebarTabSwitchRecording(e) {
+  e.preventDefault();
+  e.stopPropagation();
+
+  isRecordingSidebarTabSwitch = false;
+  const input = document.getElementById("setting-sidebar-tab-switch-shortcut");
+  if (input) {
+    input.classList.remove("recording");
+    input.disabled = false;
+  }
+
+  document.removeEventListener("keydown", recordSidebarTabSwitch, { capture: true });
+  document.removeEventListener("keyup", finishSidebarTabSwitchRecording, { capture: true });
+
+  const shortcutString = input?.value || "";
+
+  // 跳过无效输入
+  if (!shortcutString || shortcutString.includes("请按下") || shortcutString.includes("不支持")) {
+    // 恢复默认显示
+    if (input && shortcutString.includes("不支持")) {
+      input.value = sidebarTabSwitchShortcut ? formatShortcutFromConfig(sidebarTabSwitchShortcut) : '`';
+    }
+    return;
+  }
+
+  const shortcut = parseShortcutString(shortcutString);
+  saveSidebarTabSwitchShortcut(shortcut);
+}
+
+/**
+ * 从配置对象格式化快捷键显示
+ */
+function formatShortcutFromConfig(config) {
+  const parts = [];
+  if (config.ctrlKey) parts.push("Ctrl");
+  if (config.altKey) parts.push("Alt");
+  if (config.shiftKey) parts.push("Shift");
+  if (config.metaKey) parts.push("Meta");
+  parts.push(config.key);
+  return parts.join("+");
+}
+
+/**
+ * 解析快捷键字符串为配置对象
+ */
+function parseShortcutString(shortcutString) {
+  const parts = shortcutString.split("+");
+  return {
+    ctrlKey: parts.includes("Ctrl"),
+    altKey: parts.includes("Alt"),
+    shiftKey: parts.includes("Shift"),
+    metaKey: parts.includes("Meta"),
+    key: parts[parts.length - 1],
+  };
+}
+
+/**
+ * 格式化快捷键显示
+ */
+function formatShortcutDisplay(shortcutString) {
+  return shortcutString.replace("Control", "Ctrl").replace("Meta", "Cmd");
+}
+
+/**
+ * 保存快捷键
+ */
+async function saveSidebarTabSwitchShortcut(shortcut) {
+  await chrome.storage.local.set({ [SIDEBAR_TAB_SWITCH_SHORTCUT_KEY]: shortcut });
+  sidebarTabSwitchShortcut = shortcut;
+
+  // 广播给所有标签页的 content script
+  try {
+    const tabs = await chrome.tabs.query({});
+    tabs.forEach((tab) => {
+      chrome.tabs
+        .sendMessage(tab.id, {
+          action: "translation.sidebarTabSwitch.updateShortcut",
+          shortcut: shortcut,
+        })
+        .catch(() => {});
+    });
+  } catch (e) {
+    console.warn("[Sidebar] 广播快捷键失败:", e);
+  }
+
+  console.log("[Sidebar] Tab 切换快捷键已保存:", shortcut);
+}
+
+/**
+ * 加载快捷键
+ */
+async function loadSidebarTabSwitchShortcut() {
+  try {
+    const result = await chrome.storage.local.get([SIDEBAR_TAB_SWITCH_SHORTCUT_KEY]);
+    const input = document.getElementById("setting-sidebar-tab-switch-shortcut");
+    if (result[SIDEBAR_TAB_SWITCH_SHORTCUT_KEY]) {
+      sidebarTabSwitchShortcut = result[SIDEBAR_TAB_SWITCH_SHORTCUT_KEY];
+      if (input) {
+        input.value = formatShortcutFromConfig(sidebarTabSwitchShortcut);
+      }
+    } else {
+      // 默认快捷键: `
+      sidebarTabSwitchShortcut = { ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, key: '`' };
+      if (input) input.value = '`';
+    }
+  } catch (e) {
+    console.warn("[Sidebar] 加载快捷键失败:", e);
+  }
+}
+
+/**
+ * 加载开关状态
+ */
+async function loadSidebarTabSwitchEnabled() {
+  try {
+    const result = await chrome.storage.local.get([SIDEBAR_TAB_SWITCH_ENABLED_KEY]);
+    sidebarTabSwitchEnabled = result[SIDEBAR_TAB_SWITCH_ENABLED_KEY] !== false;  // 默认启用
+    const toggle = document.getElementById("setting-sidebar-tab-switch-enabled");
+    if (toggle) toggle.checked = sidebarTabSwitchEnabled;
+  } catch (e) {
+    console.warn("[Sidebar] 加载开关状态失败:", e);
+  }
+}
+
+/**
+ * 保存开关状态
+ */
+async function saveSidebarTabSwitchEnabled(enabled) {
+  await chrome.storage.local.set({ [SIDEBAR_TAB_SWITCH_ENABLED_KEY]: enabled });
+  sidebarTabSwitchEnabled = enabled;
+
+  // 广播给所有标签页的 content script
+  try {
+    const tabs = await chrome.tabs.query({});
+    tabs.forEach((tab) => {
+      chrome.tabs
+        .sendMessage(tab.id, {
+          action: "translation.sidebarTabSwitch.updateEnabled",
+          enabled: enabled,
+        })
+        .catch(() => {});
+    });
+  } catch (e) {
+    console.warn("[Sidebar] 广播开关状态失败:", e);
+  }
+
+  console.log("[Sidebar] Tab 切换开关状态已保存:", enabled);
+}
+
+/**
+ * 清除快捷键
+ */
+async function clearSidebarTabSwitchShortcut() {
+  await chrome.storage.local.remove(SIDEBAR_TAB_SWITCH_SHORTCUT_KEY);
+  sidebarTabSwitchShortcut = null;
+
+  const input = document.getElementById("setting-sidebar-tab-switch-shortcut");
+  if (input) input.value = "";
+
+  // 广播清除事件
+  try {
+    const tabs = await chrome.tabs.query({});
+    tabs.forEach((tab) => {
+      chrome.tabs
+        .sendMessage(tab.id, {
+          action: "translation.sidebarTabSwitch.clearShortcut",
+        })
+        .catch(() => {});
+    });
+  } catch (e) {
+    console.warn("[Sidebar] 广播清除快捷键失败:", e);
+  }
+
+  console.log("[Sidebar] Tab 切换快捷键已清除");
 }
 
 // ==================== 工具函数 ====================
