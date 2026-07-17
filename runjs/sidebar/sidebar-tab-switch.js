@@ -91,10 +91,114 @@
     chrome.runtime.sendMessage({ action: 'addToWorkspace' }, (response) => {
       if (chrome.runtime.lastError) {
         console.log('[SidebarTabSwitch] Background 可能未就绪');
+        showToast('添加到工作区', '扩展未就绪，请刷新页面');
       } else {
-        console.log('[SidebarTabSwitch] 已通知添加工作区:', response);
+        console.log('[SidebarTabSwitch] 添加结果:', response);
+        if (response.success) {
+          showToast('已添加', `「${response.title}」已添加到工作区`);
+        } else if (response.reason === 'already_exists') {
+          showToast('已在工作区', '该标签页已存在');
+        } else if (response.reason === 'ai_platform') {
+          showToast('跳过', 'AI 平台页面无需添加');
+        } else if (response.reason === 'no_tab') {
+          showToast('添加失败', '无法获取当前标签页');
+        } else {
+          showToast('添加失败', '添加到工作区时出错');
+        }
       }
     });
+  }
+
+  // 显示 Toast 提示
+  function showToast(title, message) {
+    // 移除已有的 toast
+    const existingToast = document.getElementById('sidebar-toast');
+    if (existingToast) existingToast.remove();
+
+    // 创建 toast 元素
+    const toast = document.createElement('div');
+    toast.id = 'sidebar-toast';
+    toast.innerHTML = `
+      <div class="toast-icon">✓</div>
+      <div class="toast-content">
+        <div class="toast-title">${escapeHtml(title)}</div>
+        <div class="toast-message">${escapeHtml(message)}</div>
+      </div>
+      <button class="toast-close">×</button>
+    `;
+
+    // 添加样式
+    toast.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 2147483647;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: #1a1a1a;
+      color: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      line-height: 1.4;
+      max-width: 320px;
+      animation: toastSlideIn 0.3s ease-out;
+    `;
+
+    const iconStyle = `flex-shrink: 0; width: 24px; height: 24px; background: #333; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;`;
+    const contentStyle = `flex: 1; min-width: 0;`;
+    const titleStyle = `font-weight: 600; margin-bottom: 2px;`;
+    const messageStyle = `opacity: 0.8; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;`;
+    const closeStyle = `flex-shrink: 0; width: 20px; height: 20px; background: #333; border: none; border-radius: 50%; color: #999; cursor: pointer; font-size: 14px; line-height: 1; display: flex; align-items: center; justify-content: center; transition: all 0.2s;`;
+
+    toast.querySelector('.toast-icon').style.cssText = iconStyle;
+    toast.querySelector('.toast-content').style.cssText = contentStyle;
+    toast.querySelector('.toast-title').style.cssText = titleStyle;
+    toast.querySelector('.toast-message').style.cssText = messageStyle;
+    toast.querySelector('.toast-close').style.cssText = closeStyle;
+
+    // 添加动画样式
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes toastSlideIn {
+        from { opacity: 0; transform: translateX(100px); }
+        to { opacity: 1; transform: translateX(0); }
+      }
+      @keyframes toastSlideOut {
+        from { opacity: 1; transform: translateX(0); }
+        to { opacity: 0; transform: translateX(100px); }
+      }
+    `;
+    if (!document.querySelector('#sidebar-toast-styles')) {
+      style.id = 'sidebar-toast-styles';
+      document.head.appendChild(style);
+    }
+
+    // 关闭按钮
+    toast.querySelector('.toast-close').addEventListener('click', () => removeToast(toast));
+
+    // 自动关闭（4秒）
+    toast._timeout = setTimeout(() => removeToast(toast), 4000);
+
+    // 添加到页面
+    document.body.appendChild(toast);
+  }
+
+  function removeToast(toast) {
+    if (!toast) toast = document.getElementById('sidebar-toast');
+    if (!toast) return;
+    clearTimeout(toast._timeout);
+    toast.style.animation = 'toastSlideOut 0.3s ease-in forwards';
+    setTimeout(() => toast.remove(), 300);
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
   }
 
   // 键盘事件监听

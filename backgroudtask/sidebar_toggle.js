@@ -163,7 +163,7 @@ async function addCurrentPageToWorkspace(tabId) {
     // 排除 AI 平台页面
     if (isAiWebUrl(tab.url)) {
       console.log('[SidebarToggle] AI 平台页面无需添加到工作区');
-      return { success: false, reason: 'ai_platform' };
+      return { success: false, reason: 'ai_platform', title: tab.title };
     }
 
     // 获取当前工作区列表
@@ -173,7 +173,7 @@ async function addCurrentPageToWorkspace(tabId) {
     // 去重检查
     if (workspaceTabs.some(t => t.tabId === tabId)) {
       console.log('[SidebarToggle] 该标签页已在工作区中');
-      return { success: false, reason: 'already_exists' };
+      return { success: false, reason: 'already_exists', title: tab.title };
     }
 
     // 添加到工作区
@@ -196,6 +196,7 @@ async function addCurrentPageToWorkspace(tabId) {
     return { success: false, reason: 'error' };
   }
 }
+
 
 /**
  * 获取所有可切换的 Tab 列表（工作区 + AI平台）
