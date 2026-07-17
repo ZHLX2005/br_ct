@@ -1925,6 +1925,27 @@ async function initWorkspaceTabs() {
     // session storage may not be available
   }
   renderWorkspaceTabs();
+
+  // 监听 storage 变化，实时响应（其他渠道添加工作区时自动刷新）
+  try {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'session') return;
+      if (changes[WORKSPACE_STORAGE_KEY]) {
+        const newTabs = changes[WORKSPACE_STORAGE_KEY].newValue || [];
+        // 同步内存数据
+        workspaceTabs = newTabs.map(t => ({
+          ...t,
+          localId: ++workspaceTabCounter,
+        }));
+        // 过滤已关闭的标签页
+        refreshWorkspaceTabs().then(() => {
+          renderWorkspaceTabs();
+        });
+      }
+    });
+  } catch (e) {
+    // ignore
+  }
 }
 
 async function saveWorkspaceTabs() {
