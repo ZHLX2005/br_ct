@@ -51,6 +51,10 @@
       "suggested_key": { "default": "Alt+S" },
       "description": "打开/关闭 AI 助手边栏"
     },
+    "add_to_workspace": {
+      "suggested_key": { "default": "Alt+W" },
+      "description": "快速添加当前页面到工作区"
+    },
     "execute_div_copy": {
       "suggested_key": { "default": "Alt+C" },
       "description": "执行 div Copy 脚本"

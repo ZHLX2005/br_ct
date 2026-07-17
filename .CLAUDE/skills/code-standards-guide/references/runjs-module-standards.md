@@ -33,7 +33,7 @@ reference: code-standards-guide — runjs/ 内容脚本注入规范（归档版�
 | `runjs/translation/content.js` | 划词后弹出翻译面板 + 收藏快捷键监听 | 单次抓取脚本、单次 API 调用函数 |
 | `runjs/translation/content-ocr.js` | OCR 框选 + 结果面板 + OCR 快捷键 | 仅在用户主动触发时才挂载的逻辑 |
 | `runjs/translation/selection-ask.js` | AI 平台页面的划词模板面板 | 与划词无关的纯抓取脚本 |
-| `runjs/translation/sidebar-selection-content.js` | 边栏划词浮动按钮（**默认休眠 + 消息激活**） | — |
+| `runjs/sidebar/sidebar-selection-content.js` | 边栏划词浮动按钮（**默认休眠 + 消息激活**） | — |
 | `runjs/translation/lib/` | 第三方库的本地副本（marked、katex） | 自写业务代码 |
 
 ---
@@ -71,7 +71,7 @@ new FeatureManager(); // 注入即激活，100% 页面承受 100% 代价
 
 ### 正面案例（good_eg）
 
-参考 `runjs/translation/sidebar-selection-content.js` 的 **`injected-dom-toggle-pattern`** —— 注入即存在，但默认 `isActive = false`，仅在收到广播消息或 storage 状态匹配时才挂载 DOM 监听。
+参考 `runjs/sidebar/sidebar-selection-content.js` 的 **`injected-dom-toggle-pattern`** —— 注入即存在，但默认 `isActive = false`，仅在收到广播消息或 storage 状态匹配时才挂载 DOM 监听。
 
 ```javascript
 // runjs/xxx.js
@@ -262,7 +262,40 @@ if (command === "execute_div_copy") {
 - `funcs/元素dom/div_Img_wrapper.js` → `Alt+D` 触发（funcs/ 路径 ✅）
 - `funcs/元素dom/copy2file.js` → `Alt+F` 触发（funcs/ 路径 ✅）
 
+**特殊情况：需要 content script 集成的快捷键**
+- `runjs/sidebar/sidebar-tab-switch.js` → `` ` `` 触发（runjs/ 路径 ✅）
+- 适用场景：快捷键功能需要与 Sidebar UI 联动，或需要消息总线架构
+
 详见 [[add-func-script]] skill。
+
+---
+
+## 特殊情况：runjs/ 中的快捷键实现
+
+### 何时在 runjs/ 中实现快捷键
+
+**必须在 runjs/ 中实现快捷键的场景**：
+1. 快捷键功能需要与 Sidebar/popup UI 联动（通过 `chrome.runtime.sendMessage`）
+2. 需要 `chrome.storage.onChanged` 实时响应配置变化
+3. 需要消息总线多端同步（如 Sidebar 和 content script 都监听同一配置）
+
+**示例：`sidebar-tab-switch.js` 架构**
+
+```
+用户按 ` 键
+    ↓
+sidebar-tab-switch.js (Content Script) ← 监听键盘 + 发送消息
+    ↓ chrome.runtime.sendMessage({ action: 'sidebarTabSwitch' })
+sidebar_toggle.js (Background) ← 大脑，计算并直接切换
+    ↓ chrome.tabs.update() 直接切换
+    ↓
+完成切换（工作区/AI平台）
+```
+
+**关键设计模式**：
+1. Content Script 只做两件事：监听键盘 → 发送消息
+2. Background 作为"大脑"：接收消息 → 执行逻辑 → 直接操作
+3. 不转发到 Sidebar：逻辑全部在 Background 完成
 
 ---
 
@@ -312,7 +345,31 @@ runjs/imgsPicker.js     # 200 行 + 持续监听 + content_scripts 注入
 funcs/元素dom/div_Img_wrapper.js   # main() + executeScript + 按需注入
 ```
 
-### 案例 3：默认激活 vs 默认休眠
+### 案例 3：需要 UI 联动的快捷键（Content Script → Background）
+
+#### good_eg
+
+`sidebar-tab-switch.js` 的架构是 runjs/ 中快捷键的正确实现方式：
+
+```
+用户按 ` 键
+    ↓
+sidebar-tab-switch.js (Content Script)
+    ↓ chrome.runtime.sendMessage({ action: 'sidebarTabSwitch' })
+sidebar_toggle.js (Background)
+    ↓ chrome.tabs.update() 直接切换
+    ↓
+完成切换
+```
+
+**关键设计**：
+- Content Script 只做两件事：监听键盘 → 发送消息
+- Background 作为"大脑"：接收消息 → 执行逻辑 → 直接操作 chrome.tabs
+- 不转发到 Sidebar：逻辑全部在 Background 完成
+
+详见 [[sidebar-shortcut-impl]] 参考文档。
+
+### 案例 4：默认激活 vs 默认休眠
 
 #### bad_example
 
@@ -342,7 +399,9 @@ function deactivate() { /* 移除监听 + 清理 DOM */ }
 | `tripleSpace/tripleSpace.css` | 337 | ✅ | content_scripts | — |
 | `translation/content.js` | 1537 | ⚠️ 偏大 | content_scripts | ✅ 持续监听 |
 | `translation/content-ocr.js` | 1668 | ⚠️ 偏大 | content_scripts | ✅ 持续监听 |
-| `translation/sidebar-selection-content.js` | 151 | ✅ | content_scripts | ❌ 默认休眠（**参考范例**） |
+| `sidebar/sidebar-selection-content.js` | 151 | ✅ | content_scripts | ❌ 默认休眠（**参考范例**） |
+| `sidebar/sidebar-tab-switch.js` | 200+ | ✅ | content_scripts | ❌ 默认休眠 |
+| `translation/sidebar-selection-content.js` | ❌ 路径错误 | ❌ | content_scripts | ❌ 默认休眠 |
 | `translation/selection-ask.js` | 466 | ✅ | content_scripts | ✅ 仅 AI 平台激活 |
 | `translation/content.css` | 778 | ⚠️ 偏大 | content_scripts | — |
 | `translation/content-ocr.css` | 516 | ⚠️ 偏大 | content_scripts | — |
@@ -402,7 +461,7 @@ content.js / content-ocr.js 各自实现了一份 `callLLMNonStream` / `callLLMS
 | 错误操作 | 实际后果 | 正确做法 |
 |---------|---------|---------|
 | 单次抓取脚本放进 runjs/ | 每个页面常驻 200 行只为按一次快捷键 | 放进 funcs/ + main() + commands |
-| 默认激活 + 持续监听 | 用户访问任何页面都承受 100% 代价 | 默认休眠 + 消息激活（参考 sidebar-selection-content.js） |
+| 默认激活 + 持续监听 | 用户访问任何页面都承受 100% 代价 | 默认休眠 + 消息激活（参考 `runjs/sidebar/sidebar-selection-content.js`） |
 | 无差别 `<all_urls>` 注入 | 90% 用户用不到也要加载 | 缩窄 matches 或缩窄功能 |
 | 新增 runjs/ 脚本后忘了同步 manifest.json | 注入失败但无报错 | 每次新增都同步 content_scripts.js 数组 |
 | 快捷键脚本没用 main() 包裹 | popup 无法复用同一个脚本 | funcs/ 路径强制 main()（见 [[add-func-script]]） |
@@ -428,6 +487,21 @@ content.js / content-ocr.js 各自实现了一份 `callLLMNonStream` / `callLLMS
 
 - [ ] 快捷键脚本优先放 `funcs/` + main()（参考 [[add-func-script]]）
 - [ ] `manifest.json` 的 `commands` 与 `func_executor.js` 的 `setupFuncCommandListener` 字符串完全一致
+
+---
+
+## 审计记录
+
+### 2024-07-17 同步结果
+
+| 引用 | 状态 | 修复 |
+|------|------|------|
+| `runjs/translation/sidebar-selection-content.js` | ❌ 路径错误 | 已更正为 `runjs/sidebar/sidebar-selection-content.js` |
+| `sidebar-selection-content.js` 路径引用 | ❌ 错误 | 已在模块矩阵中添加正确条目 |
+| `runjs/sidebar/sidebar-tab-switch.js` | ✅ 新增 | 已在模块矩阵中添加条目 |
+| `func_executor.js:43` | ✅ 存在 | main() 调用位置正确 |
+| `popup/func_execute/functioncall.js` | ✅ 存在 | 路径正确 |
+| `backgroudtask/func_executor.js` | ✅ 存在 | 路径正确 |
 
 ---
 
