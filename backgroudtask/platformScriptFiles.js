@@ -63,5 +63,9 @@ export function getPlatformScriptFiles(platform) {
     return ["contentScripts/xiaomi.js"];
   }
 
+  if (platform === "copilot") {
+    return ["contentScripts/copilot.js"];
+  }
+
   return [`contentScripts/${platform}.js`];
 }

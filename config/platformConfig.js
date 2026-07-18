@@ -138,6 +138,14 @@ export const PLATFORM_CONFIG = {
     color: '#ff6700',
     url: 'https://aistudio.xiaomimimo.com/#/c',
     defaultVisible: true
+  },
+  copilot: {
+    name: 'Copilot',
+    icon: 'CO',
+    shortIcon: 'CO',
+    color: '#0078d4',
+    url: 'https://copilot.microsoft.com/',
+    defaultVisible: true
   }
 };
 
