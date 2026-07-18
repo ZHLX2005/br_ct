@@ -203,7 +203,7 @@ async function addCurrentPageToWorkspace(tabId) {
 
 
 /**
- * 获取所有可切换的 Tab 列表（工作区 + AI平台）
+ * 获取所有可切换的 Tab 列表（工作区 + 已勾选的AI平台）
  */
 async function getAllTabs() {
   const tabs = [];
@@ -221,9 +221,49 @@ async function getAllTabs() {
     console.warn('[SidebarToggle] 获取工作区标签失败:', e);
   }
 
-  // 添加 AI 平台作为最后一个选项
-  tabs.push({ type: 'platform', index: -1, name: 'AI平台' });
+  // 添加已勾选的 AI 平台（每个平台作为一个独立节点）
+  try {
+    const statesResult = await chrome.storage.local.get(PLATFORM_STATES_KEY);
+    const platformStates = statesResult[PLATFORM_STATES_KEY] || {};
+    PLATFORM_HOSTNAMES.forEach((platform, index) => {
+      if (platformStates[platform.id] !== false) {
+        tabs.push({ type: 'platform', index, name: platform.id, platform });
+      }
+    });
+  } catch (e) {
+    console.warn('[SidebarToggle] 获取平台勾选状态失败:', e);
+  }
+
   return tabs;
+}
+
+/**
+ * 切换到指定的 AI 平台（按用户勾选列表，未打开则自动打开）
+ */
+async function switchToPlatform(platform) {
+  if (!platform) return;
+
+  // 检查目标平台是否已打开
+  const allTabs = await chrome.tabs.query({ currentWindow: true });
+  const existingTab = allTabs.find(tab => {
+    if (!tab.url) return false;
+    try {
+      return new URL(tab.url).hostname.includes(platform.hostname);
+    } catch {
+      return false;
+    }
+  });
+
+  if (existingTab) {
+    await chrome.tabs.update(existingTab.id, { active: true });
+    console.log('[SidebarToggle] 已切换到 AI 平台:', existingTab.title);
+  } else {
+    const tab = await chrome.tabs.create({
+      url: platform.url,
+      active: true
+    });
+    console.log('[SidebarToggle] 已打开 AI 平台:', platform.id, tab.title);
+  }
 }
 
 /**
@@ -417,7 +457,8 @@ async function switchSelectedTab() {
   if (nextTab.type === 'workspace') {
     await switchToWorkspaceTab(nextTab);
   } else {
-    await switchToNextPlatform();
+    // 切换到对应的 AI 平台
+    await switchToPlatform(nextTab.platform);
   }
 
   console.log('[SidebarToggle] Tab 切换完成，当前索引:', currentTabIndex);
