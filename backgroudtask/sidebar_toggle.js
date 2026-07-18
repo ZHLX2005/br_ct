@@ -143,8 +143,9 @@ function isAiWebUrl(url) {
 }
 
 /**
- * 添加当前页面到工作区
- * @returns {Promise<{success: boolean, reason?: string, title?: string}>}
+ * 添加/移除当前页面到工作区（Alt+W 切换）
+ * - 已存在 → 移除
+ * - 不存在 → 添加
  */
 async function addCurrentPageToWorkspace(tabId) {
   if (!tabId) {
@@ -170,10 +171,13 @@ async function addCurrentPageToWorkspace(tabId) {
     const result = await chrome.storage.session.get(WORKSPACE_STORAGE_KEY);
     let workspaceTabs = result[WORKSPACE_STORAGE_KEY] || [];
 
-    // 去重检查
-    if (workspaceTabs.some(t => t.tabId === tabId)) {
-      console.log('[SidebarToggle] 该标签页已在工作区中');
-      return { success: false, reason: 'already_exists', title: tab.title };
+    // 检查是否已存在（切换：移除）
+    const existingIndex = workspaceTabs.findIndex(t => t.tabId === tabId);
+    if (existingIndex >= 0) {
+      workspaceTabs.splice(existingIndex, 1);
+      await chrome.storage.session.set({ [WORKSPACE_STORAGE_KEY]: workspaceTabs });
+      console.log('[SidebarToggle] 已从工作区移除:', tab.title);
+      return { success: true, action: 'removed', title: tab.title };
     }
 
     // 添加到工作区
@@ -189,7 +193,7 @@ async function addCurrentPageToWorkspace(tabId) {
     await chrome.storage.session.set({ [WORKSPACE_STORAGE_KEY]: workspaceTabs });
 
     console.log('[SidebarToggle] 已添加到工作区:', tab.title);
-    return { success: true, title: tab.title };
+    return { success: true, action: 'added', title: tab.title };
 
   } catch (err) {
     console.error('[SidebarToggle] 添加到工作区失败:', err);

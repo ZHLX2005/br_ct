@@ -94,16 +94,16 @@
         showToast('添加到工作区', '扩展未就绪，请刷新页面');
       } else {
         console.log('[SidebarTabSwitch] 添加结果:', response);
-        if (response.success) {
+        if (response.success && response.action === 'added') {
           showToast('已添加', `「${response.title}」已添加到工作区`);
-        } else if (response.reason === 'already_exists') {
-          showToast('已在工作区', '该标签页已存在');
+        } else if (response.success && response.action === 'removed') {
+          showToast('已移除', `「${response.title}」已从工作区移除`);
         } else if (response.reason === 'ai_platform') {
           showToast('跳过', 'AI 平台页面无需添加');
         } else if (response.reason === 'no_tab') {
-          showToast('添加失败', '无法获取当前标签页');
+          showToast('操作失败', '无法获取当前标签页');
         } else {
-          showToast('添加失败', '添加到工作区时出错');
+          showToast('操作失败', '操作时出错');
         }
       }
     });
