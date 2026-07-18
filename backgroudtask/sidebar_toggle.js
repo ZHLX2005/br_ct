@@ -246,38 +246,59 @@ async function switchToWorkspaceTab(tabInfo) {
 }
 
 /**
- * 切换到下一个 AI 平台（轮询已打开的标签页）
- * 如果没有已打开的标签页，自动打开第一个候选
+ * 切换到下一个 AI 平台（按用户选中顺序，未打开则自动打开）
  */
 async function switchToNextPlatform() {
-  // 获取已打开的平台标签页
-  const platformTabs = await getOpenPlatformTabs();
+  // 读取用户勾选状态
+  const statesResult = await chrome.storage.local.get(PLATFORM_STATES_KEY);
+  const platformStates = statesResult[PLATFORM_STATES_KEY] || {};
 
-  // 如果没有已打开的标签页，自动打开第一个候选
-  if (platformTabs.length === 0) {
-    console.log('[SidebarToggle] 没有已打开的 AI 平台标签，自动打开第一个候选');
-    const result = await openFirstCandidatePlatform();
-    if (result) {
-      console.log('[SidebarToggle] 已自动打开:', result.title);
-    }
+  // 按 PLATFORM_HOSTNAMES 顺序，过滤出已勾选的平台
+  const checkedPlatforms = PLATFORM_HOSTNAMES.filter(p => platformStates[p.id] !== false);
+
+  if (checkedPlatforms.length === 0) {
+    console.log('[SidebarToggle] 没有勾选任何 AI 平台');
     return;
   }
 
-  // 找到当前激活的平台标签索引
-  const currentTab = await chrome.tabs.query({ active: true, currentWindow: true });
-  const currentTabId = currentTab[0]?.id;
-
-  let currentIdx = -1;
-  if (currentTabId) {
-    currentIdx = platformTabs.findIndex(t => t.id === currentTabId);
+  // 获取当前活动标签
+  const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const currentUrl = currentTab?.url || '';
+  let currentPlatformIdx = -1;
+  try {
+    const currentHostname = new URL(currentUrl).hostname;
+    currentPlatformIdx = checkedPlatforms.findIndex(p => currentHostname.includes(p.hostname));
+  } catch (e) {
+    // ignore
   }
 
-  // 切换到下一个
-  const nextIdx = (currentIdx + 1) % platformTabs.length;
-  const nextTab = platformTabs[nextIdx];
+  // 计算下一个平台索引
+  const nextIdx = (currentPlatformIdx + 1) % checkedPlatforms.length;
+  const nextPlatform = checkedPlatforms[nextIdx];
 
-  await chrome.tabs.update(nextTab.id, { active: true });
-  console.log('[SidebarToggle] 已切换到 AI 平台:', nextTab.title);
+  // 检查目标平台是否已打开
+  const allTabs = await chrome.tabs.query({ currentWindow: true });
+  const existingTab = allTabs.find(tab => {
+    if (!tab.url) return false;
+    try {
+      return new URL(tab.url).hostname.includes(nextPlatform.hostname);
+    } catch {
+      return false;
+    }
+  });
+
+  if (existingTab) {
+    // 已打开，直接切换
+    await chrome.tabs.update(existingTab.id, { active: true });
+    console.log('[SidebarToggle] 已切换到 AI 平台:', existingTab.title);
+  } else {
+    // 未打开，自动创建
+    const tab = await chrome.tabs.create({
+      url: nextPlatform.url,
+      active: true
+    });
+    console.log('[SidebarToggle] 已打开 AI 平台:', nextPlatform.id, tab.title);
+  }
 }
 
 /**
