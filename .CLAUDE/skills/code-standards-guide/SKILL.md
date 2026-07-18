@@ -63,6 +63,7 @@ description: 当需要在 bro_chat 扩展项目中的 funcs/、runjs/、backgrou
 | `references/chrome-bg-module-pattern.md` | Chrome MV3 后台模块代码模式：thin background.js + setupXxxModule() 聚合层、命名空间、setup 内防重复注册、长连接守卫、错误案例警示 |
 | `references/runjs-module-standards.md` | runjs/ 内容脚本：必要的才注入 + 快捷键脚本归属决策树 + 模块依赖矩阵 |
 | `references/prompt-extension.md` | （非代码规范）popup 提示词模板的扩展：占位符规范、分组结构、新增步骤 |
+| `references/sidebar-shortcut-impl.md` | Sidebar 快捷键实现范例：Tab 切换（每个已勾选 AI 平台独立节点）+ 添加/移除工作区切换 + Toast 提示 + Sidebar 响应式同步 + chrome.sidePanel 用户手势陷阱 |
 
 > 💡 **backgroudtask/ 下的两个 reference 是互补关系**：
 > - `background-module-reorg.md` 解决「**目录怎么组织**」（建子目录 / index.js / import 路径）
