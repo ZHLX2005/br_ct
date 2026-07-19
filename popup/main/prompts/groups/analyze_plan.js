@@ -1,10 +1,5 @@
 export default [
   {
-    "label": "初步了解",
-    "alias": "learn",
-    "template": "告诉我关于 %s 的相关的概念基础 最佳操作手册以及实践路线 为什么要这这个场景使用这个技术,有什么优势和思想, 底层原理解读  以及常见的误区和其中巧妙的设计;\n我现在需要学习相关的主题和知识 \n你只有一次回答机会,\n不要考虑具体实现,告诉我这东西搭建起来的知识学习路线,以及渐进式的学习,每个技术基于xx场景和xx难点,处于xx考虑,解决xx问题\n不要有口癖 严肃回答"
-  },
-  {
     "label": "问题八股模拟",
     "alias": "interview",
     "template": "你是行业资深专家, 你需要模拟面试官的角色, 你需要针对 %s 这个技术点,首先描述你希望考察的知识点,包含理论和实践,针对整个知识体系的完备性进行提问, 设计10个面试问题,分别从中等到困难,注意每个问题有完整的上下文和描述 保证问题的清晰"
@@ -43,5 +38,10 @@ export default [
     "label": "exp2",
     "alias": "exp2",
     "template": "%s\ngood_eg:\n[以下是推荐的示例 / 期望你采用 — good_eg = good example]\n1. 底层的调用栈和设计\n2. 使用表格讲解时序变化 每一个step对系统的变量产生的影响\n二、Good Example（你认可的 Netty 回答模式）\n✅ Good EG 1：结论先行 + 分层拆解\n表现：\n“一句话结论：Netty 通过 PooledByteBufAllocator... 实现零拷贝。”\n接着用分层模型图区分 Kernel / JDK / Netty。\n符合规范：\n是什么（定义） -> 怎么做（操作） -> 为什么（原理）。\n✅ Good EG 2：暴露源码级细节\n表现：\n明确指出 PoolChunk的二叉树分配、EPOLLET边缘触发、DirectByteBuffer 的 Cleaner 机制。\n符合规范：\nEngineering Mindset。不掩盖规则，直接给出算法和数据结构。\n✅ Good EG 3：表格对比边界条件\n表现：\n对比 JDK NIO (LT) vs Netty Epoll (ET)，对比 Heap vs Direct ByteBuf。\n符合规范：\nVisual Support & High-Signal。用表格展示差异，一目了然。\n✅ Good EG 4：界定规则的边界\n表现：\n明确指出“EventLoop 线程数 ≠ 连接数”、“Channel 绑定 EventLoop 终身不变”。\n符合规范：\nRigor（严谨性）。明确指出规则的适用范围和限制。\nbad_eg:\n[以下是不推荐的、应避免的反例 — bad_eg = bad example]\n、Bad Example（过往回答中的问题模式）\n❌ Bad EG 1：背景铺垫过长，核心滞后\n问题表现：\n开头花大量篇幅讲“什么是 ES”、“什么是 Lucene”，而不是直接切入 docID 的生成机制和 Merge 的副作用。\n违反原则：\nStructural Clarity（结构清晰）​ —— 结论必须前置。\n用户感知：\n“我在问原子操作，不是在听科普。”\n❌ Bad EG 2：模糊回避工程标准\n问题表现：\n解释 search_after时，只说“很快”，没有明确说明底层是 Scorer.advance(docID)，也没有指出 docID 是 Segment 内局部变量这一关键边界。\n违反原则：\nEngineering Mindset（工程化视角）​ —— 必须给出函数名、类名、内核机制。\n用户感知：\n“不够硬核，像博客抄来的。”\n❌ Bad EG 3：拟人化与废话冗余\n问题表现：\n使用“太奶”、“小孙子”等角色扮演，或者“简单来说”、“我们需要注意的是”等口语化填充词。\n违反原则：\nHigh-Signal（高信噪比）​ —— 剔除一切感性语言。\n用户感知：\n信息密度低，打断思考流。\n❌ Bad EG 4：混淆层级\n问题表现：\n在讲 Netty 时，没有明确区分 Linux epoll（内核态）、JDK NIO（封装层）和 Netty EventLoop（框架层）。\n违反原则：\nPrecision（精确性）​ —— 必须界定清楚术语所属层级。\n用户感知：\n“概念糊在一起，逻辑链条断了。”"
+  },
+  {
+    "label": "exp3",
+    "alias": "exp3",
+    "template": "我们来对齐一个东西,1. 你不要使用任何其他形式的比喻 2. 我们尽可能减少思考的层面 最好从一种共识或者一堆无序的资产,按照需求 来构建整个知识体系\n下面是我的问题:\n%s"
   }
 ];

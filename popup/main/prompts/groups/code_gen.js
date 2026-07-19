@@ -5,11 +5,6 @@ export default [
     "template": "%s"
   },
   {
-    "label": "temp-step",
-    "alias": "step",
-    "template": "我要写代码 具体怎么执行指令 !!!!!! 构建什么 需要什么基础设施]\n%s"
-  },
-  {
     "label": "docx-copy",
     "alias": "docx",
     "template": "主题:  %s\n规范: 核心回答全部输出到txt代码块当中,因为我需要复制到docx当中,不支持公式语法和md语法,所以答案输出到txt的代码块里面,不要使用 -的列表符号"
