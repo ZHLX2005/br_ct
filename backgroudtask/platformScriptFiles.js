@@ -1,71 +1,22 @@
+/**
+ * platformScriptFiles.js - 平台脚本注入配置
+ *
+ * 职责：返回 AI 平台 tab 加载时 background 要注入的 sendMessage 脚本列表。
+ *
+ * 设计：
+ * - nav（右侧对话快速导航）由 manifest.json content_scripts 第二段常驻注入
+ *   contentScripts/nav/entry.js（不依赖 background SW，用户打开页面即生效）
+ * - 本模块只负责 sendMessage 注入器（contentScripts/<platform>.js），
+ *   由 ai_platform_processor.js 在 tabs.onUpdated 时调用 chrome.scripting.executeScript
+ * - nav 开关（chrome.storage.platformNavSettings）由 entry.js 自己读取，
+ *   background 不再参与 nav 缓存逻辑
+ */
+
+/**
+ * 返回该平台要注入的 sendMessage 脚本路径
+ * - 兜底：未注册的 platform 走默认路径
+ * - nav 不在此返回 —— 已由 manifest content_scripts 第二段常驻注入
+ */
 export function getPlatformScriptFiles(platform) {
-  if (platform === "chatgpt") {
-    return ["contentScripts/chatgpt.js"];
-  }
-
-  if (platform === "doubao") {
-    return ["contentScripts/doubao.js"];
-  }
-
-  if (platform === "claude") {
-    return ["contentScripts/claude.js"];
-  }
-
-  if (platform === "gemini") {
-    return ["contentScripts/gemini.js"];
-  }
-
-  if (platform === "deepseek") {
-    return ["contentScripts/deepseek.js"];
-  }
-
-  if (platform === "grok") {
-    return ["contentScripts/grok.js"];
-  }
-
-  if (platform === "glm") {
-    return ["contentScripts/glm.js"];
-  }
-
-  if (platform === "kimi") {
-    return ["contentScripts/kimi.js"];
-  }
-
-  if (platform === "yuanbao") {
-    return ["contentScripts/yuanbao.js", "contentScripts/nav/yuanbao.js"];
-  }
-
-  if (platform === "tongyi") {
-    return ["contentScripts/tongyi.js"];
-  }
-
-  if (platform === "googlestudio") {
-    return ["contentScripts/googlestudio.js"];
-  }
-
-  if (platform === "notionai") {
-    return ["contentScripts/notionai.js"];
-  }
-
-  if (platform === "coze") {
-    return ["contentScripts/coze.js"];
-  }
-
-  if (platform === "coderqwen") {
-    return ["contentScripts/coderqwen.js"];
-  }
-
-  if (platform === "zai") {
-    return ["contentScripts/zai.js"];
-  }
-
-  if (platform === "xiaomi") {
-    return ["contentScripts/xiaomi.js"];
-  }
-
-  if (platform === "copilot") {
-    return ["contentScripts/copilot.js"];
-  }
-
   return [`contentScripts/${platform}.js`];
 }

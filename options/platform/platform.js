@@ -6,6 +6,7 @@
 import { PLATFORM_CONFIG } from '../../config/platformConfig.js';
 
 const PLATFORM_VISIBILITY_KEY = 'platformVisibilitySettings';
+const PLATFORM_NAV_KEY = 'platformNavSettings';
 const OCR_PROMPT_KEY = 'platformOcrPrompt';
 const DEFAULT_OCR_PROMPT = '请识别这张图片中的所有文字内容';
 
@@ -64,6 +65,16 @@ function generatePlatformOptions() {
   Object.entries(PLATFORM_CONFIG).forEach(([platformId, config]) => {
     const platformItem = document.createElement('div');
     platformItem.className = 'platform-item';
+    platformItem.dataset.platform = platformId;
+
+    // hasNav: false 的平台不显示 nav 复选框（gemini 暂无 nav 适配）
+    const navToggleHtml = config.hasNav === false
+      ? ''
+      : `<label class="platform-nav-toggle" title="右侧对话快速导航">
+           <input type="checkbox" class="platform-nav-checkbox"
+             id="platform-nav-${platformId}" data-platform="${platformId}">
+           <span>导航</span>
+         </label>`;
 
     platformItem.innerHTML = `
       <input
@@ -78,6 +89,7 @@ function generatePlatformOptions() {
         </div>
         <span>${config.name}</span>
       </label>
+      ${navToggleHtml}
     `;
 
     platformGrid.appendChild(platformItem);
@@ -99,6 +111,43 @@ function loadPlatformVisibilitySettings() {
           ? settings[platformId]
           : config.defaultVisible;
       }
+    });
+  });
+
+  // 加载 nav 开关设置（独立 key）
+  loadPlatformNavSettings();
+}
+
+/**
+ * 加载平台 nav 开关
+ * 未显式关闭 = 开启（与 platformScriptFiles.js 一致）
+ */
+function loadPlatformNavSettings() {
+  chrome.storage.local.get([PLATFORM_NAV_KEY], (result) => {
+    const settings = (result && result[PLATFORM_NAV_KEY]) || {};
+    Object.entries(PLATFORM_CONFIG).forEach(([platformId, config]) => {
+      if (config.hasNav === false) return;
+      const navCheckbox = document.getElementById(`platform-nav-${platformId}`);
+      if (navCheckbox) {
+        // 默认开启（与 background 的 isNavEnabled 规则一致）
+        navCheckbox.checked = settings[platformId] !== false;
+        navCheckbox.addEventListener('change', () => {
+          savePlatformNavSetting(platformId, navCheckbox.checked);
+        });
+      }
+    });
+  });
+}
+
+/**
+ * 写单个平台 nav 开关
+ */
+function savePlatformNavSetting(platformId, enabled) {
+  chrome.storage.local.get([PLATFORM_NAV_KEY], (result) => {
+    const settings = (result && result[PLATFORM_NAV_KEY]) || {};
+    settings[platformId] = enabled;
+    chrome.storage.local.set({ [PLATFORM_NAV_KEY]: settings }, () => {
+      console.log(`[options] ${platformId} nav ${enabled ? 'on' : 'off'}`);
     });
   });
 }

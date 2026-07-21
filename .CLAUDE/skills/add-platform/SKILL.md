@@ -161,14 +161,19 @@ return [`contentScripts/${platform}.js`];
 ## 完整步骤汇总
 
 ```
-1. config/platformConfig.js         → 注册平台（显示名、图标、URL）
+1. config/platformConfig.js         → 注册平台（显示名、图标、URL、hasNav）
 2. contentScripts/{platform}.js     → 输入发送逻辑（sendMessage）
 3. backgroudtask/platformScriptFiles.js  → 注册脚本列表（可省略，走默认分支）
+4. manifest.json & nav adapter       → 右侧对话导航（见 reference）
+5. tests/nav/platform-configs.test.mjs → 平台计数更新
 ```
+
+右侧对话导航的接入规范（manifest match、adapter 创建、selector 探查、验证）见 `references/nav-adapter.md`。
 
 ## 相关 skill（协作参考）
 
-- 内容脚本的代码规范（IIFE 模式、注入顺序、模块注册）见 [[code-standards-guide]]（特别是 `references/runjs-module-standards.md` 与 `references/chrome-bg-module-pattern.md`）
+- 内容脚本的代码规范（IIFE 模式、注入顺序、模块注册）见 [[code-standards-guide]]
+- 右侧对话导航的接入规范见 `references/nav-adapter.md`，架构 / 调试见用户级 skill [[nav-platform]]
 - 各平台剪贴板捕获原理（路径 A 原型链替换 / simulateCopy / `mainWorldHook.js` 行为差异）详见独立 skill **clipboard-capture-architecture**
 - 平台侧栏入口的快捷键切换、伪关闭 vs 真关闭、tabId 生命周期见 **keyboard-shortcut-architecture**（新增/修改本 skill 的边栏入口时读）
 

@@ -1592,7 +1592,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 // 页面卸载时清理
-window.addEventListener('unload', cleanup);
+// 改用 pagehide 替代 unload —— Chrome Permissions Policy 禁止某些网站
+// （如 yuanbao.tencent.com）允许 unload 事件 listener，会导致整个 content_scripts
+// 段被 Chrome 静默拒绝注入。pagehide 是规范推荐的等价替代。
+window.addEventListener('pagehide', cleanup);
 
 // ========== 快捷键功能 ==========
 

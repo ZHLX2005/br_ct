@@ -1909,3 +1909,37 @@ select:focus {
   height: 28px;
   border-radius: 8px;
 }
+
+/* ===== nav 复选框（每个 platform 第二个 checkbox）===== */
+.platform-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.platform-item .platform-checkbox {
+  margin-right: 4px;
+}
+.platform-nav-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted, #6b6f76);
+  cursor: pointer;
+  user-select: none;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: auto;
+  transition: background-color .15s ease;
+}
+.platform-nav-toggle:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+.platform-nav-checkbox {
+  margin: 0;
+  cursor: pointer;
+}
+.platform-nav-toggle span {
+  pointer-events: none;
+}
