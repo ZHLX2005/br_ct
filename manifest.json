@@ -83,20 +83,43 @@
         "runjs/translation/lib/katex.min.css"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "*://yuanbao.tencent.com/*",
+        "*://chat.deepseek.com/*",
+        "*://chatgpt.com/*",
+        "*://claude.ai/*",
+        "*://www.doubao.com/*",
+        "*://chatglm.cn/*",
+        "*://aistudio.google.com/*",
+        "*://gemini.google.com/*",
+        "*://*.qianwen.com/*",
+        "*://grok.com/*",
+        "*://www.notion.so/*",
+        "*://app.notion.com/*",
+        "*://chat.z.ai/*",
+        "*://www.kimi.com/*",
+        "*://coder.qwen.ai/*",
+        "*://www.coze.cn/*",
+        "*://aistudio.xiaomimimo.com/*",
+        "*://copilot.microsoft.com/*"
+      ],
+      "js": ["contentScripts/nav/entry.js"],
+      "run_at": "document_idle",
+      "all_frames": false
     }
   ],
   "web_accessible_resources": [
     {
       "resources": [
         "contentScripts/*.js",
-        "contentScripts/**/*.js",
+        "config/*.js",
         "funcs/*.js",
-        "funcs/**/*.js",
         "runjs/*.js",
-        "runjs/**/*.js",
-        "runjs/**/*.css",
-        "modules/translation/**/*.js",
-        "modules/translation/**/*.html"
+        "runjs/*.css",
+        "modules/translation/*.js",
+        "modules/translation/*.html"
       ],
       "matches": ["<all_urls>"]
     }

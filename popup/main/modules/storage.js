@@ -5,6 +5,7 @@ export const STORAGE_KEYS = {
   HISTORY: "messageHistory",
   OPTIMIZER: "selectedOptimizer",
   PLATFORM_VISIBILITY: "platformVisibilitySettings",
+  PLATFORM_NAV: "platformNavSettings",
   LAST_MESSAGE: "lastMessage",
   PLATFORM_STATES: "platformStates",
   LAST_PROMPT_TEMPLATE: "lastPromptTemplate",

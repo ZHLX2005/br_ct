@@ -1275,12 +1275,15 @@ function checkFavoritesShortcut(e) {
     return e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey && e.key === 'Control';
   }
 
+  // e.key / favoritesShortcut.key 在某些场景（IME 输入法激活、特殊键）下可能 undefined
+  const userKey = typeof e.key === 'string' ? e.key.toLowerCase() : '';
+  const cfgKey = typeof favoritesShortcut.key === 'string' ? favoritesShortcut.key.toLowerCase() : '';
   return (
     e.ctrlKey === favoritesShortcut.ctrlKey &&
     e.altKey === favoritesShortcut.altKey &&
     e.shiftKey === favoritesShortcut.shiftKey &&
     e.metaKey === favoritesShortcut.metaKey &&
-    e.key.toLowerCase() === favoritesShortcut.key.toLowerCase()
+    userKey === cfgKey
   );
 }
 
@@ -1312,6 +1315,8 @@ document.addEventListener('keydown', (e) => {
 });
 
 document.addEventListener('keyup', (e) => {
+  // e.key 在某些场景（IME 输入法激活、特殊键）下可能是 undefined
+  if (typeof e.key !== 'string' || typeof getShortcutMainKey() !== 'string') return;
   if (e.key.toLowerCase() === getShortcutMainKey().toLowerCase()) {
     favoritesShortcutPressed = false;
   }
