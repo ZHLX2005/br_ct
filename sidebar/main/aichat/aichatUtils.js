@@ -1433,6 +1433,17 @@ function renderPlatformMessages(convState) {
         removePendingMessage(message.messageId);
       });
       actions.appendChild(removeBtn);
+    } else if (isBlocked) {
+      // 阻塞消息：× 按钮删除当前这条（只删当前平台会话中的副本，其他平台同内容保留）
+      const removeBlockedBtn = document.createElement("button");
+      removeBlockedBtn.className = "notion-chat-btn notion-chat-btn--danger";
+      removeBlockedBtn.title = "删除该阻塞消息（仅当前平台）";
+      removeBlockedBtn.textContent = "✕";
+      removeBlockedBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        removeBlockedMessage(message);
+      });
+      actions.appendChild(removeBlockedBtn);
     } else {
       const toggleBtn = document.createElement("button");
       toggleBtn.className = "notion-chat-btn";
@@ -2027,6 +2038,31 @@ async function sendBlockedMessage(message) {
 
   // 执行真正发送：当前选中的所有平台（携带该消息阻塞时绑定的提取/划词文本）
   await dispatchMessageToPlatforms(message.content, selectedPlatforms, { skipHistory: true, extractedText: message.extractedText });
+}
+
+/**
+ * 删除当前平台会话里的某条阻塞消息（只删当前这条，不动其他平台里的同内容副本）。
+ * 找到当前 activePlatformId 对应会话中 role==="user" 且 blocked===true 且 messageId 匹配的对象，
+ * 从 conversationStates.messages 中 splice 出去，再触发 UI 刷新。
+ */
+function removeBlockedMessage(message) {
+  if (!message || !message.blocked) return;
+  const platformId = activePlatformId;
+  if (!platformId) return;
+  const ps = getPlatformState(platformId);
+  const convId = ps.activeConvId || DEFAULT_CONVERSATION_ID;
+  const convState = ps.conversationStates.find((c) => c.id === convId);
+  if (!convState) return;
+
+  const idx = convState.messages.findIndex((m) =>
+    m.role === "user" && m.blocked && m.messageId === message.messageId
+  );
+  if (idx < 0) return;
+
+  convState.messages.splice(idx, 1);
+  renderCurrentPlatform();
+  updatePendingSendBar();
+  scrollToBottom(true);
 }
 
 /**

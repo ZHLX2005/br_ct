@@ -286,6 +286,11 @@
   transition: all 0.12s ease;
 }
 .notion-chat-btn:hover { background: white; color: var(--text); border-color: rgba(0,0,0,0.06); }
+.notion-chat-btn--danger:hover {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: rgba(220, 38, 38, 0.2);
+}
 .notion-chat-bubble-content { font-size: 13px; line-height: 1.6; }
 .notion-chat-bubble-content p { margin: 4px 0; }
 .notion-chat-bubble-content p:first-child { margin-top: 0; }
