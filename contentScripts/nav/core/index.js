@@ -83,7 +83,20 @@ export function createNav(cfg) {
     setTimeout(() => { if (a.parentNode) a.remove(); }, 2000);
   }
 
-  const view = createNavView({ onSelect, onExport });
+  // 复制原文到剪贴板（不带 frontmatter，直接拼 fullText，保留换行）
+  // 用法：粘贴到 IM / 邮件 / 笔记时不会被 md 标记干扰
+  async function onCopy() {
+    if (records.length === 0) return;
+    const text = records.map(r => r.fullText).join('\n\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      console.log('[nav] copied', records.length, 'messages to clipboard');
+    } catch (err) {
+      console.warn('[nav] clipboard write failed', err);
+    }
+  }
+
+  const view = createNavView({ onSelect, onExport, onCopy });
   if (!view) return null;
   d.add(() => view.destroy());
 

@@ -16,6 +16,7 @@ const LINE_CLASS = 'bro-chat-nav__line';
 const HANDLE_CLASS = 'bro-chat-nav__handle';
 const HANDLE_BAR_CLASS = 'bro-chat-nav__handle-bar';
 const EXPORT_CLASS = 'bro-chat-nav__export';
+const COPY_CLASS = 'bro-chat-nav__copy';
 
 const NAV_CSS = `
 #${NAV_ID} {
@@ -125,6 +126,22 @@ const NAV_CSS = `
 .${EXPORT_CLASS}:hover {
   color: var(--bro-chat-nav-text);
 }
+.${COPY_CLASS} {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px 1px 0;
+  font-size: 12px;
+  color: var(--bro-chat-nav-text-idle);
+  cursor: pointer;
+  white-space: nowrap;
+}
+#${NAV_ID}:hover .${COPY_CLASS} {
+  display: flex;
+}
+.${COPY_CLASS}:hover {
+  color: var(--bro-chat-nav-text);
+}
 `;
 
 function injectStyle() {
@@ -182,7 +199,7 @@ function createRow({ label, onSelect }) {
   return { row, item, line };
 }
 
-export function createNavView({ onSelect, onExport }) {
+export function createNavView({ onSelect, onExport, onCopy }) {
   if (document.getElementById(NAV_ID)) return null;
   injectStyle();
   const { nav, handle } = createContainer();
@@ -200,12 +217,26 @@ export function createNavView({ onSelect, onExport }) {
     });
   }
 
+  // Create copy button (same row as export, rendered first so it sits on the left)
+  let copyBtn = null;
+  const hasCopy = typeof onCopy === 'function';
+  if (hasCopy) {
+    copyBtn = document.createElement('span');
+    copyBtn.className = COPY_CLASS;
+    copyBtn.textContent = '复制';
+    copyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onCopy();
+    });
+  }
+
   // Vertical drag handler（不变）
   let dragState = null;
   nav.addEventListener('pointerdown', (event) => {
     if (event.button !== undefined && event.button !== 0) return;
     if (event.target.closest(`.${ROW_CLASS}`)) return;
     if (event.target.closest(`.${EXPORT_CLASS}`)) return;
+    if (event.target.closest(`.${COPY_CLASS}`)) return;
     nav.classList.add('is-dragging');
     nav.setPointerCapture(event.pointerId);
     const rect = nav.getBoundingClientRect();
@@ -237,12 +268,14 @@ export function createNavView({ onSelect, onExport }) {
   function clear() {
     // Remove all rows, keep only handle
     while (nav.children.length > 1) nav.removeChild(nav.lastChild);
-    // Re-append export button at the bottom
+    // Re-append copy + export buttons at the bottom (copy on the left, export on the right)
+    if (hasCopy) nav.appendChild(copyBtn);
     if (hasExport) nav.appendChild(exportBtn);
   }
 
   function render(labels) {
-    // Remove export button temporarily for clean row reconciliation
+    // Remove copy + export buttons temporarily for clean row reconciliation
+    if (hasCopy && copyBtn.parentNode) nav.removeChild(copyBtn);
     if (hasExport && exportBtn.parentNode) nav.removeChild(exportBtn);
 
     // 1) 移除多余 row（新列表比当前短）
@@ -266,7 +299,8 @@ export function createNavView({ onSelect, onExport }) {
       nav.appendChild(row);
     }
 
-    // Append export button at the bottom after all rows
+    // Append copy + export buttons at the bottom after all rows
+    if (hasCopy) nav.appendChild(copyBtn);
     if (hasExport) nav.appendChild(exportBtn);
   }
 
