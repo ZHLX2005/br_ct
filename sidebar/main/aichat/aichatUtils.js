@@ -20,10 +20,6 @@ import {
   saveOptimizerSetting,
   loadStoredData as loadData,
   addToHistory,
-  addMessageTabContext,
-  getMessageTabContext,
-  removeMessageFromTabContext,
-  removeTabContextUrl
 } from "../../../popup/main/modules/storage.js";
 import {
   loadPlatformVisibilitySettings,
@@ -224,10 +220,13 @@ export async function initializePopup() {
     promptEditorBody: document.getElementById("prompt-editor-body"),
     pagePromptEditor: document.getElementById("page-prompt-editor"),
     footHistoryBtn: document.getElementById("foot-history-btn"),
-    footSourceBtn: document.getElementById("foot-source-btn"),
-    sourcePanel: document.getElementById("source-panel"),
-    sourcePanelClose: document.getElementById("source-panel-close"),
-    sourcePanelBody: document.getElementById("source-panel-body"),
+    footImportBtn: document.getElementById("foot-import-btn"),
+    importModal: document.getElementById("aichat-import-modal"),
+    importModalClose: document.getElementById("aichat-import-close"),
+    importTextarea: document.getElementById("aichat-import-textarea"),
+    importCount: document.getElementById("aichat-import-count"),
+    importCancelBtn: document.getElementById("aichat-import-cancel"),
+    importConfirmBtn: document.getElementById("aichat-import-confirm"),
     pendingSendBar: document.getElementById("pending-send-bar"),
     pendingSendCount: document.getElementById("pending-send-count"),
     pendingSendBtn: document.getElementById("pending-send-btn"),
@@ -602,9 +601,12 @@ export function setupEventListeners() {
   // 历史按钮：切换显示/隐藏历史
   elements.footHistoryBtn?.addEventListener("click", toggleHistoryView);
 
-  // 来源按钮：切换显示/隐藏有来源的消息面板
-  elements.footSourceBtn?.addEventListener("click", toggleSourcePanel);
-  elements.sourcePanelClose?.addEventListener("click", closeSourcePanel);
+  // 导入按钮：弹 modal 让用户粘贴文本，按 ========== 分隔为多条阻塞消息
+  elements.footImportBtn?.addEventListener("click", openImportModal);
+  elements.importModalClose?.addEventListener("click", closeImportModal);
+  elements.importCancelBtn?.addEventListener("click", closeImportModal);
+  elements.importTextarea?.addEventListener("input", updateImportCount);
+  elements.importConfirmBtn?.addEventListener("click", importAndBlock);
 
   // 统一发送按钮
   elements.pendingSendBtn?.addEventListener("click", copyBlockedAsLinks);
@@ -1025,177 +1027,6 @@ export function refreshHistoryCache() {
   });
 }
 
-// ==================== 有来源的消息面板 ====================
-
-let _sourcePanelOpen = false;
-
-function closeSourcePanel() {
-  _sourcePanelOpen = false;
-  if (elements.sourcePanel) {
-    elements.sourcePanel.classList.remove("open");
-    elements.sourcePanel.style.display = "none";
-  }
-  if (elements.footSourceBtn) elements.footSourceBtn.classList.remove("active");
-  // 恢复对话视图
-  if (elements.conversationSection) elements.conversationSection.style.display = "";
-  if (elements.historySection) elements.historySection.style.display = "";
-  if (responseContent) responseContent.classList.remove("source-open");
-}
-
-async function toggleSourcePanel() {
-  if (_sourcePanelOpen) {
-    closeSourcePanel();
-    return;
-  }
-
-  // 关闭历史视图（如果开着）
-  if (elements.historySection?.classList.contains("visible")) {
-    elements.historySection.classList.remove("visible");
-  }
-
-  _sourcePanelOpen = true;
-  if (elements.sourcePanel) {
-    elements.sourcePanel.style.display = "flex";
-    elements.sourcePanel.classList.add("open");
-  }
-  if (elements.footSourceBtn) elements.footSourceBtn.classList.add("active");
-
-  // 隐藏对话/历史区，避免滚动冲突
-  if (elements.conversationSection) elements.conversationSection.style.display = "none";
-  if (elements.historySection) elements.historySection.style.display = "none";
-  if (responseContent) responseContent.classList.add("source-open");
-
-  await renderSourcePanel();
-}
-
-async function renderSourcePanel() {
-  if (!elements.sourcePanelBody) return;
-
-  let data;
-  try {
-    data = await getMessageTabContext();
-  } catch (e) {
-    data = {};
-  }
-
-  const urls = Object.keys(data);
-  if (urls.length === 0) {
-    elements.sourcePanelBody.innerHTML = '<div class="source-empty-tip">暂无带来源的消息</div>';
-    return;
-  }
-
-  // 按消息数量降序，数量相同按 URL 字母序
-  urls.sort((a, b) => {
-    const countDiff = (data[b]?.length || 0) - (data[a]?.length || 0);
-    if (countDiff !== 0) return countDiff;
-    return a.localeCompare(b);
-  });
-
-  const frag = document.createDocumentFragment();
-  urls.forEach((url) => {
-    const messages = data[url] || [];
-    if (messages.length === 0) return;
-
-    const group = document.createElement("div");
-    group.className = "source-group open";
-
-    const header = document.createElement("div");
-    header.className = "source-group-header";
-
-    const toggle = document.createElement("span");
-    toggle.className = "source-group-toggle";
-    toggle.textContent = "▸";
-
-    let hostname = "";
-    try { hostname = new URL(url).hostname; } catch { /* ignore */ }
-
-    const favicon = document.createElement("img");
-    favicon.className = "source-group-favicon";
-    favicon.src = hostname
-      ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&size=16`
-      : "";
-    favicon.onerror = () => { favicon.style.display = "none"; };
-
-    const urlEl = document.createElement("span");
-    urlEl.className = "source-group-url";
-    urlEl.title = url;
-    urlEl.textContent = url;
-    urlEl.addEventListener("click", (e) => {
-      e.stopPropagation();
-      try {
-        chrome.tabs.create({ url, active: false });
-      } catch (err) {
-        window.open(url, "_blank");
-      }
-    });
-
-    const count = document.createElement("span");
-    count.className = "source-group-count";
-    count.textContent = messages.length;
-
-    const removeUrlBtn = document.createElement("button");
-    removeUrlBtn.className = "source-group-remove";
-    removeUrlBtn.title = "删除该来源及所有消息";
-    removeUrlBtn.innerHTML = "×";
-    removeUrlBtn.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      await removeTabContextUrl(url);
-      renderSourcePanel();
-      showTempMessage("已删除来源");
-    });
-
-    header.appendChild(toggle);
-    header.appendChild(favicon);
-    header.appendChild(urlEl);
-    header.appendChild(count);
-    header.appendChild(removeUrlBtn);
-
-    const list = document.createElement("div");
-    list.className = "source-msg-list";
-    messages.forEach((msg) => {
-      const item = document.createElement("div");
-      item.className = "source-msg";
-      item.title = "点击填充到输入框";
-
-      const text = document.createElement("span");
-      text.className = "source-msg-text";
-      text.textContent = msg;
-      const removeMsgBtn = document.createElement("button");
-      removeMsgBtn.className = "source-msg-remove";
-      removeMsgBtn.title = "删除该消息";
-      removeMsgBtn.innerHTML = "×";
-      removeMsgBtn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        await removeMessageFromTabContext(msg, url);
-        renderSourcePanel();
-        showTempMessage("已删除消息");
-      });
-
-      item.appendChild(text);
-      item.appendChild(removeMsgBtn);
-      item.addEventListener("click", () => {
-        if (elements.messageInput) {
-          elements.messageInput.value = msg;
-          elements.messageInput.dispatchEvent(new Event("input"));
-          focusInputAndSetCursor(elements.messageInput);
-        }
-        closeSourcePanel();
-      });
-      list.appendChild(item);
-    });
-
-    header.addEventListener("click", () => {
-      group.classList.toggle("open");
-    });
-
-    group.appendChild(header);
-    group.appendChild(list);
-    frag.appendChild(group);
-  });
-
-  elements.sourcePanelBody.innerHTML = "";
-  elements.sourcePanelBody.appendChild(frag);
-}
 
 // ==================== 输入框自动调整 ====================
 
@@ -1280,7 +1111,6 @@ async function startSending() {
   if (isBlocked) {
     clearExtractedContent();
     try { await addToHistory(originalMessage); } catch (e) { /* ignore */ }
-    try { await addMessageTabContext(originalMessage, await getCurrentActiveTabUrl()); } catch (e) { /* ignore */ }
     refreshHistoryCache();
     showTempMessage(`已阻塞 ${selectedPlatforms.length} 个平台的消息，点击消息发送`);
     return;
@@ -2178,19 +2008,6 @@ function renderPendingMessages() {
 }
 
 /**
- * 获取当前窗口激活标签页的 URL
- * 用于阻塞发送时给"标签页-消息"关联容器打标
- */
-async function getCurrentActiveTabUrl() {
-  try {
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    return tabs[0]?.url || "";
-  } catch (e) {
-    return "";
-  }
-}
-
-/**
  * 点击某条被阻塞的消息时，把该消息发送到当前选中的所有平台
  */
 async function sendBlockedMessage(message) {
@@ -2325,6 +2142,111 @@ async function dispatchMessageToPlatforms(originalMessage, platformIds, { skipHi
   if (successCount > 0) {
     showTempMessage(`已发送到 ${successCount}/${platformIds.length} 个平台`);
   }
+}
+
+// ==================== 导入文本（弹 modal，按 ========== 分隔为阻塞消息） ====================
+
+const IMPORT_SEPARATOR = "==========";
+
+/**
+ * 解析文本为多条消息。
+ * 规则：按 ========== 行拆分；每段 trim 后非空才算一条；空段丢弃。
+ */
+function parseImportText(text) {
+  if (!text) return [];
+  const parts = text.split(IMPORT_SEPARATOR);
+  return parts
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+/**
+ * 更新 modal 底部"将创建 X 条阻塞消息"的提示。
+ */
+function updateImportCount() {
+  if (!elements.importCount || !elements.importTextarea) return;
+  const n = parseImportText(elements.importTextarea.value).length;
+  elements.importCount.textContent = `将创建 ${n} 条阻塞消息`;
+  if (elements.importConfirmBtn) {
+    elements.importConfirmBtn.disabled = n === 0;
+  }
+}
+
+/**
+ * 打开导入 modal，自动聚焦 textarea。
+ */
+function openImportModal() {
+  if (!elements.importModal) return;
+  if (elements.importTextarea) {
+    elements.importTextarea.value = "";
+    setTimeout(() => elements.importTextarea.focus(), 0);
+  }
+  elements.importModal.style.display = "flex";
+  updateImportCount();
+}
+
+/**
+ * 关闭导入 modal，清空内容。
+ */
+function closeImportModal() {
+  if (!elements.importModal) return;
+  elements.importModal.style.display = "none";
+  if (elements.importTextarea) elements.importTextarea.value = "";
+  updateImportCount();
+}
+
+/**
+ * 把 modal 里的文本拆成多条阻塞消息并加入会话。
+ * 每条消息走 startSending 的阻塞路径——创建 user 气泡（黄色 pending 样式），用户点击发送。
+ * 不依赖 aichatSettings.blockOnSend（导入路径强制阻塞）。
+ */
+async function importAndBlock() {
+  if (!elements.importTextarea) return;
+  const messages = parseImportText(elements.importTextarea.value);
+  if (messages.length === 0) {
+    showTempMessage("没有可导入的消息");
+    return;
+  }
+
+  const selectedPlatforms = getSelectedPlatformIdsShared(elements.platformCheckboxes);
+  if (!validatePlatformSelection(selectedPlatforms)) {
+    return;
+  }
+
+  // 写入会话（user 消息 + blocked=true），渲染后由用户点击触发 sendBlockedMessage
+  const now = Date.now();
+  messages.forEach((content, idx) => {
+    selectedPlatforms.forEach((platformId) => {
+      const ps = getPlatformState(platformId);
+      const conversationId = ps.activeConvId || DEFAULT_CONVERSATION_ID;
+      appendUserMessage(
+        platformId,
+        conversationId,
+        content,
+        now + idx,    // 同批消息间留 1ms 间距，避免时间戳碰撞导致合并渲染
+        true,         // blocked=true
+        ""            // 导入路径不绑定提取文本
+      );
+    });
+  });
+
+  // 切到第一个被勾选平台并刷新
+  if (!activePlatformId || !selectedPlatforms.includes(activePlatformId)) {
+    activePlatformId = selectedPlatforms[0];
+  }
+  renderCurrentPlatform();
+  updatePendingSendBar();
+  renderPlatformTabs();
+  scrollToBottom(true);
+
+  // 写入历史记录（不调 dispatchMessageToPlatforms，由用户点气泡触发）
+  for (const content of messages) {
+    try { await addToHistory(content); } catch (e) { /* ignore */ }
+  }
+  refreshHistoryCache();
+
+  closeImportModal();
+  showTempMessage(`已阻塞 ${messages.length} 条消息，点击黄色气泡发送`);
 }
 
 // ==================== AI 平台标签页映射 ====================

@@ -83,11 +83,12 @@ export function createNav(cfg) {
     setTimeout(() => { if (a.parentNode) a.remove(); }, 2000);
   }
 
-  // 复制原文到剪贴板（不带 frontmatter，直接拼 fullText，保留换行）
-  // 用法：粘贴到 IM / 邮件 / 笔记时不会被 md 标记干扰
+  // 复制原文到剪贴板（用 ========== 分隔多条消息，与 sidebar 的"导入阻塞消息"功能配对）
+  // 用法：粘贴到 sidebar 底部的"导入"按钮 → 自动拆成阻塞消息
   async function onCopy() {
     if (records.length === 0) return;
-    const text = records.map(r => r.fullText).join('\n\n');
+    const SEP = '==========';
+    const text = records.map(r => r.fullText).join(`\n\n${SEP}\n\n`);
     try {
       await navigator.clipboard.writeText(text);
       console.log('[nav] copied', records.length, 'messages to clipboard');

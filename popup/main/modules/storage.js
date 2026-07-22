@@ -9,7 +9,6 @@ export const STORAGE_KEYS = {
   LAST_MESSAGE: "lastMessage",
   PLATFORM_STATES: "platformStates",
   LAST_PROMPT_TEMPLATE: "lastPromptTemplate",
-  MESSAGE_TAB_CONTEXT: "messageTabContext"
 };
 
 const MAX_HISTORY = 30;
@@ -144,83 +143,4 @@ export function addToHistory(message) {
       });
     });
   });
-}
-
-/**
- * 添加消息到 "标签页-消息" 关联容器
- * 结构：{ [tabUrl]: string[] }
- * 用于统计"某个标签页（专注窗口）下产生了哪些问题"
- */
-export async function addMessageTabContext(message, tabUrl) {
-  if (!message || !tabUrl) return;
-
-  try {
-    const result = await chrome.storage.local.get(STORAGE_KEYS.MESSAGE_TAB_CONTEXT);
-    const map = result[STORAGE_KEYS.MESSAGE_TAB_CONTEXT] || {};
-    const list = map[tabUrl] || [];
-
-    // 按内容去重：已有相同消息则移到最前
-    const filtered = list.filter((m) => m !== message);
-    filtered.unshift(message);
-
-    map[tabUrl] = filtered;
-    await chrome.storage.local.set({ [STORAGE_KEYS.MESSAGE_TAB_CONTEXT]: map });
-  } catch (error) {
-    console.error("保存标签页-消息关联失败:", error);
-  }
-}
-
-/**
- * 读取 "标签页-消息" 关联容器
- * @returns {Object} { [tabUrl]: messages[] }
- */
-export async function getMessageTabContext() {
-  try {
-    const result = await chrome.storage.local.get(STORAGE_KEYS.MESSAGE_TAB_CONTEXT);
-    return result[STORAGE_KEYS.MESSAGE_TAB_CONTEXT] || {};
-  } catch (error) {
-    console.error("读取标签页-消息关联失败:", error);
-    return {};
-  }
-}
-
-/**
- * 从指定 URL 下移除单条消息
- * 如果该 URL 下没有消息了，则自动删除该 URL 条目
- */
-export async function removeMessageFromTabContext(message, tabUrl) {
-  if (!message || !tabUrl) return;
-
-  try {
-    const result = await chrome.storage.local.get(STORAGE_KEYS.MESSAGE_TAB_CONTEXT);
-    const map = result[STORAGE_KEYS.MESSAGE_TAB_CONTEXT] || {};
-    const list = map[tabUrl] || [];
-
-    const filtered = list.filter((m) => m !== message);
-    if (filtered.length === 0) {
-      delete map[tabUrl];
-    } else {
-      map[tabUrl] = filtered;
-    }
-
-    await chrome.storage.local.set({ [STORAGE_KEYS.MESSAGE_TAB_CONTEXT]: map });
-  } catch (error) {
-    console.error("删除标签页-消息关联失败:", error);
-  }
-}
-
-/**
- * 移除整个 URL 条目（包括其下所有消息）
- */
-export async function removeTabContextUrl(tabUrl) {
-  if (!tabUrl) return;
-
-  try {
-    const result = await chrome.storage.local.get(STORAGE_KEYS.MESSAGE_TAB_CONTEXT);
-    const map = result[STORAGE_KEYS.MESSAGE_TAB_CONTEXT] || {};
-    delete map[tabUrl];
-    await chrome.storage.local.set({ [STORAGE_KEYS.MESSAGE_TAB_CONTEXT]: map });
-  } catch (error) {
-    console.error("删除来源 URL 失败:", error);
-  }
 }

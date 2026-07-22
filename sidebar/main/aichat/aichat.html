@@ -95,6 +95,25 @@
   </div>
 </div>
 
+<div class="aichat-import-modal" id="aichat-import-modal" style="display:none">
+  <div class="aichat-import-backdrop"></div>
+  <div class="aichat-import-panel">
+    <div class="aichat-import-header">
+      <span class="aichat-import-title">导入文本并阻塞发送</span>
+      <button class="aichat-import-close" id="aichat-import-close" type="button">×</button>
+    </div>
+    <div class="aichat-import-body">
+      <div class="aichat-import-hint">粘贴文本，使用 <code>==========</code> 分隔多条消息，每段将创建一条阻塞消息，点击发送。</div>
+      <textarea id="aichat-import-textarea" class="aichat-import-textarea" placeholder="第一条消息&#10;&#10;==========&#10;&#10;第二条消息&#10;&#10;==========&#10;&#10;第三条消息" rows="10"></textarea>
+      <div class="aichat-import-count" id="aichat-import-count">将创建 0 条阻塞消息</div>
+    </div>
+    <div class="aichat-import-actions">
+      <button class="aichat-import-cancel" id="aichat-import-cancel" type="button">取消</button>
+      <button class="aichat-import-confirm" id="aichat-import-confirm" type="button">导入并阻塞</button>
+    </div>
+  </div>
+</div>
+
 <div class="tab-context-menu" id="tab-context-menu" style="display:none">
   <div class="context-menu-item" data-action="close">关闭标签页</div>
   <div class="context-menu-item danger" data-action="remove">移除工作区</div>
@@ -131,15 +150,6 @@
   <section class="page active" id="page-main">
     <div class="response-content" id="response-content">
       <div class="history-section" id="history-section"></div>
-      <div class="source-panel" id="source-panel" style="display:none">
-        <div class="source-panel-header">
-          <span class="source-panel-title">有来源的消息</span>
-          <button class="source-panel-close" id="source-panel-close" type="button" title="关闭">×</button>
-        </div>
-        <div class="source-panel-body" id="source-panel-body">
-          <div class="source-empty-tip">暂无带来源的消息</div>
-        </div>
-      </div>
       <div class="conversation-section" id="conversation-section">
         <div class="response-placeholder">暂无回复内容</div>
       </div>
@@ -191,9 +201,9 @@
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/><path d="M6 3.5v3l2 1.2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
           历史
         </button>
-        <button class="foot-btn" id="foot-source-btn" title="查看来源消息">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-          来源
+        <button class="foot-btn" id="foot-import-btn" title="导入文本并按 ========== 分隔阻塞">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M2 6h8M2 9h5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          导入
         </button>
       </div>
       <div class="chat-input-foot-right">
