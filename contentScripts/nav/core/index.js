@@ -33,6 +33,18 @@ export function createNav(cfg) {
     tracker.lock();
   }
 
+  // 复制单条消息全文到剪贴板（无 frontmatter / 无 ========== 分隔，纯原文）
+  async function onCopyRow(index) {
+    const record = records[index];
+    if (!record || !record.fullText) return;
+    try {
+      await navigator.clipboard.writeText(record.fullText);
+      console.log('[nav] copied row', index, `(${record.fullText.length} chars)`);
+    } catch (err) {
+      console.warn('[nav] clipboard write failed', err);
+    }
+  }
+
   function buildExportMarkdown(records, meta) {
     const lines = [];
     lines.push('---');
@@ -97,7 +109,7 @@ export function createNav(cfg) {
     }
   }
 
-  const view = createNavView({ onSelect, onExport, onCopy });
+  const view = createNavView({ onSelect, onExport, onCopy, onCopyRow });
   if (!view) return null;
   d.add(() => view.destroy());
 

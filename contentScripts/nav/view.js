@@ -29,6 +29,9 @@ const NAV_CSS = `
   position: fixed;
   right: 20px;
   top: 50%;
+  /* 禁止文字选中：双击 row 时不会触发文字选择，光标也不会变成 text-cursor */
+  -webkit-user-select: none;
+  user-select: none;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 0;
@@ -172,7 +175,7 @@ function createContainer() {
  * Create a single nav row DOM element.
  * Click handler uses sibling index to derive the records index.
  */
-function createRow({ label, onSelect }) {
+function createRow({ label, onSelect, onCopyRow }) {
   const item = document.createElement('span');
   item.className = ITEM_CLASS;
   item.textContent = label;
@@ -182,24 +185,36 @@ function createRow({ label, onSelect }) {
 
   const row = document.createElement('div');
   row.className = ROW_CLASS;
+  row.title = '单击跳转，双击复制';
   row.appendChild(item);
   row.appendChild(line);
 
-  row.addEventListener('click', () => {
-    // 从 handle 之后开始数，index = nav 中第 N 个 .ROW_CLASS
+  function getIndex() {
     let idx = 0;
     let cur = row.previousElementSibling;
     while (cur) {
       if (cur.classList.contains(ROW_CLASS)) idx++;
       cur = cur.previousElementSibling;
     }
-    onSelect(idx);
+    return idx;
+  }
+
+  row.addEventListener('click', () => {
+    onSelect(getIndex());
   });
+
+  // 双击复制该条消息原文。与单击跳转不冲突（dblclick 事件独立触发）
+  if (typeof onCopyRow === 'function') {
+    row.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      onCopyRow(getIndex());
+    });
+  }
 
   return { row, item, line };
 }
 
-export function createNavView({ onSelect, onExport, onCopy }) {
+export function createNavView({ onSelect, onExport, onCopy, onCopyRow }) {
   if (document.getElementById(NAV_ID)) return null;
   injectStyle();
   const { nav, handle } = createContainer();
@@ -268,7 +283,7 @@ export function createNavView({ onSelect, onExport, onCopy }) {
   function clear() {
     // Remove all rows, keep only handle
     while (nav.children.length > 1) nav.removeChild(nav.lastChild);
-    // Re-append copy + export buttons at the bottom (copy on the left, export on the right)
+    // Re-append copy + export buttons at the bottom
     if (hasCopy) nav.appendChild(copyBtn);
     if (hasExport) nav.appendChild(exportBtn);
   }
@@ -295,7 +310,7 @@ export function createNavView({ onSelect, onExport, onCopy }) {
 
     // 3) 追加新行
     for (let i = nav.children.length - 1; i < labels.length; i++) {
-      const { row, item, line } = createRow({ label: labels[i], onSelect });
+      const { row, item, line } = createRow({ label: labels[i], onSelect, onCopyRow });
       nav.appendChild(row);
     }
 
