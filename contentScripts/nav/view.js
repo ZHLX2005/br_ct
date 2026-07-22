@@ -88,9 +88,15 @@ const NAV_CSS = `
   display: flex; align-items: center; gap: 8px;
   padding: 1px 8px 1px 14px;
   color: var(--bro-chat-nav-text-idle);
-  transition: color 0.2s ease;
+  transition: color 0.2s ease, background 0.2s ease;
 }
 .${ROW_CLASS}:hover { color: var(--bro-chat-nav-text); }
+/* 双击复制成功反馈：row 背景短暂变绿 */
+.${ROW_CLASS}.is-copied {
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.1);
+  border-radius: 4px;
+}
 .${LINE_CLASS} {
   display: block; width: 12px; height: 2px;
   background: var(--bro-chat-nav-line-color);
@@ -207,7 +213,11 @@ function createRow({ label, onSelect, onCopyRow }) {
   if (typeof onCopyRow === 'function') {
     row.addEventListener('dblclick', (e) => {
       e.stopPropagation();
-      onCopyRow(getIndex());
+      const idx = getIndex();
+      onCopyRow(idx);
+      // 视觉反馈：row 短暂变绿
+      row.classList.add('is-copied');
+      setTimeout(() => row.classList.remove('is-copied'), 1200);
     });
   }
 
