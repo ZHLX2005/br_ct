@@ -486,7 +486,7 @@ export const PLATFORM_CONFIG = {
 };
 ```
 
-然后创建 `contentScripts/yourplatform.js`（参考 `platform.template.js`）
+然后创建 `contentScripts/yourplatform.js`（参考 `.CLAUDE/skills/add-platform/references/sendmessage-template.js`）
 
 ### 添加新的提示词模板
 

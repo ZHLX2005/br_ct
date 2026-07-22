@@ -1,3 +1,8 @@
+---
+name: sendmessage-template
+description: AI 平台 sendMessage 注入脚本的完整 IIFE 模板。包含所有工具函数（findElementBySelectors / setInputValue / triggerClick / 各种模式适配），是 contentScripts/{platform}.js 的 1:1 拷贝起点。新增平台 sendMessage 脚本时使用。
+---
+
 /**
  * @fileoverview
  * AI 平台内容脚本通用模板
