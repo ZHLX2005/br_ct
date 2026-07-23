@@ -32,6 +32,9 @@ const NAV_CSS = `
   /* 禁止文字选中：双击 row 时不会触发文字选择，光标也不会变成 text-cursor */
   -webkit-user-select: none;
   user-select: none;
+  /* 创建独立 stacking context，避免被页面自身的 transform/filter/will-change 影响 z-index */
+  isolation: isolate;
+  z-index: 2147483647;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 0;
@@ -49,8 +52,8 @@ const NAV_CSS = `
   align-items: flex-end;
   gap: 2px;
   cursor: pointer;
-  z-index: 2147483647;
-  transform: translateY(-50%);
+  /* 不用 transform 居中：避免 pointerup 时 transform 恢复导致 nav 跳到中央 */
+  /* 初始 top 在 JS 内联设为 (vh - navH) / 2，让 nav 视觉居中 */
 }
 #${NAV_ID}.is-dragging { cursor: grabbing; }
 #${NAV_ID}::-webkit-scrollbar { display: none; }
@@ -78,7 +81,7 @@ const NAV_CSS = `
 .${HANDLE_BAR_CLASS} {
   width: 10px; height: 1.5px;
   border-radius: 1px;
-  background: rgba(15,17,21,0.45);
+  background: rgba(15,17,21,0.55);
   flex-shrink: 0;
   transition: background 0.2s ease;
 }
@@ -164,8 +167,12 @@ function injectStyle() {
 function createContainer() {
   const nav = document.createElement('div');
   nav.id = NAV_ID;
-  document.body.appendChild(nav);
-  nav.style.top = '';
+  // 挂到 documentElement 而非 body：避免 body 被 React/Vue 重建导致 nav 丢失；
+  // 同时某些 SPA 的 body 有 transform/filter 会创建新的 containing block 影响 position: fixed 定位
+  document.documentElement.appendChild(nav);
+  // 计算居中位置并写为 inline style。appendChild 后 offsetHeight 才有效（但此时 nav 还没有 row，高度是 handle+padding ≈ 26px）
+  const initialTop = Math.max(0, Math.floor((window.innerHeight - nav.offsetHeight) / 2));
+  nav.style.top = `${initialTop}px`;
   const handle = document.createElement('div');
   handle.className = HANDLE_CLASS;
   for (let i = 0; i < 3; i += 1) {
@@ -229,6 +236,9 @@ export function createNavView({ onSelect, onExport, onCopy, onCopyRow }) {
   injectStyle();
   const { nav, handle } = createContainer();
 
+  // destroy 时调用的清理函数（不能依赖外层 disposer，view.js 不知道 core 的 disposer）
+  let destroyCleanup = () => {};
+
   // Create export button but don't append yet — it goes at the bottom after all rows
   let exportBtn = null;
   const hasExport = typeof onExport === 'function';
@@ -255,7 +265,7 @@ export function createNavView({ onSelect, onExport, onCopy, onCopyRow }) {
     });
   }
 
-  // Vertical drag handler（不变）
+  // Vertical drag handler
   let dragState = null;
   nav.addEventListener('pointerdown', (event) => {
     if (event.button !== undefined && event.button !== 0) return;
@@ -265,7 +275,7 @@ export function createNavView({ onSelect, onExport, onCopy, onCopyRow }) {
     nav.classList.add('is-dragging');
     nav.setPointerCapture(event.pointerId);
     const rect = nav.getBoundingClientRect();
-    nav.style.transform = 'none';
+    // 关闭 transition 让拖动 1:1 跟随鼠标；不需要改 transform（nav 本来就用 top 控制位置）
     nav.style.transition = 'none';
     dragState = { startY: event.clientY, startTop: rect.top };
   });
@@ -273,8 +283,15 @@ export function createNavView({ onSelect, onExport, onCopy, onCopyRow }) {
     if (!dragState) return;
     event.preventDefault();
     const next = dragState.startTop + (event.clientY - dragState.startY);
-    const maxTop = Math.max(8, window.innerHeight - nav.offsetHeight - 8);
-    const clamped = Math.min(Math.max(8, next), maxTop);
+    const vh = window.innerHeight;
+    const navH = nav.offsetHeight;
+    // 严格边界保护：
+    //   - top >= 0：避免 nav 顶部滑出 viewport（handle 在 nav 顶部 +17px，top>=0 时 handle 在 y=17~23 可见）
+    //   - top <= vh - 30：避免 nav 底部滑出，导致用户找不到拖拽点
+    //   - 当 nav 比 viewport 还高时（消息很多），允许 nav 完全覆盖 viewport 但 top >= 0
+    const minTop = 0;
+    const maxTop = Math.max(minTop, vh - 30);
+    const clamped = Math.min(Math.max(minTop, next), maxTop);
     nav.style.top = `${clamped}px`;
   });
   const endDrag = (event) => {
@@ -282,11 +299,32 @@ export function createNavView({ onSelect, onExport, onCopy, onCopyRow }) {
     if (nav.hasPointerCapture(event.pointerId)) nav.releasePointerCapture(event.pointerId);
     nav.classList.remove('is-dragging');
     nav.style.transition = '';
-    nav.style.transform = '';
+    // 不动 transform —— nav 永远用 inline top 控制位置
     dragState = null;
   };
   nav.addEventListener('pointerup', endDrag);
   nav.addEventListener('pointercancel', endDrag);
+
+  // 窗口 resize / scroll 后重新把 nav 拉回视口安全区
+  // 防止用户把 nav 拖到合理位置后 resize 窗口导致 nav 溢出到屏幕外
+  function ensureInViewport() {
+    const vh = window.innerHeight;
+    const navH = nav.offsetHeight;
+    const cur = parseFloat(nav.style.top || '');
+    if (Number.isNaN(cur)) return;
+    const minTop = 0;
+    const maxTop = Math.max(minTop, vh - 30);
+    // 兜底：nav 完全离开视口（top + navH < 0 或 top > vh），直接拉回中央
+    if (cur + navH < 0 || cur > vh) {
+      nav.style.top = `${Math.max(0, (vh - navH) / 2)}px`;
+      return;
+    }
+    const clamped = Math.min(Math.max(minTop, cur), maxTop);
+    if (clamped !== cur) nav.style.top = `${clamped}px`;
+  }
+  window.addEventListener('resize', ensureInViewport);
+  // destroy 时清理 resize 监听
+  destroyCleanup = () => window.removeEventListener('resize', ensureInViewport);
 
   // ---- 增量 reconcile ----
 
@@ -345,6 +383,7 @@ export function createNavView({ onSelect, onExport, onCopy, onCopyRow }) {
     if (style) style.remove();
     const navEl = document.getElementById(NAV_ID);
     if (navEl) navEl.remove();
+    destroyCleanup();
   }
 
   return { render, setActive, clear, destroy };
