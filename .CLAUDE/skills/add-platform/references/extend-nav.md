@@ -46,20 +46,24 @@ nav/
 const MY_BTN_CLASS = 'bro-chat-nav__mybtn';
 
 // 2. NAV_CSS 模板字符串里追加样式（用 ${} 插值，不要硬编码）
+//    注意：按钮 ≥ 3 个时建议收进 toolbar 容器（详见 nav-ux-patterns.md）
+//    并排模式下 padding 不再带 14px 左边距，统一用 `padding: 1px 8px`
 const NAV_CSS = `
   ...现有 CSS...
   .${MY_BTN_CLASS} {
-    display: none;
+    display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 1px 8px 1px 14px;
+    padding: 1px 8px;
     font-size: 12px;
     color: var(--bro-chat-nav-text-idle);
     cursor: pointer;
     white-space: nowrap;
+    border-radius: 4px;
+    transition: color 0.2s ease, background 0.2s ease;
   }
-  #${NAV_ID}:hover .${MY_BTN_CLASS} { display: flex; }
-  .${MY_BTN_CLASS}:hover { color: var(--bro-chat-nav-text); }
+  #${NAV_ID}:hover .${MY_BTN_CLASS} { display: inline-flex; }
+  .${MY_BTN_CLASS}:hover { color: var(--bro-chat-nav-text); background: rgba(15,17,21,0.04); }
 `;
 
 // 3. createNavView 形参加 onMyAction
@@ -76,9 +80,11 @@ export function createNavView({ onSelect, onExport, onCopy, onMyAction }) {
       e.stopPropagation();
       onMyAction();
     });
+    // 异步动作必须做状态机 + 防重入：参考 nav-ux-patterns.md §2
   }
 
   // 4. 拖拽判断里跳过新按钮
+  //    多个按钮时推荐命中 toolbar 公共祖先，而不是各自 closest（见 nav-ux-patterns.md §1.3）
   nav.addEventListener('pointerdown', (event) => {
     // ...
     if (event.target.closest(`.${MY_BTN_CLASS}`)) return;  // ← 新增
@@ -87,6 +93,7 @@ export function createNavView({ onSelect, onExport, onCopy, onMyAction }) {
 
   // 5. clear() / render() / destroy() 同步处理 myBtn
   //    clear: removeChild 后再 appendChild（与 exportBtn 同模式）
+  //       若按钮 ≥ 3 个，改成 append / detach 整个 toolbar 容器
   //    destroy: 不需要单独处理（navEl.remove() 会带走所有子节点）
 }
 ```
@@ -97,15 +104,42 @@ export function createNavView({ onSelect, onExport, onCopy, onMyAction }) {
 export function createNav(cfg) {
   // ... 现有 onSelect / onExport / onCopy 等 ...
 
-  const onMyAction = cfg.onMyAction || (() => {
-    // 默认行为：基于 records 数组做点事
-    console.log('[nav] myAction with', records.length, 'records');
+  // 同步动作：返回 Promise<void>，view 基于"已执行"判定 success
+  const onCopy = cfg.onCopy || (async () => {
+    if (records.length === 0) return;
+    const markdown = buildMarkdown(/* ... */);
+    await navigator.clipboard.writeText(markdown);
+  });
+
+  // 异步动作（向 background 发消息）：**必须**返回 Promise<boolean>
+  //   success → view 显示 is-success；error/throw → view 显示 is-error
+  //   不要静默 try/catch 吞异常（参考 SKILL.md §5.8）
+  const onMyAction = cfg.onMyAction || (async () => {
+    if (records.length === 0) return false;
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'navMyAction',             // 自定义 action，在 background.js 注册
+        platformId,                        // 来自 cfg，entry.js 已经传进来
+        records: records.map(r => ({       // 即时读取，别缓存！records 是 let 可变
+          text: r.text,
+          fullText: r.fullText,
+        })),
+      });
+      return !!(response && response.status === 'success');
+    } catch (err) {
+      console.warn('[nav] myAction failed', err);
+      return false;
+    }
   });
 
   const view = createNavView({ onSelect, onExport, onCopy, onMyAction });
   // ... 其余不变 ...
 }
 ```
+
+**为什么必须即时读 records**：nav 的 `records` 是 `let records = []` 可变变量；SPA 切对话 / 列表新增消息都会让 `rebuild()` 重新 collect，覆盖旧数组。如果在按钮 click 时不去**现场读** `records`，而是缓存进闭包，复用旧 list 的内容是大概率事件。
+
+**异步动作的 UI 配套**：进入 `nav-ux-patterns.md` §2 查"按钮状态机"模板——`is-busy` 锁、`is-success/is-error` 反馈、setTimeout 还原。
 
 ### 步骤 C：测试
 
@@ -283,7 +317,10 @@ export const COPY_FEEDBACK_DURATION_MS = 1200;
 | **render 没把按钮加回去** | rows 增量更新后按钮消失 | render 末尾 + clear 都要 append 新按钮 |
 | **业务逻辑写到 view.js** | view.js 变臃肿，难测 | view.js 只做 DOM/CSS，业务放在 core/index.js 回调里 |
 | **adapter 写交互** | 不同平台行为不一致，破坏"通用"特性 | adapter 永远是纯配置对象 |
-| **clipboard.writeText 失败无降级** | 用户不知道失败原因 | try/catch + 按钮文字反馈（已复制 / 失败） |
+| **clipboard.writeText 失败无降级** | 用户不知道失败原因 | try/catch + 按钮文字反馈（已复制 / 失败），或参考下方"回调契约" |
+| **异步按钮无防重入** | 连点触发多次 sendMessage | `.is-busy` 类锁住第二次点击（见 `nav-ux-patterns.md` §2） |
+| **异步回调静默 catch + 没有 return false** | 失败时按钮永远显示绿色 | callback 必须返回 `Promise<boolean>`，或主动 `throw` |
+| **按钮各自独立成行 ≥ 3 个** | nav 纵向被撑爆，触发 70vh 限制 | 收进 toolbar 容器（见 `nav-ux-patterns.md` §1） |
 
 ## 5. 与 records 生命周期对齐
 
@@ -302,13 +339,42 @@ export const COPY_FEEDBACK_DURATION_MS = 1200;
 
 ## 6. 进阶：把 records 暴露给 background
 
-如果新交互需要把数据发到 background 处理（如调用 native host），在 `core/index.js` 内用 `chrome.runtime.sendMessage`：
+如果新交互需要把数据发到 background 处理（如调用 native host、把汇总消息直接发给当前 AI 平台），有两条路径。
+
+### 路径 A（推荐）：复用 `directSend`，触发 background 自动注入 + 发送
+
+`directSend` 已经在 `backgroudtask/ai_platform_processor.js` 中实现，**sidebar 也在用**。它会复用已注入的 tab、等待 `complete`、按需注入 sendMessage 脚本、重试一次。
+
+```javascript
+// core/index.js — "向当前 AI 平台发一条汇总消息" 按钮
+async function onSummary() {
+  if (records.length === 0) return false;
+  const questions = records.map(r => r.fullText).join('\n\n==========\n\n');
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: 'directSend',
+      platform: platformId,             // 来自 cfg，entry.js 已注入
+      message: SUMMARY_TEMPLATE.replace('%s', questions),
+      switchToTab: false,               // 当前就在本页
+    });
+    return !!(response && response.status === 'success');
+  } catch (err) {
+    return false;
+  }
+}
+```
+
+**优点**：nav 不需要关心哪些平台已经注入了 sendMessage 脚本，全交给 background。完整 UI 模板见 `nav-ux-patterns.md` §2（状态机）、§3（异步动作）。
+
+**缺点**：想自定义"发完之后再收集 AI 回复"这种 workflow 就需要走路径 B。
+
+### 路径 B（自定义 action）：直接发 records 给 background
 
 ```javascript
 const onMyAction = () => {
   if (records.length === 0) return;
   chrome.runtime.sendMessage({
-    action: 'navMyAction',
+    action: 'navMyAction',             // 在 background.js register setupMessageListener 中注册
     platformId,
     records: records.map(r => ({ text: r.text, fullText: r.fullText })),
   });
@@ -316,6 +382,16 @@ const onMyAction = () => {
 ```
 
 注意：content script 跨扩展消息需要 `manifest.json` 已声明的 `externally_connectable`，本扩展没声明，所以**只能在 content script 内自己处理**或通过 `chrome.runtime.sendMessage` 给自己的 background（默认允许）。
+
+### 两条路径的差别
+
+| 维度 | 路径 A: `directSend` | 路径 B: 自定义 action |
+|---|---|---|
+| 注入管理 | background 自动按需注入 sendMessage 脚本 | 自己处理（手动注入 / 直接调 `window.__platformScript`） |
+| 触发场景 | "向当前 AI 平台发一条消息" | 自定义后续处理（如收集回复、保存历史） |
+| 复用 sidebar 基础设施 | ✅ 直接复用 sidebar 已用的路径 | ❌ 需要自己在 background 写 listener |
+| 失败处理 | background 内置 retry | 自己实现 |
+| 推荐度 | ✅ 90% 场景下用这条 | 仅需要自定义 workflow 时用 |
 
 ## 7. 测试用例样例
 
@@ -340,3 +416,14 @@ const onMyAction = () => {
 | 用户场景 | 存档整段会话 | 粘贴到 IM/邮件 |
 
 可以共用 `buildMarkdown` 纯函数；不要重复实现 frontmatter 拼装逻辑。
+
+## 9. 相关 UX 模式
+
+本文档给出"加新交互"的标准流程。当交互变得更复杂时（如按钮 ≥ 3 个、异步动作）配套阅读：
+
+| Ref | 何时读 |
+|---|---|
+| [[nav-ux-patterns]] §1 Toolbar 容器 | 按钮数量 ≥ 3，把它们收成横排一行避免 nav 纵向被撑爆 |
+| [[nav-ux-patterns]] §2 按钮状态机 | 异步动作必须有的 `busy/success/error` 反馈 + 防重入 |
+| [[nav-ux-patterns]] §3 异步动作 | 经 `chrome.runtime.sendMessage` 到 background 的标准结构（directSend vs 自定义 action） |
+| [[nav-ux-patterns]] §4 三模式配合 | 复制 / 总结 / 导出 + toolbar 的完整示例 |

@@ -382,6 +382,155 @@ export function createNav(cfg) {
 import { buildMarkdown } from '../export.js';
 ```
 
+### 3.2b 范例：新增"向当前 AI 平台发送回问"按钮
+
+需求：nav hover 多一个 "总结" 按钮，点击把 nav 里的所有用户消息（用与"复制"按钮一致的 `==========` 分隔文本）填充到一个 prompt 模板里，作为**新消息**发送到当前 AI 平台页面（不复制、不下载）。
+
+**与"复制"按钮的关键差别**：这个动作会触发一次异步的"输入→点发送"，因此：
+
+1. 按钮必须做 **状态机反馈**（`is-busy` 锁防重入 → `is-success` / `is-error` 短暂反馈 → 还原）；
+2. 导航层（nav/core/index.js）通过 `chrome.runtime.sendMessage({ action: 'directSend', ..., switchToTab: false })` 触发 background 已注册的 `directSend` action——这是 sidebar 已经在用的现成路径，会复用 `ai_platform_processor.js` 的 tab 查找 + sendMessage 脚本注入；
+3. **千万不能** 自己试图去读 `window.__platformScript` 调 `sendChatMessage`——脚本可能没注入，且会让 nav 与具体平台 sendMessage 耦合。
+
+**模板与 `%s` 替换约定**：模板用纯字符串 + `.replace('%s', questions)`，与 `runjs/translation/selection-ask.js` 的写法保持一致（未来想换成 `applyPromptTemplate` 决策树也兼容）。
+
+#### 改动 1：`view.js` —— 加按钮 + 状态机样式
+
+```javascript
+const SUMMARY_CLASS = 'bro-chat-nav__summary';
+
+NAV_CSS 末尾追加：
+.${SUMMARY_CLASS} {
+  display: inline-flex;            /* 横排 → 配合下方 toolbar 容器使用 */
+  align-items: center; gap: 4px;
+  padding: 1px 8px;                /* 统一：并排时不再各自负责外边距 */
+  font-size: 12px;
+  color: var(--bro-chat-nav-text-idle);
+  cursor: pointer; white-space: nowrap;
+  border-radius: 4px;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+.${SUMMARY_CLASS}:hover { color: var(--bro-chat-nav-text); background: rgba(15,17,21,0.04); }
+/* 状态机：busy 锁住，success/error 短暂反馈后还原 */
+.${SUMMARY_CLASS}.is-busy    { color: var(--bro-chat-nav-text-idle); background: rgba(15,17,21,0.04); cursor: wait; }
+.${SUMMARY_CLASS}.is-success { color: #16a34a; background: rgba(22,163,74,0.10); }
+.${SUMMARY_CLASS}.is-error   { color: #dc2626; background: rgba(220,38,38,0.08); }
+
+// createNavView 增加 onSummary 形参
+export function createNavView({ onSelect, onExport, onCopy, onCopyRow, onSummary }) {
+  // ...
+  let summaryBtn = null;
+  let summaryResetTimer = null;
+  const hasSummary = typeof onSummary === 'function';
+  if (hasSummary) {
+    summaryBtn = document.createElement('span');
+    summaryBtn.className = SUMMARY_CLASS;
+    summaryBtn.textContent = '总结';
+    summaryBtn.title = '把本对话的所有问题连同总结要求一起发送到当前页面';
+
+    summaryBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (summaryBtn.classList.contains('is-busy')) return; // 锁：避免重入
+      summaryBtn.classList.remove('is-success', 'is-error');
+      summaryBtn.classList.add('is-busy');
+      summaryBtn.textContent = '发送中…';
+
+      let ok = false;
+      try { ok = await onSummary(); }
+      catch (err) { console.warn('[nav] summary callback threw', err); ok = false; }
+
+      if (summaryResetTimer) clearTimeout(summaryResetTimer);
+      summaryBtn.classList.remove('is-busy');
+      summaryBtn.classList.add(ok ? 'is-success' : 'is-error');
+      summaryBtn.textContent = ok ? '已发送 ✓' : '发送失败';
+      summaryResetTimer = setTimeout(() => {
+        summaryBtn.classList.remove('is-success', 'is-error');
+        summaryBtn.textContent = '总结';
+        summaryResetTimer = null;
+      }, 1600);
+    });
+  }
+
+  // 拖拽判断里跳过新按钮（pointerdown 命中子 span 仍能 closest 到）
+  nav.addEventListener('pointerdown', (event) => {
+    // ...
+    if (event.target.closest(`.${SUMMARY_CLASS}`)) return;  // ← 新增
+    // ...
+  });
+}
+```
+
+#### 改动 2：`core/index.js` —— 实现 onSummary 用 directSend
+
+```javascript
+// %s 用与"复制"按钮相同的 SEP 分隔文本填充，方便复用 sidebar 的"导入阻塞消息"流程
+const SUMMARY_TEMPLATE =
+  '%s,这是我向你提出的这些问题 现在重新对每个问题进行总结,讲解整个知识体系,让整个所有提问和体系更加自然';
+
+async function onSummary() {
+  if (records.length === 0) return false;
+
+  const SEP = '==========';
+  const questions = records.map(r => r.fullText).join(`\n\n${SEP}\n\n`);
+  const message = SUMMARY_TEMPLATE.replace('%s', questions);
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: 'directSend',           // 已注册：sidebar/main/aichat/aichatUtils.js 在用
+      platform: platformId,           // entry.js 注入时已经传入
+      message,
+      switchToTab: false,             // 当前就在本页面，不需要切 tab
+    });
+    return !!(response && response.status === 'success');
+  } catch (err) {
+    console.warn('[nav] summary send failed', err);
+    return false;
+  }
+}
+
+const view = createNavView({ onSelect, onExport, onCopy, onCopyRow, onSummary });
+```
+
+#### 改动 3（可选）：多按钮收纳 toolbar 容器
+
+按钮 ≥ 3 个时，建议引入 `toolbar` 容器把它们收成横排一行，避免每个按钮各自独立成行占用过多纵向空间。
+
+```javascript
+// view.js
+const TOOLBAR_CLASS = 'bro-chat-nav__toolbar';
+
+NAV_CSS：
+.${TOOLBAR_CLASS} {
+  display: none;
+  align-items: center; justify-content: flex-end;
+  gap: 2px;
+  padding: 4px 8px 6px 14px;
+  flex-wrap: nowrap;
+}
+#${NAV_ID}:hover .${TOOLBAR_CLASS} { display: flex; }
+
+// 在 createNavView 内构造（clear/render 统一 append/detach 整个 toolbar）
+const toolbar = document.createElement('div');
+toolbar.className = TOOLBAR_CLASS;
+if (hasSummary) toolbar.appendChild(summaryBtn);
+if (hasCopy) toolbar.appendChild(copyBtn);
+if (hasExport) toolbar.appendChild(exportBtn);
+
+function clear() {
+  while (nav.children.length > 1) nav.removeChild(nav.lastChild);
+  nav.appendChild(toolbar);          // 一次 append 替换原来的三个 append
+}
+function render(labels) {
+  if (toolbar.parentNode) nav.removeChild(toolbar);
+  /* row reconcile ... */
+  nav.appendChild(toolbar);
+}
+```
+
+**判断时机**：当新按钮会让 `<all_urls>` 注入的 nav 内独立成行的尾部按钮多于 3 个、并且你注意到 nav 在多消息列表里会过度增长（70vh 受限），就上 toolbar。
+
+> 详见 `references/nav-ux-patterns.md` 的「Toolbar 容器」「按钮状态机」「异步动作」三节。
+
 ### 3.3 通用增强 checklist
 
 新增任何 nav 交互能力都按下面清单走：
@@ -397,6 +546,9 @@ import { buildMarkdown } from '../export.js';
 - **id 冲突**：`view.js` 顶部所有常量 (`NAV_ID` / `STYLE_ID` / `ROW_CLASS` / `ITEM_CLASS` / `LINE_CLASS` / `HANDLE_CLASS` / `HANDLE_BAR_CLASS` / `EXPORT_CLASS`) 都在 `<all_urls>` manifest 注入，**新功能复用同一 nav 容器**，必须用新的 class 名，不能改老 class 名
 - **destroy 完整性**：新加的按钮要在 `destroy()` 里清掉（参考 `EXPORT_CLASS` 的处理）
 - **点击穿透**：`pointerdown` 监听里必须 `event.target.closest(XXX_CLASS)` 跳过新按钮，避免拖拽冲突
+- **render 漏重新挂载**：增量 reconcile 时把按钮 detach 出来，但末尾必须再 append 回去。**若引入 toolbar 容器**（参考 3.2b），整 toolbar 一次性 append/detach 即可，不要再各自操作
+- **按钮状态机死锁**：异步动作（向 background 发消息）必须用 `.is-busy` 锁防重入；用户连续点击时如果第二个点击在第一个回调未完成时进入，要么 return、要么 queue，**不要**让两条消息同时 sendMessage
+- **回调返回类型**：异步按钮的 `onXxx` 必须返回 `Promise<boolean>`（或其他真值），让 view 决定 success/error；onCopy 的剪贴板失败也要 `throw` 而非静默 catch，否则按钮永远显示"已复制"
 
 ---
 
@@ -516,6 +668,50 @@ URL 路径是 `/` 时 `basePath` 是 `'/'`，`currentPath.startsWith('/')` 永�
 "*://app.notion.com/*"
 ```
 
+### 5.7 ❌ 错误案例：按钮点击没做防重入，被快速连点发了两条消息
+
+```javascript
+// ❌ 错：异步回调没锁，连点两次会触发两次 chrome.runtime.sendMessage
+summaryBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  onSummary();   // 不 await，也不防重
+  summaryBtn.textContent = '已发送';
+});
+```
+
+**后果**：directSend → 同一个 tab 注入的 sendMessage 脚本写输入框时**第二次写入覆盖第一次**，但发送按钮可能被同时点两下，造成 AI 平台进入 "流式回复 + 新增问题" 的奇怪状态。
+
+**根因**：异步 action 没有 `.is-busy` 状态机，也没有 reset 计时器去还原视觉。
+
+**正确做法**：参考 3.2b 范例，busy 锁 + 成功/失败短暂反馈 + setTimeout 还原。详细的状态机模板见 `references/nav-ux-patterns.md`。
+
+### 5.8 ❌ 错误案例：导航层的回调静默 catch 异常，按钮永远绿
+
+```javascript
+// ❌ 错：onCopy 把异常吞了，外层按钮基于"已执行"判定为成功
+const onCopy = async () => {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (err) {
+    console.warn(err);
+  }
+};
+// view.js：
+copyBtn.addEventListener('click', async () => {
+  await onCopy();                 // 即便失败也不抛
+  copyBtn.textContent = '已复制';  // 永远显示成功
+  copyBtn.classList.add('is-success');
+});
+```
+
+**后果**：剪贴板被同源策略拒绝、无痕模式、用户授权拒绝等场景下，按钮反馈"已复制"但实际剪贴板为空，用户 5 分钟后才发现。
+
+**正确做法**：
+
+- onCopy 必须 `throw`（让 `try { await onCopy() } catch { ... }` 触发"失败"分支）；或
+- onCopy 返回 `Promise<boolean>`，view 据此切换 success / error 文案；
+- 二选一，**不要**用"已 catch 就当作成功"的逻辑。
+
 ---
 
 ## References 索引
@@ -525,6 +721,7 @@ URL 路径是 `/` 时 `basePath` 是 `'/'`，`currentPath.startsWith('/')` 永�
 | **nav-adapter.md** | 新增/修改平台 adapter 时：selector 探查命令、virtual list 陷阱、extractText 兜底写法 | `references/nav-adapter.md` |
 | **sendmessage-injector.md** | 新增 sendMessage 脚本时：IIFE 模板、所有 clickMode / inputMode 适配模式、样板对照表 | `references/sendmessage-injector.md` |
 | **extend-nav.md** | 增强通用 nav 时：view.js 扩展点、回调钩子、副作用陷阱清单 | `references/extend-nav.md` |
+| **nav-ux-patterns.md** | ≥3 个按钮时 toolbar 容器化、按钮状态机反馈（busy/success/error）、向 background 发异步消息的标准结构 | `references/nav-ux-patterns.md` |
 
 ## 相关 skill（协作参考）
 

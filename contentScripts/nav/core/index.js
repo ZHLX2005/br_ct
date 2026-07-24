@@ -109,7 +109,41 @@ export function createNav(cfg) {
     }
   }
 
-  const view = createNavView({ onSelect, onExport, onCopy, onCopyRow });
+  // 总结模板：把 nav 中的所有问题拼接成一个新消息发到当前 AI 平台。
+  // %s 用与"复制"按钮相同的多消息原文（以 ========== 分隔）填充。
+  // 参考 runjs/translation/selection-ask.js 的"模板+%s+选区"模式。
+  const SUMMARY_TEMPLATE =
+    '%s,这是我向你提出的这些问题 现在重新对每个问题进行总结,讲解整个知识体系,让整个所有提问和体系更加自然';
+
+  async function onSummary() {
+    if (records.length === 0) {
+      console.warn('[nav] summary skipped: no records');
+      return false;
+    }
+    const SEP = '==========';
+    const questions = records.map(r => r.fullText).join(`\n\n${SEP}\n\n`);
+    const message = SUMMARY_TEMPLATE.replace('%s', questions);
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'directSend',
+        platform: platformId,
+        message,
+        switchToTab: false, // 当前正在使用，无需切换
+      });
+      if (response && response.status === 'success') {
+        console.log('[nav] summary sent to', platformId, `(${records.length} questions)`);
+        return true;
+      }
+      console.warn('[nav] summary send non-success response', response);
+      return false;
+    } catch (err) {
+      console.warn('[nav] summary send failed', err);
+      return false;
+    }
+  }
+
+  const view = createNavView({ onSelect, onExport, onCopy, onCopyRow, onSummary });
   if (!view) return null;
   d.add(() => view.destroy());
 

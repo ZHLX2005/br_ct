@@ -2,7 +2,6 @@
 name: sendmessage-injector
 description: AI 平台 sendMessage 注入脚本的规范。每个平台一个 IIFE 文件（contentScripts/{platform}.js），由 background 通过 chrome.scripting.executeScript 动态注入，监听 sendMessage action 完成"输入→点击"全流程。
 ---
-
 # sendMessage 注入脚本规范
 
 > 新增/修改 sendMessage 注入脚本（`contentScripts/{platform}.js`）的完整指南。
@@ -30,12 +29,12 @@ Popup / Sidebar
 
 **与 nav 的区别**：
 
-| | nav | sendMessage |
-|---|---|---|
-| 注入方式 | manifest 常驻 | background 动态 |
-| 触发 | 页面加载 | 业务消息 |
-| 入口文件 | `contentScripts/nav/entry.js` | `contentScripts/{platform}.js` |
-| 通信 | 无（自动运行） | `chrome.runtime.onMessage` 监听 `sendMessage` action |
+|          | nav                             | sendMessage                                              |
+| -------- | ------------------------------- | -------------------------------------------------------- |
+| 注入方式 | manifest 常驻                   | background 动态                                          |
+| 触发     | 页面加载                        | 业务消息                                                 |
+| 入口文件 | `contentScripts/nav/entry.js` | `contentScripts/{platform}.js`                         |
+| 通信     | 无（自动运行）                  | `chrome.runtime.onMessage` 监听 `sendMessage` action |
 
 ## 2. 文件结构样板
 
@@ -309,11 +308,11 @@ export function getPlatformScriptFiles(platform) {
 
 只有以下情况才需要新增分支：
 
-| 场景 | 例子 |
-|---|---|
+| 场景                               | 例子                                                                                                                |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | 需要多个文件（先 helper 后主脚本） | `getPlatformScriptFiles('chatgpt') → ['contentScripts/chatgpt_copy_automation.js', 'contentScripts/chatgpt.js']` |
-| 需要注入 MAIN world 脚本 | 用 `world: 'MAIN'` 参数；通常意味着要 hook 原型链，慎用 |
-| 需要按平台加载不同 helper | 在 entry 加判断 |
+| 需要注入 MAIN world 脚本           | 用`world: 'MAIN'` 参数；通常意味着要 hook 原型链，慎用                                                            |
+| 需要按平台加载不同 helper          | 在 entry 加判断                                                                                                     |
 
 ```javascript
 export function getPlatformScriptFiles(platform) {
@@ -329,37 +328,37 @@ export function getPlatformScriptFiles(platform) {
 
 ## 6. 验证清单
 
-| 项 | 命令 / 检查 |
-|---|---|
-| 配置注册 | `config/platformConfig.js` 有 `yourplatform` 字段 |
-| manifest 注入 nav | `manifest.json` matches 含 `*://example.com/*`（如启用 nav） |
-| sendMessage 脚本创建 | `contentScripts/yourplatform.js` 存在 |
-| background 注入 | `backgroudtask/platformScriptFiles.js` 默认分支已覆盖 |
-| Tab 加载 | 在 popup 触发发送 → DevTools 看 `[YourPlatform] 内容脚本已加载并激活` |
-| 选择器命中 | `window.__platformScript.config` 存在；DevTools 跑 4 节命令 |
-| 点击有效 | 输入后按钮状态变化；消息成功发送 |
-| 重复发送不冲突 | 快速连发两次 → `isSending` 锁住第二次 |
+| 项                   | 命令 / 检查                                                             |
+| -------------------- | ----------------------------------------------------------------------- |
+| 配置注册             | `config/platformConfig.js` 有 `yourplatform` 字段                   |
+| manifest 注入 nav    | `manifest.json` matches 含 `*://example.com/*`（如启用 nav）        |
+| sendMessage 脚本创建 | `contentScripts/yourplatform.js` 存在                                 |
+| background 注入      | `backgroudtask/platformScriptFiles.js` 默认分支已覆盖                 |
+| Tab 加载             | 在 popup 触发发送 → DevTools 看`[YourPlatform] 内容脚本已加载并激活` |
+| 选择器命中           | `window.__platformScript.config` 存在；DevTools 跑 4 节命令           |
+| 点击有效             | 输入后按钮状态变化；消息成功发送                                        |
+| 重复发送不冲突       | 快速连发两次 →`isSending` 锁住第二次                                 |
 
 ## 7. 常见错误
 
-| 现象 | 根因 | 修复 |
-|---|---|---|
-| `[Platform] 当前页面不是 xxx` 出现后无 listener | hostname 拼错 | 检查 `location.hostname.includes(PLATFORM_CONFIG.hostname)` |
-| listener 收不到消息 | background 没注入该脚本 | 检查 `getPlatformScriptFiles` 返回的路径 |
-| "Content script 执行失败" | Tab 没等 `complete` | `waitForTabComplete` 处理；网络慢时调大 timeout |
-| 按钮点了没反应 | React 拦截了 click | 改 `inputMode: 'nativeSetter'`；或 `findButtonNearInput: true` |
-| 输入框输入了但按钮一直 disabled | 编辑器没收到 beforeinput | 加 `contenteditableInputMode: 'auto'` + `buttonEnableRetry.enabled: true` |
-| 输入后发送出去但没消息 | 没触发 input 事件 | 确认 `triggerInputEvents` 被调用；或在 `setInputValue` 后手动 dispatch |
-| Enter 模式不工作 | 输入框没聚焦 | 加 `needActivateInput: true` |
-| 重复发送 | 没 `isSending` 锁 | 复制 chatgpt.js 的 `isSending` 模式 |
+| 现象                                              | 根因                     | 修复                                                                         |
+| ------------------------------------------------- | ------------------------ | ---------------------------------------------------------------------------- |
+| `[Platform] 当前页面不是 xxx` 出现后无 listener | hostname 拼错            | 检查`location.hostname.includes(PLATFORM_CONFIG.hostname)`                 |
+| listener 收不到消息                               | background 没注入该脚本  | 检查`getPlatformScriptFiles` 返回的路径                                    |
+| "Content script 执行失败"                         | Tab 没等`complete`     | `waitForTabComplete` 处理；网络慢时调大 timeout                            |
+| 按钮点了没反应                                    | React 拦截了 click       | 改`inputMode: 'nativeSetter'`；或 `findButtonNearInput: true`            |
+| 输入框输入了但按钮一直 disabled                   | 编辑器没收到 beforeinput | 加`contenteditableInputMode: 'auto'` + `buttonEnableRetry.enabled: true` |
+| 输入后发送出去但没消息                            | 没触发 input 事件        | 确认`triggerInputEvents` 被调用；或在 `setInputValue` 后手动 dispatch    |
+| Enter 模式不工作                                  | 输入框没聚焦             | 加`needActivateInput: true`                                                |
+| 重复发送                                          | 没`isSending` 锁       | 复制 chatgpt.js 的`isSending` 模式                                         |
 
 ## 8. 与 nav 的协同
 
-| 时序 | 事件 |
-|---|---|
-| 用户访问平台页面 | manifest 注入 `contentScripts/nav/entry.js` → nav 挂载 |
-| 页面 complete | background 注入 `contentScripts/{platform}.js` → 控制台 `[xxx] 内容脚本已加载并激活` |
-| popup 触发发送 | background `tabs.sendMessage` → contentScripts/{platform}.js 监听器处理 |
+| 时序             | 事件                                                                                     |
+| ---------------- | ---------------------------------------------------------------------------------------- |
+| 用户访问平台页面 | manifest 注入`contentScripts/nav/entry.js` → nav 挂载                                 |
+| 页面 complete    | background 注入`contentScripts/{platform}.js` → 控制台 `[xxx] 内容脚本已加载并激活` |
+| popup 触发发送   | background`tabs.sendMessage` → contentScripts/{platform}.js 监听器处理                |
 
 两者**完全独立**：nav 自己管 DOM 监听，sendMessage 只在消息来时工作。
 
@@ -371,13 +370,13 @@ export function getPlatformScriptFiles(platform) {
 
 ## 10. 模板来源
 
-| 平台 | 适配模式 | 参考文件 |
-|---|---|---|
-| 标准 | click + value | `chatgpt.js` `claude.js` `gemini.js` `yuanbao.js` `doubao.js` |
-| Slate/ProseMirror | beforeinput + buttonEnableRetry | `tongyi.js` |
-| Enter 键 | clickMode='enter' | `coze.js` |
-| GLM | clickMode='mouseup' | `glm.js` |
-| React 受控 | inputMode='nativeSetter' | `deepseek.js` |
-| 多按钮容器 | findButtonNearInput=true | `deepseek.js` |
+| 平台              | 适配模式                        | 参考文件                                                                |
+| ----------------- | ------------------------------- | ----------------------------------------------------------------------- |
+| 标准              | click + value                   | `chatgpt.js` `claude.js` `gemini.js` `yuanbao.js` `doubao.js` |
+| Slate/ProseMirror | beforeinput + buttonEnableRetry | `tongyi.js`                                                           |
+| Enter 键          | clickMode='enter'               | `coze.js`                                                             |
+| GLM               | clickMode='mouseup'             | `glm.js`                                                              |
+| React 受控        | inputMode='nativeSetter'        | `deepseek.js`                                                         |
+| 多按钮容器        | findButtonNearInput=true        | `deepseek.js`                                                         |
 
 `sendmessage-template.js` 保留作为"完整工具集参考"，但不直接复制给新平台使用——它不支持 enter/mouseup 等所有分支混用。

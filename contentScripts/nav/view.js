@@ -17,6 +17,8 @@ const HANDLE_CLASS = 'bro-chat-nav__handle';
 const HANDLE_BAR_CLASS = 'bro-chat-nav__handle-bar';
 const EXPORT_CLASS = 'bro-chat-nav__export';
 const COPY_CLASS = 'bro-chat-nav__copy';
+const SUMMARY_CLASS = 'bro-chat-nav__summary';
+const TOOLBAR_CLASS = 'bro-chat-nav__toolbar';
 
 const NAV_CSS = `
 #${NAV_ID} {
@@ -123,36 +125,79 @@ const NAV_CSS = `
   max-width: 320px; opacity: 1; transform: translateX(0);
 }
 .${EXPORT_CLASS} {
-  display: none;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 1px 8px 1px 14px;
+  padding: 1px 8px;
   font-size: 12px;
   color: var(--bro-chat-nav-text-idle);
   cursor: pointer;
   white-space: nowrap;
-}
-#${NAV_ID}:hover .${EXPORT_CLASS} {
-  display: flex;
+  border-radius: 4px;
+  transition: color 0.2s ease, background 0.2s ease;
 }
 .${EXPORT_CLASS}:hover {
   color: var(--bro-chat-nav-text);
+  background: rgba(15,17,21,0.04);
 }
 .${COPY_CLASS} {
-  display: none;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 1px 8px 1px 0;
+  padding: 1px 8px;
   font-size: 12px;
   color: var(--bro-chat-nav-text-idle);
   cursor: pointer;
   white-space: nowrap;
-}
-#${NAV_ID}:hover .${COPY_CLASS} {
-  display: flex;
+  border-radius: 4px;
+  transition: color 0.2s ease, background 0.2s ease;
 }
 .${COPY_CLASS}:hover {
   color: var(--bro-chat-nav-text);
+  background: rgba(15,17,21,0.04);
+}
+.${SUMMARY_CLASS} {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  font-size: 12px;
+  color: var(--bro-chat-nav-text-idle);
+  cursor: pointer;
+  white-space: nowrap;
+  border-radius: 4px;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+.${SUMMARY_CLASS}:hover {
+  color: var(--bro-chat-nav-text);
+  background: rgba(15,17,21,0.04);
+}
+/* 总结按钮：发送中（与 row 复制成功反馈同款绿色提示） */
+.${SUMMARY_CLASS}.is-busy {
+  color: var(--bro-chat-nav-text-idle);
+  background: rgba(15,17,21,0.04);
+  cursor: wait;
+}
+.${SUMMARY_CLASS}.is-success {
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.1);
+}
+.${SUMMARY_CLASS}.is-error {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.08);
+}
+
+/* 把总结/复制/导出三个按钮收进一行 */
+.${TOOLBAR_CLASS} {
+  display: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 4px 8px 6px 14px;
+  flex-wrap: nowrap;
+}
+#${NAV_ID}:hover .${TOOLBAR_CLASS} {
+  display: flex;
 }
 `;
 
@@ -231,7 +276,7 @@ function createRow({ label, onSelect, onCopyRow }) {
   return { row, item, line };
 }
 
-export function createNavView({ onSelect, onExport, onCopy, onCopyRow }) {
+export function createNavView({ onSelect, onExport, onCopy, onCopyRow, onSummary }) {
   if (document.getElementById(NAV_ID)) return null;
   injectStyle();
   const { nav, handle } = createContainer();
@@ -265,6 +310,49 @@ export function createNavView({ onSelect, onExport, onCopy, onCopyRow }) {
     });
   }
 
+  // Create summary button ("总结") — 点击把 nav 中的所有问题 + 总结模板作为一个新消息发到当前 AI 平台
+  let summaryBtn = null;
+  let summaryResetTimer = null;
+  const hasSummary = typeof onSummary === 'function';
+  if (hasSummary) {
+    summaryBtn = document.createElement('span');
+    summaryBtn.className = SUMMARY_CLASS;
+    summaryBtn.textContent = '总结';
+    summaryBtn.title = '把本对话的所有问题连同总结要求一起发送到当前页面';
+    const LABEL_IDLE = '总结';
+    const LABEL_BUSY = '发送中…';
+    const LABEL_SUCCESS = '已发送 ✓';
+    const LABEL_ERROR = '发送失败';
+
+    summaryBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (summaryBtn.classList.contains('is-busy')) return;
+
+      summaryBtn.classList.remove('is-success', 'is-error');
+      summaryBtn.classList.add('is-busy');
+      summaryBtn.textContent = LABEL_BUSY;
+
+      let ok = false;
+      try {
+        ok = await onSummary();
+      } catch (err) {
+        console.warn('[nav] summary callback threw', err);
+        ok = false;
+      }
+
+      if (summaryResetTimer) clearTimeout(summaryResetTimer);
+      summaryBtn.classList.remove('is-busy');
+      summaryBtn.classList.add(ok ? 'is-success' : 'is-error');
+      summaryBtn.textContent = ok ? LABEL_SUCCESS : LABEL_ERROR;
+
+      summaryResetTimer = setTimeout(() => {
+        summaryBtn.classList.remove('is-success', 'is-error');
+        summaryBtn.textContent = LABEL_IDLE;
+        summaryResetTimer = null;
+      }, 1600);
+    });
+  }
+
   // Vertical drag handler
   let dragState = null;
   nav.addEventListener('pointerdown', (event) => {
@@ -272,6 +360,7 @@ export function createNavView({ onSelect, onExport, onCopy, onCopyRow }) {
     if (event.target.closest(`.${ROW_CLASS}`)) return;
     if (event.target.closest(`.${EXPORT_CLASS}`)) return;
     if (event.target.closest(`.${COPY_CLASS}`)) return;
+    if (event.target.closest(`.${SUMMARY_CLASS}`)) return;
     nav.classList.add('is-dragging');
     nav.setPointerCapture(event.pointerId);
     const rect = nav.getBoundingClientRect();
@@ -328,18 +417,23 @@ export function createNavView({ onSelect, onExport, onCopy, onCopyRow }) {
 
   // ---- 增量 reconcile ----
 
+  // toolbar: 总结 / 复制 / 导出 三个按钮放在一行
+  const toolbar = document.createElement('div');
+  toolbar.className = TOOLBAR_CLASS;
+  if (hasSummary) toolbar.appendChild(summaryBtn);
+  if (hasCopy) toolbar.appendChild(copyBtn);
+  if (hasExport) toolbar.appendChild(exportBtn);
+
   function clear() {
     // Remove all rows, keep only handle
     while (nav.children.length > 1) nav.removeChild(nav.lastChild);
-    // Re-append copy + export buttons at the bottom
-    if (hasCopy) nav.appendChild(copyBtn);
-    if (hasExport) nav.appendChild(exportBtn);
+    // Re-append the toolbar (it contains summary + copy + export in one row)
+    nav.appendChild(toolbar);
   }
 
   function render(labels) {
-    // Remove copy + export buttons temporarily for clean row reconciliation
-    if (hasCopy && copyBtn.parentNode) nav.removeChild(copyBtn);
-    if (hasExport && exportBtn.parentNode) nav.removeChild(exportBtn);
+    // Detach the toolbar so row reconciliation doesn't disturb its inner buttons
+    if (toolbar.parentNode) nav.removeChild(toolbar);
 
     // 1) 移除多余 row（新列表比当前短）
     while (nav.children.length - 1 > labels.length) {
@@ -362,9 +456,8 @@ export function createNavView({ onSelect, onExport, onCopy, onCopyRow }) {
       nav.appendChild(row);
     }
 
-    // Append copy + export buttons at the bottom after all rows
-    if (hasCopy) nav.appendChild(copyBtn);
-    if (hasExport) nav.appendChild(exportBtn);
+    // Re-append the toolbar at the bottom after all rows
+    nav.appendChild(toolbar);
   }
 
   function setActive(activeIdx) {
