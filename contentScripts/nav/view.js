@@ -186,6 +186,16 @@ const NAV_CSS = `
   color: #dc2626;
   background: rgba(220, 38, 38, 0.08);
 }
+/* 总结按钮：禁用态（防止无限递归：nav 中已有总结发出的消息时锁住） */
+.${SUMMARY_CLASS}.is-disabled {
+  color: rgba(15,17,21,0.32);
+  background: transparent;
+  cursor: not-allowed;
+}
+.${SUMMARY_CLASS}.is-disabled:hover {
+  color: rgba(15,17,21,0.32);
+  background: transparent;
+}
 
 /* 把总结/复制/导出三个按钮收进一行 */
 .${TOOLBAR_CLASS} {
@@ -313,24 +323,29 @@ export function createNavView({ onSelect, onExport, onCopy, onCopyRow, onSummary
   // Create summary button ("总结") — 点击把 nav 中的所有问题 + 总结模板作为一个新消息发到当前 AI 平台
   let summaryBtn = null;
   let summaryResetTimer = null;
+  // 状态文案提到外层作用域，便于 setSummaryEnabled / click handler / 定时器共用
+  const SUMMARY_LABEL_IDLE = '总结';
+  const SUMMARY_LABEL_BUSY = '发送中…';
+  const SUMMARY_LABEL_SUCCESS = '已发送 ✓';
+  const SUMMARY_LABEL_ERROR = '发送失败';
+  const SUMMARY_DEFAULT_TITLE = '把本对话的所有问题连同总结要求一起发送到当前页面';
+  const SUMMARY_DISABLED_TITLE = '已总结过，避免无限递归';
   const hasSummary = typeof onSummary === 'function';
   if (hasSummary) {
     summaryBtn = document.createElement('span');
     summaryBtn.className = SUMMARY_CLASS;
-    summaryBtn.textContent = '总结';
-    summaryBtn.title = '把本对话的所有问题连同总结要求一起发送到当前页面';
-    const LABEL_IDLE = '总结';
-    const LABEL_BUSY = '发送中…';
-    const LABEL_SUCCESS = '已发送 ✓';
-    const LABEL_ERROR = '发送失败';
+    summaryBtn.textContent = SUMMARY_LABEL_IDLE;
+    summaryBtn.title = SUMMARY_DEFAULT_TITLE;
 
     summaryBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
+      // 防重入锁 + 禁用态：禁用时即使 click 穿透也别发
       if (summaryBtn.classList.contains('is-busy')) return;
+      if (summaryBtn.classList.contains('is-disabled')) return;
 
       summaryBtn.classList.remove('is-success', 'is-error');
       summaryBtn.classList.add('is-busy');
-      summaryBtn.textContent = LABEL_BUSY;
+      summaryBtn.textContent = SUMMARY_LABEL_BUSY;
 
       let ok = false;
       try {
@@ -343,11 +358,14 @@ export function createNavView({ onSelect, onExport, onCopy, onCopyRow, onSummary
       if (summaryResetTimer) clearTimeout(summaryResetTimer);
       summaryBtn.classList.remove('is-busy');
       summaryBtn.classList.add(ok ? 'is-success' : 'is-error');
-      summaryBtn.textContent = ok ? LABEL_SUCCESS : LABEL_ERROR;
+      summaryBtn.textContent = ok ? SUMMARY_LABEL_SUCCESS : SUMMARY_LABEL_ERROR;
 
       summaryResetTimer = setTimeout(() => {
         summaryBtn.classList.remove('is-success', 'is-error');
-        summaryBtn.textContent = LABEL_IDLE;
+        // 还原到正确状态：成功时下一轮很可能又变 disabled（消息回流了），保留当前 is-disabled
+        if (!summaryBtn.classList.contains('is-disabled')) {
+          summaryBtn.textContent = SUMMARY_LABEL_IDLE;
+        }
         summaryResetTimer = null;
       }, 1600);
     });
@@ -471,6 +489,33 @@ export function createNavView({ onSelect, onExport, onCopy, onCopyRow, onSummary
     }
   }
 
+  /**
+   * 切换"总结"按钮的禁用态。disabled=true 时按钮灰显、cursor=not-allowed、
+   * title 写明原因、click 也不响应（见 summaryBtn click handler 的 is-disabled 短路）。
+   *
+   * @param {boolean} enabled
+   * @param {string} [reason] - 禁用时给用户的提示，写入 title
+   */
+  function setSummaryEnabled(enabled, reason) {
+    if (!summaryBtn) return;
+    if (enabled) {
+      summaryBtn.classList.remove('is-disabled');
+      // 恢复默认 title：只在未进入其他状态时还原
+      if (!summaryBtn.classList.contains('is-busy')
+        && !summaryBtn.classList.contains('is-success')
+        && !summaryBtn.classList.contains('is-error')) {
+        summaryBtn.textContent = SUMMARY_LABEL_IDLE;
+        summaryBtn.title = SUMMARY_DEFAULT_TITLE;
+      }
+    } else {
+      // 强制清除瞬时态，让禁用态在视觉上占主导
+      summaryBtn.classList.remove('is-success', 'is-error', 'is-busy');
+      summaryBtn.classList.add('is-disabled');
+      summaryBtn.textContent = SUMMARY_LABEL_IDLE;
+      summaryBtn.title = reason || SUMMARY_DISABLED_TITLE;
+    }
+  }
+
   function destroy() {
     const style = document.getElementById(STYLE_ID);
     if (style) style.remove();
@@ -479,5 +524,5 @@ export function createNavView({ onSelect, onExport, onCopy, onCopyRow, onSummary
     destroyCleanup();
   }
 
-  return { render, setActive, clear, destroy };
+  return { render, setActive, clear, destroy, setSummaryEnabled };
 }

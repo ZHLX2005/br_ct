@@ -10,7 +10,7 @@ import { createDisposer } from '../util/disposer.js';
 import { collectRecords } from './collector.js';
 import { createActiveTracker } from './activeTracker.js';
 import { observeViewport, watchScroll, observeList, observeShell } from './observers.js';
-import { RETRY_INTERVAL_MS, RETRY_MAX, CLICK_LOCK_MS } from '../constants.js';
+import { RETRY_INTERVAL_MS, RETRY_MAX, CLICK_LOCK_MS, SUMMARY_TEMPLATE, isSummaryMessage } from '../constants.js';
 
 export function createNav(cfg) {
   const { itemSel, listSel, textSel, extractText, platformId, platformName } = cfg;
@@ -33,10 +33,23 @@ export function createNav(cfg) {
     tracker.lock();
   }
 
+  // 过滤掉"总结按钮"发出的消息（这些是上一轮总结的产物，包含 SUMMARY_MARKER）。
+  // 复制/导出/再次总结都要避开它们 —— 否则会出现用户提问被自己上一次的总结嵌套覆盖。
+  // 复制单条时也要走这条过滤：万一用户双击复制了一条总结消息，体验上同样应该跳过。
+  function getUserQuestionRecords() {
+    return records.filter(r => r.fullText && !isSummaryMessage(r.fullText));
+  }
+
   // 复制单条消息全文到剪贴板（无 frontmatter / 无 ========== 分隔，纯原文）
   async function onCopyRow(index) {
     const record = records[index];
     if (!record || !record.fullText) return;
+    // 单条复制时若这条恰好是总结发出的消息，按钮响应了但剪贴板实际写入空字符串
+    // 让用户感知到"按了但没生效"。
+    if (isSummaryMessage(record.fullText)) {
+      console.warn('[nav] copy row skipped: this is a summary-generated message', index);
+      return;
+    }
     try {
       await navigator.clipboard.writeText(record.fullText);
       console.log('[nav] copied row', index, `(${record.fullText.length} chars)`);
@@ -67,12 +80,15 @@ export function createNav(cfg) {
   }
 
   function onExport() {
-    if (records.length === 0) return;
+    const userQuestions = getUserQuestionRecords();
+    if (userQuestions.length === 0) return;
+    const filteredOut = records.length - userQuestions.length;
     const platformId_ = platformId;
     const platformName_ = platformName || platformId;
     const sourceUrl = location.href;
-    const msgCount = records.length;
-    const skipCount = skippedCount;
+    const msgCount = userQuestions.length;
+    // 不与 collector 的 skippedCount 混淆 —— 这是过滤器主动排除的"总结消息"
+    const skipCount = skippedCount + filteredOut;
 
     const now = new Date();
     const pad = (n) => String(n).padStart(2, '0');
@@ -81,7 +97,7 @@ export function createNav(cfg) {
     const filename = `${platformId_}-${dateStr}-${timeStr}.md`;
 
     const markdown = buildExportMarkdown(
-      records.map(r => ({ fullText: r.fullText })),
+      userQuestions.map(r => ({ fullText: r.fullText })),
       { platformId: platformId_, platformName: platformName_, sourceUrl, messageCount: msgCount, skippedCount: skipCount }
     );
 
@@ -93,35 +109,47 @@ export function createNav(cfg) {
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { if (a.parentNode) a.remove(); }, 2000);
+    if (filteredOut > 0) {
+      console.log('[nav] export filtered out', filteredOut, 'summary message(s)');
+    }
   }
 
   // 复制原文到剪贴板（用 ========== 分隔多条消息，与 sidebar 的"导入阻塞消息"功能配对）
   // 用法：粘贴到 sidebar 底部的"导入"按钮 → 自动拆成阻塞消息
+  // 已过滤：排除所有"总结按钮"发出的消息，避免复制出含自己总结的嵌套原文。
   async function onCopy() {
-    if (records.length === 0) return;
+    const userQuestions = getUserQuestionRecords();
+    if (userQuestions.length === 0) return;
     const SEP = '==========';
-    const text = records.map(r => r.fullText).join(`\n\n${SEP}\n\n`);
+    const text = userQuestions.map(r => r.fullText).join(`\n\n${SEP}\n\n`);
     try {
       await navigator.clipboard.writeText(text);
-      console.log('[nav] copied', records.length, 'messages to clipboard');
+      console.log('[nav] copied', userQuestions.length, 'user questions to clipboard',
+        records.length - userQuestions.length, 'summary message(s) excluded');
     } catch (err) {
       console.warn('[nav] clipboard write failed', err);
     }
   }
 
-  // 总结模板：把 nav 中的所有问题拼接成一个新消息发到当前 AI 平台。
-  // %s 用与"复制"按钮相同的多消息原文（以 ========== 分隔）填充。
-  // 参考 runjs/translation/selection-ask.js 的"模板+%s+选区"模式。
-  const SUMMARY_TEMPLATE =
-    '%s,这是我向你提出的这些问题 现在重新对每个问题进行总结,讲解整个知识体系,让整个所有提问和体系更加自然';
-
+  // 总结模板由 constants.js 的 SUMMARY_TEMPLATE 统一提供（复制/导出/总结都靠 marker 识别）
+  // 详见 constants.js SUMMARY_MARKER / isSummaryMessage
   async function onSummary() {
-    if (records.length === 0) {
-      console.warn('[nav] summary skipped: no records');
+    const userQuestions = getUserQuestionRecords();
+    if (userQuestions.length === 0) {
+      // 两种 0 的来源：
+      // 1) nav 里压根没有用户问题（records 为空）—— 真正的"无内容"
+      // 2) nav 里有记录但全是"总结按钮"发的消息（上一轮总结已回流）—— 防止无限递归
+      const hasAnySummary = records.some(r => r.fullText && isSummaryMessage(r.fullText));
+      if (hasAnySummary) {
+        console.warn('[nav] summary skipped: last message is already a summary, '
+          + 'would cause recursion');
+      } else {
+        console.warn('[nav] summary skipped: no records');
+      }
       return false;
     }
     const SEP = '==========';
-    const questions = records.map(r => r.fullText).join(`\n\n${SEP}\n\n`);
+    const questions = userQuestions.map(r => r.fullText).join(`\n\n${SEP}\n\n`);
     const message = SUMMARY_TEMPLATE.replace('%s', questions);
 
     try {
@@ -132,7 +160,8 @@ export function createNav(cfg) {
         switchToTab: false, // 当前正在使用，无需切换
       });
       if (response && response.status === 'success') {
-        console.log('[nav] summary sent to', platformId, `(${records.length} questions)`);
+        console.log('[nav] summary sent to', platformId, `(${userQuestions.length} questions, `
+          + `${records.length - userQuestions.length} summary message(s) excluded)`);
         return true;
       }
       console.warn('[nav] summary send non-success response', response);
@@ -162,6 +191,16 @@ export function createNav(cfg) {
     records = result.records;
     skippedCount = result.skippedCount;
     view.render(records.map((r) => r.text));
+
+    // 同步"总结"按钮的禁用态：nav 中存在由"总结"按钮发出的消息时禁用。
+    // 这是防无限递归的另一道保险（即便 isSummaryMessage marker 漏判，disabled 也拦住）。
+    const hasSummaryMessage = records.some(r => r.fullText && isSummaryMessage(r.fullText));
+    if (typeof view.setSummaryEnabled === 'function') {
+      view.setSummaryEnabled(!hasSummaryMessage,
+        hasSummaryMessage
+          ? '已总结过，避免无限递归（请新建一个会话再总结）'
+          : undefined);
+    }
 
     if (records.length > 0) {
       if (!tracker.evaluate()) {
