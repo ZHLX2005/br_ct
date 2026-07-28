@@ -354,18 +354,18 @@ async function gitDiscardStaged(id) {
   if (!dir) return;
 
   try {
-    // 执行 git reset HEAD 丢弃暂存
+    // 执行 git reset --hard HEAD 回退所有 tracked 文件的修改
     const resetResp = await sendNativeMessage({ command: 'gitDiscard', path: dir.path });
     const resetResult = resetResp.data;
 
-    // 执行 git clean -fd 丢弃未跟踪文件
+    // 执行 git clean -fd 删除所有未跟踪文件和目录
     const cleanResp = await sendNativeMessage({ command: 'gitClean', path: dir.path });
     const cleanResult = cleanResp.data;
 
     const resetOk = resetResult.success;
     const cleanOk = cleanResult.success;
     const messages = [];
-    if (resetOk) messages.push('暂存已丢弃');
+    if (resetOk) messages.push('已回退到 HEAD');
     if (cleanOk) messages.push('未跟踪已删除');
 
     toast(messages.length > 0 ? messages.join('\n') : '没有需要丢弃的内容', 'success');

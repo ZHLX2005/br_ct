@@ -391,32 +391,44 @@ func GitClean(req protocol.Request) protocol.Response {
 	return protocol.Response{Status: "ok", Data: result}
 }
 
-// GitDiscard 丢弃所有暂存区的更改 (git reset HEAD)
+// GitDiscard 完全回退整个仓库到 HEAD (git reset --hard HEAD)
+//
+// 语义：撤销所有 tracked 文件的任何修改，不区分 staged / unstaged，
+// 工作树恢复到与 HEAD 完全一致。未跟踪文件（'??' 状态）不在此命令范围，
+// 需配合 GitClean (`git clean -fd`) 一起使用才能达到「完全干净」的效果。
+//
+// 之前实现是 `git reset HEAD`（mixed reset，只把 index 挪到 unstaged，
+// 工作区文件内容不变），导致用户点「丢弃」后仍能看到修改文件残留。
 func GitDiscard(req protocol.Request) protocol.Response {
 	dir := req.Path
 	result := GitOperationResult{Dir: dir}
 
-	// 检查是否有暂存的内容
+	// 检查是否有 tracked 文件的任何变化（staged 或 worktree 修改）
+	// x/y 任意一位是非空且非 '?'，就说明有 tracked 变更需要 hard reset
 	statusOut, _ := runGit(dir, "status", "--porcelain", "-uall")
-	hasStaged := false
+	hasChanges := false
 	for _, line := range strings.Split(statusOut, "\n") {
 		if len(line) >= 4 {
 			x := line[0]
-			if x != ' ' && x != '?' {
-				hasStaged = true
+			y := line[1]
+			// tracked 且有变更：x/y 至少一位不是空格，且都不是 '?'
+			if (x != ' ' && x != '?') || (y != ' ' && y != '?') {
+				hasChanges = true
 				break
 			}
 		}
 	}
 
-	if !hasStaged {
-		result.Output = "暂存区没有需要丢弃的更改"
+	if !hasChanges {
+		result.Output = "工作区没有需要回退的更改"
 		result.Success = true
 		return protocol.Response{Status: "ok", Data: result}
 	}
 
-	// 执行 git reset HEAD 丢弃所有暂存区的更改
-	out, err := runGitCombined(dir, "reset", "HEAD")
+	// 执行 git reset --hard HEAD：让工作树、index 完全回到 HEAD
+	// 已 tracked 文件的任何修改（staged/unstaged）都被撤销
+	// 未跟踪文件不受影响，由前端串接 gitClean 处理
+	out, err := runGitCombined(dir, "reset", "--hard", "HEAD")
 	result.Output = out
 	if err != nil {
 		result.Error = err.Error()
