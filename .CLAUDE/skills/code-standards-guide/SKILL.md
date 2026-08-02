@@ -36,6 +36,7 @@ description: 当需要在 bro_chat 扩展项目中的 funcs/、runjs/、backgrou
 | 写新的 background 模块代码（命名空间 / setup 模式 / 防重复注册 / 长连接守卫） | `references/chrome-bg-module-pattern.md` |
 | 在 runjs/ 新增内容脚本 / 改 manifest 注入策略 | `references/runjs-module-standards.md` |
 | 评估"这个快捷键脚本放 runjs 还是 funcs" | `references/runjs-module-standards.md` 末尾「快捷键脚本归属决策树」 |
+| 新增/修改注入主页面的 CSS（content_scripts.css、运行时 `<style>`、`<link>`），或发现样式污染宿主页面（与宿主同名 class 撞车 / `@keyframes` 冲突 / 选择器无前缀） | `references/runjs-css-namespace.md` |
 | 加 prompt 提示词模板（@scenario/@feature 等占位符） | `references/prompt-extension.md`（**非代码规范**，仅作项目提示词资源） |
 
 ## 三套规范的共同主线
@@ -62,6 +63,7 @@ description: 当需要在 bro_chat 扩展项目中的 funcs/、runjs/、backgrou
 | `references/background-module-reorg.md` | backgroudtask/ 目录组织规范：建子目录、index.js 入口、import 路径 +1 ../ 规则、迁移到父模块的集成模式 |
 | `references/chrome-bg-module-pattern.md` | Chrome MV3 后台模块代码模式：thin background.js + setupXxxModule() 聚合层、命名空间、setup 内防重复注册、长连接守卫、错误案例警示 |
 | `references/runjs-module-standards.md` | runjs/ 内容脚本：必要的才注入 + 快捷键脚本归属决策树 + 模块依赖矩阵 |
+| `references/runjs-css-namespace.md` | 注入主页面的 CSS 命名空间隔离：作用域根 + 原生 CSS 嵌套（方案 A）/ 统一前缀（方案 B）、`@keyframes` 命名空间化、JS 不重复注入 `<style>`、headless Chrome 验证方法、错误案例 |
 | `references/prompt-extension.md` | （非代码规范）popup 提示词模板的扩展：占位符规范、分组结构、新增步骤 |
 | `references/sidebar-shortcut-impl.md` | Sidebar 快捷键实现范例：Tab 切换（每个已勾选 AI 平台独立节点）+ 添加/移除工作区切换 + Toast 提示 + Sidebar 响应式同步 + chrome.sidePanel 用户手势陷阱 |
 

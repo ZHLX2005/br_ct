@@ -157,10 +157,6 @@ html, body {
   transition: var(--transition);
 }
 
-.header:hover h1 {
-  transform: scale(1.03);
-}
-
 .header::after {
   content: "";
   position: absolute;
