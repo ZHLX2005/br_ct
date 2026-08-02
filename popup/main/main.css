@@ -5,7 +5,12 @@
  * 加载顺序须为 theme.css 在前、main.css 在后。
  */
 
-body {
+/*
+ * 主页内容内边距。viewController 会把 mainView.html 的 [data-view-content]
+ * 子节点包裹进 <div class="view view-main">，故用 .view-main 命中。
+ * 直开 mainView.html 时 document.body 直接是 wrapper 的父级，规则同样生效。
+ */
+.view-main {
   /* theme.css 中 body 为 padding:0，主页需要内边距 */
   padding: 16px;
 }
@@ -348,26 +353,6 @@ body {
 .message-input.drop-error {
   border-color: #e53e3e;
   background-color: rgba(229, 62, 62, 0.05);
-}
-
-/*
- * 隐藏弹出页的页面级滚动条（仅视觉隐藏，鼠标滚轮仍可滚动）。
- * main.css 仅被 popup/main/main.html 加载，不属于共享外壳，
- * 因此无需 :has(.page-container) 作用域，直接作用于 html/body 即可，
- * 不会泄漏到 options 外壳或其他页面。
- */
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-}
-
-html::-webkit-scrollbar-track,
-body::-webkit-scrollbar-track,
-html::-webkit-scrollbar-thumb,
-body::-webkit-scrollbar-thumb {
-  background: transparent;
-  opacity: 0;
 }
 
 /* ========== 图片预览区 ========== */

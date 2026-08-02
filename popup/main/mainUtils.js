@@ -43,7 +43,8 @@ let ocrController = null;
 function getOcrController() {
   if (!ocrController) {
     ocrController = createImageOcrController({
-      getPreviewContainer: () => document.getElementById("image-preview-area"),
+      // scope 到当前视图根（initializePopup 时绑定）；shell 接管后 rootEl 由 viewController 注入
+      getPreviewContainer: () => viewRoot && viewRoot.querySelector("#image-preview-area"),
       showTempMessage: (msg) => showTempMessage(msg),
       onChange: () => {},
     });
@@ -53,6 +54,9 @@ function getOcrController() {
 
 // DOM 元素缓存
 let elements = {};
+
+// 视图根元素（init 时绑定；事件处理函数与 OCR 回调中查询使用，参照 translation.js 模式）
+let viewRoot = null;
 
 // 输入持久化 saver（shared 原语；module-level 以便 startSending 调用 flush）
 let messageSaver = null;
@@ -65,20 +69,21 @@ window.__onImagePasted = ({ dataUrl, fileName }) => {
 };
 
 /**
- * 初始化弹窗，获取并缓存 DOM 元素
+ * 初始化弹窗，获取并缓存 DOM 元素。
+ * @param {Element} rootEl 视图根元素（viewController 注入的 .view.view-main 或直开 mainView.html 时的 document.body）
  */
-export async function initializePopup() {
+export async function initializePopup(rootEl) {
+  viewRoot = rootEl;
   elements = {
-    platformCheckboxes: document.querySelectorAll(
+    platformCheckboxes: rootEl.querySelectorAll(
       '.platform-icon-option input[type="checkbox"]'
     ),
-    messageInput: document.getElementById("message-input"),
-    sendButton: document.getElementById("send-button"),
-    closeTabsButton: document.getElementById("close-tabs-button"),
-    selectAllButton: document.getElementById("select-all"),
-    historySelect: document.getElementById("history-select"),
-    promptOptimizerSelect: document.getElementById("prompt-optimizer-select"),
-    openOptionsButton: document.getElementById("open-options"),
+    messageInput: rootEl.querySelector("#message-input"),
+    sendButton: rootEl.querySelector("#send-button"),
+    closeTabsButton: rootEl.querySelector("#close-tabs-button"),
+    selectAllButton: rootEl.querySelector("#select-all"),
+    historySelect: rootEl.querySelector("#history-select"),
+    promptOptimizerSelect: rootEl.querySelector("#prompt-optimizer-select"),
   };
 
   // 自动聚焦输入框
@@ -212,26 +217,8 @@ export function setupEventListeners() {
   // 关闭AI标签页按钮
   elements.closeTabsButton.addEventListener("click", closeAllAITabs);
 
-  // 打开设置页面按钮
-  elements.openOptionsButton.addEventListener("click", () => {
-    chrome.runtime.openOptionsPage();
-  });
-
-  // 打开侧边栏按钮
-  elements.openSidepanelButton = document.getElementById("open-sidepanel-btn");
-  if (elements.openSidepanelButton) {
-    elements.openSidepanelButton.addEventListener("click", async () => {
-      try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tab) {
-          await chrome.sidePanel.open({ tabId: tab.id });
-          window.close();
-        }
-      } catch (error) {
-        console.error("打开侧边栏失败:", error);
-      }
-    });
-  }
+  // 注：`#open-options`（设置）与 `#open-sidepanel-btn`（侧边栏）属于 shell nav（.header 内），
+  // 不在 mainView 中，改由 shell 绑定（见 Task 5）。
 }
 
 /**
