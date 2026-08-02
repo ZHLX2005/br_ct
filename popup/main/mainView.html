@@ -2,64 +2,11 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>主页视图</title>
-  <!-- 独立直开所需的样式：theme.css 在最前（变量与基础），main.css 提供主页布局，
-       promptsUI.css 提示词下拉。被 viewController 加载时仅取 [data-view-content]。 -->
-  <link rel="stylesheet" href="../components/theme.css">
-  <link rel="stylesheet" href="main.css">
-  <link rel="stylesheet" href="./prompts/promptsUI.css">
+  <!-- 主页视图已 inline 进 shell.html;直开 mainView.html 时跳转到 shell。 -->
+  <meta http-equiv="refresh" content="0; url=../main/main.html#main" />
+  <title>跳转主页…</title>
 </head>
 <body>
-  <div data-view-content>
-    <!-- 平台选择区 -->
-    <div class="platform-selector">
-      <div class="platform-selector-header">
-        <h3>选择平台</h3>
-        <div class="header-buttons">
-          <div class="select-all" id="select-all">全选</div>
-          <div class="close-tabs" id="close-tabs-button">关闭</div>
-        </div>
-      </div>
-
-      <div class="platform-options-row" id="platform-options-row">
-        <!-- 平台选项将由 JS 从 platformConfig.js 动态生成 -->
-      </div>
-    </div>
-
-    <!-- 历史消息选择框 -->
-    <select id="history-select" class="history-select">
-      <option value="">选择历史消息</option>
-    </select>
-
-    <!-- 提示词优化选择框 -->
-    <div class="prompt-optimizer-selector">
-      <div class="custom-select" id="prompt-optimizer-select">
-        <div class="selected-value">不使用优化</div>
-        <div class="custom-select-options">
-          <!-- 由JS动态填充选项 -->
-        </div>
-      </div>
-    </div>
-
-    <!-- 图片预览区 -->
-    <div id="image-preview-area" class="image-preview-area" hidden>
-      <!-- 图片缩略图卡片由 JS 动态渲染 -->
-    </div>
-
-    <!-- 消息输入框 -->
-    <textarea
-      class="message-input"
-      id="message-input"
-      placeholder="输入要发送的消息或拖放文件/文件夹到此处"
-    ></textarea>
-
-    <!-- 发送按钮 -->
-    <div class="button-group">
-      <button class="send-button" id="send-button">发送消息</button>
-    </div>
-  </div>
-
-  <script src="main.js" type="module"></script>
+  <p>正在跳转到 <a href="../main/main.html#main">主页</a>…</p>
 </body>
 </html>

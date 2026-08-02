@@ -17,6 +17,18 @@ const CSS_ATTR = 'data-view-css';
 
 export function setMountPoint(el) { mountPoint = el; }
 
+/**
+ * 预先为某视图注入 dom（通常用于主页：内容已 inline 在 shell.html 中）。
+ * 调用后该视图的首次 mount 跳过 fetch，直接 attach 这块 dom。
+ * 必须在 register 之后、首次 mount 该视图之前调用。
+ */
+export function setViewDom(viewId, dom) {
+  const v = views[viewId];
+  if (!v) { console.error('[viewController] setViewDom: unknown view', viewId); return; }
+  if (v.dom !== null) { console.warn('[viewController] setViewDom: view already has dom, overwriting', viewId); }
+  v.dom = dom;
+}
+
 export function register(viewDefs) {
   views = Object.create(null);
   for (const def of viewDefs) {
@@ -65,6 +77,19 @@ function removeLinks(viewId) {
   }
 }
 
+/**
+ * 等待 <link> 的 CSSOM 解析完成。返回的 promise 在 link 触发 load 时 resolve（成功）或 error 时 reject。
+ * preload 命中浏览器缓存时通常 1 帧内完成；冷 fetch 需等网络 + 解析。
+ */
+function waitForCssLoad(link) {
+  // 若 link 已被 sheet 列表采用，sheet.loaded 可能已为 true，直接 resolve
+  if (link.sheet) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    link.addEventListener('load', resolve, { once: true });
+    link.addEventListener('error', reject, { once: true });
+  });
+}
+
 export async function mount(viewId) {
   if (current === viewId) return;
   const view = views[viewId];
@@ -82,6 +107,12 @@ export async function mount(viewId) {
     try { views[prev].teardown(views[prev].dom); } catch (e) { console.error(e); }
   }
   addLinks(viewId);
+  // 等新 CSS 解析完成再切换 DOM，避免新视图以无样式状态绘一帧再重绘。
+  // （preload 命中缓存时 1 帧内完成；冷 fetch 等更久。这是为消除"css 从无到有"突兀跳变付出的代价。）
+  await Promise.all(view.cssHrefs.map(href => {
+    const el = document.head.querySelector(`link[${CSS_ATTR}="${href}"]`);
+    return el ? waitForCssLoad(el) : Promise.resolve();
+  }));
   mountPoint.appendChild(view.dom);
   // onActivate 在 attach 之后、init 之前调用。document 级副作用（监听、挂在 body 的 popup）
   // 在此注册，对应的清理由 teardown 在下次 unmount 之前调用 → 重挂载后能力完整恢复。

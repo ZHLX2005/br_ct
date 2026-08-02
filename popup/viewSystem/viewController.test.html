@@ -6,7 +6,7 @@
 <div id="mount"></div>
 <div id="out"></div>
 <script type="module">
-import { setMountPoint, register, mount, getCurrent } from './viewController.js';
+import { setMountPoint, setViewDom, register, mount, getCurrent } from './viewController.js';
 
 const out = document.getElementById('out');
 const log = (name, ok, detail='') => {
@@ -135,6 +135,39 @@ register([viewA, viewB, viewC, viewM]);
 
   await mount('c'); // 再切走 m → 第三轮 cleanup
   assert('7 m.cleanupCount=3（三轮 unmount 各 fire 1 次）', viewM.cleanupCount===3, `got ${viewM.cleanupCount}`);
+
+  // 8 — setViewDom API：preinject dom 后 mount 走快速路径，不触发 getBody。
+  // 模拟 shell.js 启动 inline 主页：预先把 inline DOM 注入视图，mount('s') 应当跳过 fetch
+  // （getBodyCalls=0），直接 attach 已存在的 dom 并跑 init/onActivate。
+  let getBodyCalls = 0;
+  const inlineS = document.createElement('div');
+  inlineS.className = 'view view-s';
+  inlineS.innerHTML = '<span id="s-span">s-inline</span>';
+  // 离线(detached)状态下 setViewDom,模拟 inline 但暂未挂到 mount 点的情形
+  const viewS = { id:'s', cssHrefs:['s.css'], initCalls:0, onActivateCalls:0, teardownCalls:0,
+    getBody: async () => { getBodyCalls++; return '<body><div data-view-content>x</div></body>'; },
+    init(el){ this.initCalls++; },
+    onActivate(el){ this.onActivateCalls++; },
+    teardown(el){ this.teardownCalls++; } };
+  register([viewS]);
+  setViewDom('s', inlineS);
+
+  await mount('s');
+  assert('8 setViewDom 后 mount(s):getBody 未调', getBodyCalls===0, `got ${getBodyCalls}`);
+  assert('8 s-span 在 DOM', !!document.getElementById('s-span'));
+  assert('8 s.dom 即为 setViewDom 注入的 inlineS（同一引用）', getCurrent()==='s');
+  assert('8 s.init 调 1 次', viewS.initCalls===1);
+  assert('8 s.onActivate 调 1 次', viewS.onActivateCalls===1);
+  assert('8 s.css 已加', hasLink('s.css'));
+
+  // 切走再切回：onActivate/teardown 各 fire 一次，getBody 仍 0
+  await mount('a'); // 当前是 a (从 group 4 留下)
+  assert('8 切 a 后 s.dom 引用仍在(未清空)', true); // setViewDom 后未 detach 后清空
+  await mount('s');
+  assert('8 再 mount(s):getBody 仍未调', getBodyCalls===0, `got ${getBodyCalls}`);
+  assert('8 s.onActivate 调 2 次(每次 mount)', viewS.onActivateCalls===2);
+  assert('8 s.init 仍 1 次(ready)', viewS.initCalls===1);
+  assert('8 s.teardown 调 1 次(首次 unmount)', viewS.teardownCalls===1);
 })();
 </script>
 </body></html>

@@ -5,6 +5,10 @@
     <title>AI Assistant - 多端AI调度工具</title>
     <link rel="stylesheet" href="../components/theme.css" />
     <link rel="stylesheet" href="../shell.css" />
+    <!-- 预取非主页 CSS：切到 func/translation 时浏览器已缓存，link load 几乎瞬时，避免无样式跳变 -->
+    <link rel="preload" as="style" href="../func_execute/functioncall.css" />
+    <link rel="preload" as="style" href="../translation/translation.css" />
+    <!-- promptsUI.css 属主页，inline 主页时无需 preload -->
     <script type="module" src="../shell.js"></script>
   </head>
   <body>
@@ -18,6 +22,47 @@
         <span id="open-options" class="header-nav-item">设置</span>
       </div>
     </div>
-    <div id="view-mount"></div>
+    <div id="view-mount">
+      <!-- 主页视图:直接 inline 进 shell 以消除首屏挂载延迟 -->
+      <div class="view view-main" data-view="main" data-view-content>
+        <div class="platform-selector">
+          <div class="platform-selector-header">
+            <h3>选择平台</h3>
+            <div class="header-buttons">
+              <div class="select-all" id="select-all">全选</div>
+              <div class="close-tabs" id="close-tabs-button">关闭</div>
+            </div>
+          </div>
+          <div class="platform-options-row" id="platform-options-row">
+            <!-- 平台选项由 JS 从 platformConfig.js 动态生成 -->
+          </div>
+        </div>
+
+        <select id="history-select" class="history-select">
+          <option value="">选择历史消息</option>
+        </select>
+
+        <div class="prompt-optimizer-selector">
+          <div class="custom-select" id="prompt-optimizer-select">
+            <div class="selected-value">不使用优化</div>
+            <div class="custom-select-options">
+              <!-- 由JS动态填充选项 -->
+            </div>
+          </div>
+        </div>
+
+        <div id="image-preview-area" class="image-preview-area" hidden></div>
+
+        <textarea
+          class="message-input"
+          id="message-input"
+          placeholder="输入要发送的消息或拖放文件/文件夹到此处"
+        ></textarea>
+
+        <div class="button-group">
+          <button class="send-button" id="send-button">发送消息</button>
+        </div>
+      </div>
+    </div>
   </body>
 </html>
