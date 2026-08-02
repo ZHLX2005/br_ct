@@ -5,3 +5,7 @@
 html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; }
 html::-webkit-scrollbar-track, body::-webkit-scrollbar-track,
 html::-webkit-scrollbar-thumb, body::-webkit-scrollbar-thumb { background: transparent; opacity: 0; }
+
+/* 侧边栏按钮仅在主页显示;壳在 body[data-view] 上标当前视图 */
+body[data-view="func"] .open-sidepanel-btn,
+body[data-view="translation"] .open-sidepanel-btn { display: none; }
