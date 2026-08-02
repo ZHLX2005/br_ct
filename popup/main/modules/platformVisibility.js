@@ -119,14 +119,21 @@ export async function setPlatformVisibility(platformId, isVisible) {
 
 /**
  * 监听平台可见性更新消息
+ * 返回 cleanup 函数：移除注册的 onMessage 监听，供 main.js teardown 调用。
+ * @param {(settings: object) => void} [callback]
+ * @returns {() => void}
  */
 export function setupPlatformVisibilityMessageListener(callback) {
-  chrome.runtime.onMessage.addListener((request) => {
+  const handler = (request) => {
     if (request.action === 'platformVisibilityUpdated') {
       applyPlatformVisibilitySettings(request.settings);
       if (callback) {
         callback(request.settings);
       }
     }
-  });
+  };
+  chrome.runtime.onMessage.addListener(handler);
+  return () => {
+    chrome.runtime.onMessage.removeListener(handler);
+  };
 }

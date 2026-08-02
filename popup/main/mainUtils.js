@@ -58,6 +58,11 @@ let elements = {};
 // 视图根元素（init 时绑定；事件处理函数与 OCR 回调中查询使用，参照 translation.js 模式）
 let viewRoot = null;
 
+// init 链中注册的 cleanup 函数集合（populateOptimizer / initAliasShortcut /
+// setupPlatformVisibilityMessageListener 等返回的 document 级监听与 popup 清理）。
+// 由 teardownView() 在视图卸载时统一调用，避免多次挂载累积监听与 DOM。
+let viewCleanups = [];
+
 // 输入持久化 saver（shared 原语；module-level 以便 startSending 调用 flush）
 let messageSaver = null;
 
@@ -74,6 +79,8 @@ window.__onImagePasted = ({ dataUrl, fileName }) => {
  */
 export async function initializePopup(rootEl) {
   viewRoot = rootEl;
+  // 每次 mount 重置 cleanup 集合（防止上一轮 teardown 异常遗留）
+  viewCleanups = [];
   elements = {
     platformCheckboxes: rootEl.querySelectorAll(
       '.platform-icon-option input[type="checkbox"]'
@@ -89,11 +96,13 @@ export async function initializePopup(rootEl) {
   // 自动聚焦输入框
   focusInputAndSetCursor(elements.messageInput);
 
-  // 初始化 /alias 快捷输入
-  initAliasShortcut(elements.messageInput, PROMPT_TEMPLATES, elements.promptOptimizerSelect);
+  // 初始化 /alias 快捷输入（返回 cleanup：移除 document 监听 + alias popup）
+  const aliasCleanup = initAliasShortcut(elements.messageInput, PROMPT_TEMPLATES, elements.promptOptimizerSelect);
+  if (typeof aliasCleanup === "function") viewCleanups.push(aliasCleanup);
 
-  // 初始化优化器下拉框
-  populateOptimizer(elements.promptOptimizerSelect, PROMPT_TEMPLATES);
+  // 初始化优化器下拉框（返回 cleanup：移除 document 监听）
+  const optimizerCleanup = populateOptimizer(elements.promptOptimizerSelect, PROMPT_TEMPLATES);
+  if (typeof optimizerCleanup === "function") viewCleanups.push(optimizerCleanup);
 
   // 加载并应用平台可见性设置
   await loadPlatformVisibilitySettings();
@@ -159,11 +168,12 @@ function restorePlatformStates(platformStates) {
  * 设置所有事件监听器
  */
 export function setupEventListeners() {
-  // 监听来自options页面的平台可见性更新消息
-  setupPlatformVisibilityMessageListener((settings) => {
+  // 监听来自options页面的平台可见性更新消息（返回 cleanup：移除 onMessage 监听）
+  const visibilityCleanup = setupPlatformVisibilityMessageListener((settings) => {
     showTempMessage('平台显示设置已更新');
     updateSelectAllButton();
   });
+  if (typeof visibilityCleanup === "function") viewCleanups.push(visibilityCleanup);
 
   // 输入框持久化（shared 原语）
   messageSaver = createDebouncedSaver(async (text) => {
@@ -219,6 +229,23 @@ export function setupEventListeners() {
 
   // 注：`#open-options`（设置）与 `#open-sidepanel-btn`（侧边栏）属于 shell nav（.header 内），
   // 不在 mainView 中，改由 shell 绑定（见 Task 5）。
+}
+
+/**
+ * 视图拆解：调用 init 链中各模块注册的 cleanup，移除 document 级监听与 alias popup，
+ * 释放对旧 rootEl 的引用。由 main.js teardown 调用。
+ * view 内的元素监听随 DOM detach 自动失效，无需在此处理。
+ */
+export function teardownView() {
+  for (const cleanup of viewCleanups) {
+    try {
+      cleanup();
+    } catch (e) {
+      console.error("main teardown cleanup 失败:", e);
+    }
+  }
+  viewCleanups = [];
+  viewRoot = null;
 }
 
 /**

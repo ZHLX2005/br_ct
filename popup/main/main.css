@@ -7,8 +7,10 @@
 
 /*
  * 主页内容内边距。viewController 会把 mainView.html 的 [data-view-content]
- * 子节点包裹进 <div class="view view-main">，故用 .view-main 命中。
- * 直开 mainView.html 时 document.body 直接是 wrapper 的父级，规则同样生效。
+ * 子节点包裹进 <div class="view view-main">，故用 .view-main 命中（嵌入式场景）。
+ * 注意：直开 mainView.html 时没有控制器包裹，document.body 上不会形成 .view-main，
+ * 此规则不命中 → 直开路径不补 16px 内边距（仅调试视觉差异，功能不受影响；
+ * 若后续需要直开也保留内边距，应在 mainView.html 内层加 wrapper 或在 shell.css 处理）。
  */
 .view-main {
   /* theme.css 中 body 为 padding:0，主页需要内边距 */

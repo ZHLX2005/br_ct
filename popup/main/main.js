@@ -3,6 +3,7 @@ import {
   initializePopup,
   setupEventListeners,
   loadStoredData,
+  teardownView,
 } from "./mainUtils.js";
 import { setupDragDropEvents } from "./dragDropHandler.js";
 import { initializePlatformOptions } from "./platformRenderer.js";
@@ -33,11 +34,11 @@ export async function init(rootEl) {
 }
 
 /**
- * 主页视图拆解。本视图无 document 级常驻监听（仅 rootEl 内元素监听，
- * 随 DOM detach 自动失效），故 no-op。
+ * 主页视图拆解。init 链中的 document 级监听与 alias popup 由 teardownView 统一清理；
+ * view 内的元素监听随 DOM detach 自动失效。
  */
 export function teardown(rootEl) {
-  // no-op
+  teardownView();
 }
 
 // 直开 mainView.html 时自动 init；被 shell 通过 viewController 加载时由控制器调用 init。
