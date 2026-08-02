@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>viewController tests</title>
+<style>body{font-family:monospace;padding:12px} .pass{color:green} .fail{color:red;font-weight:bold}</style>
+</head><body>
+<h3>viewController tests</h3>
+<div id="mount"></div>
+<div id="out"></div>
+<script type="module">
+import { setMountPoint, register, mount, getCurrent } from './viewController.js';
+
+const out = document.getElementById('out');
+const log = (name, ok, detail='') => {
+  const d = document.createElement('div'); d.className = ok ? 'pass' : 'fail';
+  d.textContent = `${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`;
+  out.appendChild(d);
+};
+const assert = (name, cond, detail) => log(name, !!cond, detail);
+const hasLink = href => !!document.head.querySelector(`link[data-view-css="${href}"]`);
+
+// 模拟恒留的 theme.css（静态 link，放 head 最前）
+const theme = document.createElement('link');
+theme.rel='stylesheet'; theme.href='theme.css'; theme.dataset.static='1';
+document.head.insertBefore(theme, document.head.firstChild);
+const hasTheme = () => !!document.head.querySelector('link[data-static="1"]');
+
+// def 对象：init/teardown 内 this===def，故 def.initCalls 可读
+const viewA = { id:'a', cssHrefs:['a.css'], initCalls:0, teardownCalls:0,
+  getBody: async () => '<body><div data-view-content><input id="a-input"></div></body>',
+  init(el){ this.initCalls++; }, teardown(el){ this.teardownCalls++; } };
+const viewB = { id:'b', cssHrefs:['b.css'], initCalls:0, teardownCalls:0,
+  getBody: async () => '<body><div data-view-content><p>b</p></div></body>',
+  init(el){ this.initCalls++; }, teardown(el){ this.teardownCalls++; } };
+
+setMountPoint(document.getElementById('mount'));
+register([viewA, viewB]);
+
+(async () => {
+  await mount('a');
+  assert('1 current===a', getCurrent()==='a');
+  assert('1 a-input 在 DOM', !!document.getElementById('a-input'));
+  assert('1 a.init 调 1 次', viewA.initCalls===1, `got ${viewA.initCalls}`);
+  assert('1 a.css 在 head', hasLink('a.css'));
+  assert('1 theme.css 恒在', hasTheme());
+
+  document.getElementById('a-input').value = 'hello'; // 切走前写值
+
+  await mount('a'); // 幂等
+  assert('2 重复 mount(a) 幂等,init 不再调', viewA.initCalls===1, `got ${viewA.initCalls}`);
+
+  await mount('b');
+  assert('3 current===b', getCurrent()==='b');
+  assert('3 a-input 已从 mount 点移除', !document.getElementById('a-input'));
+  assert('3 b.init 调 1 次', viewB.initCalls===1);
+  assert('3 a.css 已移除', !hasLink('a.css'));
+  assert('3 b.css 已加', hasLink('b.css'));
+  assert('3 a.teardown 调 1 次', viewA.teardownCalls===1, `got ${viewA.teardownCalls}`);
+
+  await mount('a'); // 切回
+  assert('4 a 重新挂载', !!document.getElementById('a-input'));
+  assert('4 a.init 不再调(ready)', viewA.initCalls===1, `got ${viewA.initCalls}`);
+  assert('4 a-input 值保留', document.getElementById('a-input').value==='hello', `got "${document.getElementById('a-input').value}"`);
+  assert('4 b.teardown 调 1 次', viewB.teardownCalls===1);
+})();
+</script>
+</body></html>
