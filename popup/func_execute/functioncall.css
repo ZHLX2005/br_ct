@@ -183,6 +183,7 @@
   text-decoration: none;
   transition: all 0.2s ease;
   box-shadow: var(--shadow-sm);
+  box-sizing: border-box;
 }
 
 .back-button::before {

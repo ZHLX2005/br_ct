@@ -1142,29 +1142,17 @@ function showFavoriteNotification(text) {
     box-shadow: 0 2px 8px rgba(0,0,0,0.2);
     z-index: 2147483647;
     font-size: 14px;
-    animation: slideIn 0.3s ease-out;
+    animation: bro-slide-in 0.3s ease-out;
   `;
   notification.textContent = `已收藏: "${text.length > 30 ? text.substring(0, 30) + '...' : text}"`;
-
-  const style = document.createElement('style');
-  style.textContent = `
-    @keyframes slideIn {
-      from { transform: translateX(100%); opacity: 0; }
-      to { transform: translateX(0); opacity: 1; }
-    }
-  `;
-  document.head.appendChild(style);
 
   document.body.appendChild(notification);
 
   setTimeout(() => {
-    notification.style.animation = 'slideOut 0.3s ease-in';
+    notification.style.animation = 'bro-slide-out 0.3s ease-in';
     setTimeout(() => {
       if (notification.parentNode) {
         notification.parentNode.removeChild(notification);
-      }
-      if (style.parentNode) {
-        style.parentNode.removeChild(style);
       }
     }, 300);
   }, 3000);
