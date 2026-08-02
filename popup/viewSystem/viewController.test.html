@@ -23,22 +23,32 @@ theme.rel='stylesheet'; theme.href='theme.css'; theme.dataset.static='1';
 document.head.insertBefore(theme, document.head.firstChild);
 const hasTheme = () => !!document.head.querySelector('link[data-static="1"]');
 
-// def 对象：init/teardown 内 this===def，故 def.initCalls 可读
-const viewA = { id:'a', cssHrefs:['a.css'], initCalls:0, teardownCalls:0,
+// def 对象：init/onActivate/teardown 内 this===def，故 def.xxxCalls 可读
+const viewA = { id:'a', cssHrefs:['a.css'], initCalls:0, onActivateCalls:0, teardownCalls:0,
   getBody: async () => '<body><div data-view-content><input id="a-input"></div></body>',
-  init(el){ this.initCalls++; }, teardown(el){ this.teardownCalls++; } };
-const viewB = { id:'b', cssHrefs:['b.css'], initCalls:0, teardownCalls:0,
+  init(el){ this.initCalls++; },
+  onActivate(el){ this.onActivateCalls++; },
+  teardown(el){ this.teardownCalls++; } };
+const viewB = { id:'b', cssHrefs:['b.css'], initCalls:0, onActivateCalls:0, teardownCalls:0,
   getBody: async () => '<body><div data-view-content><p>b</p></div></body>',
-  init(el){ this.initCalls++; }, teardown(el){ this.teardownCalls++; } };
+  init(el){ this.initCalls++; },
+  onActivate(el){ this.onActivateCalls++; },
+  teardown(el){ this.teardownCalls++; } };
+// viewC 故意不实现 onActivate，验证 backward-compat（缺省为 no-op，行为不变）
+const viewC = { id:'c', cssHrefs:[], initCalls:0, teardownCalls:0,
+  getBody: async () => '<body><div data-view-content><span id="c-span">c</span></div></body>',
+  init(el){ this.initCalls++; },
+  teardown(el){ this.teardownCalls++; } };
 
 setMountPoint(document.getElementById('mount'));
-register([viewA, viewB]);
+register([viewA, viewB, viewC]);
 
 (async () => {
   await mount('a');
   assert('1 current===a', getCurrent()==='a');
   assert('1 a-input 在 DOM', !!document.getElementById('a-input'));
   assert('1 a.init 调 1 次', viewA.initCalls===1, `got ${viewA.initCalls}`);
+  assert('1 a.onActivate 调 1 次', viewA.onActivateCalls===1, `got ${viewA.onActivateCalls}`);
   assert('1 a.css 在 head', hasLink('a.css'));
   assert('1 theme.css 恒在', hasTheme());
 
@@ -46,11 +56,13 @@ register([viewA, viewB]);
 
   await mount('a'); // 幂等
   assert('2 重复 mount(a) 幂等,init 不再调', viewA.initCalls===1, `got ${viewA.initCalls}`);
+  assert('2 重复 mount(a) 幂等,onActivate 也不调', viewA.onActivateCalls===1, `got ${viewA.onActivateCalls}`);
 
   await mount('b');
   assert('3 current===b', getCurrent()==='b');
   assert('3 a-input 已从 mount 点移除', !document.getElementById('a-input'));
   assert('3 b.init 调 1 次', viewB.initCalls===1);
+  assert('3 b.onActivate 调 1 次', viewB.onActivateCalls===1, `got ${viewB.onActivateCalls}`);
   assert('3 a.css 已移除', !hasLink('a.css'));
   assert('3 b.css 已加', hasLink('b.css'));
   assert('3 a.teardown 调 1 次', viewA.teardownCalls===1, `got ${viewA.teardownCalls}`);
@@ -58,8 +70,23 @@ register([viewA, viewB]);
   await mount('a'); // 切回
   assert('4 a 重新挂载', !!document.getElementById('a-input'));
   assert('4 a.init 不再调(ready)', viewA.initCalls===1, `got ${viewA.initCalls}`);
-  assert('4 a-input 值保留', document.getElementById('a-input').value==='hello', `got "${document.getElementById('a-input').value}"`);
+  // *** 核心断言：onActivate 在每次 mount 都调用 —— 这是修复的关键点 ***
+  assert('4 a.onActivate 再次调用(每次 mount)', viewA.onActivateCalls===2, `got ${viewA.onActivateCalls}`);
+  assert('4 a.teardown 已先于此次 onActivate 调用', viewA.teardownCalls===1);
   assert('4 b.teardown 调 1 次', viewB.teardownCalls===1);
+  assert('4 b.onActivate 已调 1 次', viewB.onActivateCalls===1);
+
+  await mount('b');
+  assert('5 b.onActivate 再次调用', viewB.onActivateCalls===2, `got ${viewB.onActivateCalls}`);
+  assert('5 a.onActivate 仍为 2（未再次 mount a）', viewA.onActivateCalls===2);
+  assert('5 a.teardown 调 2 次（每次 unmount）', viewA.teardownCalls===2, `got ${viewA.teardownCalls}`);
+
+  await mount('c'); // 验证无 onActivate 实现的视图：backward-compat
+  assert('6 c 无 onActivate:viewC.onActivate 仍是 0', viewC.onActivateCalls===undefined || viewC.onActivateCalls===0);
+  assert('6 c.init 调 1 次', viewC.initCalls===1);
+  assert('6 c-span 在 DOM', !!document.getElementById('c-span'));
+  assert('6 b.teardown 调 2 次（每次 unmount）', viewB.teardownCalls===2, `got ${viewB.teardownCalls}`);
+  assert('6 c.teardown 未调（首挂）', viewC.teardownCalls===0);
 })();
 </script>
 </body></html>

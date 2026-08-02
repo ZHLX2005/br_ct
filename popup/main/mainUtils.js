@@ -74,12 +74,22 @@ window.__onImagePasted = ({ dataUrl, fileName }) => {
 };
 
 /**
- * 初始化弹窗，获取并缓存 DOM 元素。
+ * 初始化弹窗，获取并缓存 DOM 元素 + 绑定一次性行为（按 rootEl 作用域）。
+ * 一次性 init 中可放心执行的工作：DOM 缓存、元素级事件绑定、输入持久化、平台可见性的
+ * storage 读取与样式应用。这些查询都在 rootEl 内，缓存的 viewRoot 之后被 onActivate
+ * 取代（后者每次 mount 都重新绑定）。
+ *
+ * ⚠️ 注意：document 级副作用（document.addEventListener / document.body.appendChild popup /
+ * chrome.runtime.onMessage.addListener）必须放在 registerDocumentSideEffects(rootEl)
+ * 中，由 main.js 的 onActivate 在每次 mount 时调用——首次 mount 也会调，在 init 之后。
+ *
  * @param {Element} rootEl 视图根元素（viewController 注入的 .view.view-main 或直开 mainView.html 时的 document.body）
  */
 export async function initializePopup(rootEl) {
   viewRoot = rootEl;
-  // 每次 mount 重置 cleanup 集合（防止上一轮 teardown 异常遗留）
+  // 每次 mount 重置 cleanup 集合（防止上一轮 teardown 异常遗留）。
+  // 即使 initializePopup 现在不再注册 document 副作用，注册 module 仍可能在 registerDocumentSideEffects
+  // 之前调用——故保持「先清零」以便统一管理。
   viewCleanups = [];
   elements = {
     platformCheckboxes: rootEl.querySelectorAll(
@@ -96,7 +106,24 @@ export async function initializePopup(rootEl) {
   // 自动聚焦输入框
   focusInputAndSetCursor(elements.messageInput);
 
-  // 初始化 /alias 快捷输入（返回 cleanup：移除 document 监听 + alias popup）
+  // 加载并应用平台可见性设置（一次性的 storage 读取；onActivate 不需要重复做）。
+  await loadPlatformVisibilitySettings();
+}
+
+/**
+ * 注册 main 视图的 document 级副作用：每次 mount 都调用（首次 mount 也调）。
+ * 与 init 的差别：副作用登记必须在视图「可见」后（attach 之后）才注册，以便用户在当前视图内
+ * 触发的事件能立即命中监听；同时要求每次 mount 都重新注册——避免上一轮 teardown 移除了监听、
+ * 当前轮缺位导致功能静默失效（这就是 fix round 1 暴露的缺陷）。
+ *
+ * init 链中注册的 cleanup 推入 viewCleanups；teardownView 调用时按 LIFO 顺序清理。
+ *
+ * @param {Element} rootEl 视图根元素
+ */
+export function registerDocumentSideEffects(rootEl) {
+  viewRoot = rootEl;
+
+  // 初始化 /alias 快捷输入（返回 cleanup：移除 document 监听 + 移除 alias popup）
   const aliasCleanup = initAliasShortcut(elements.messageInput, PROMPT_TEMPLATES, elements.promptOptimizerSelect);
   if (typeof aliasCleanup === "function") viewCleanups.push(aliasCleanup);
 
@@ -104,8 +131,12 @@ export async function initializePopup(rootEl) {
   const optimizerCleanup = populateOptimizer(elements.promptOptimizerSelect, PROMPT_TEMPLATES);
   if (typeof optimizerCleanup === "function") viewCleanups.push(optimizerCleanup);
 
-  // 加载并应用平台可见性设置
-  await loadPlatformVisibilitySettings();
+  // 监听来自 options 页面的平台可见性更新消息（返回 cleanup：移除 onMessage 监听）
+  const visibilityCleanup = setupPlatformVisibilityMessageListener((settings) => {
+    showTempMessage('平台显示设置已更新');
+    updateSelectAllButton();
+  });
+  if (typeof visibilityCleanup === "function") viewCleanups.push(visibilityCleanup);
 }
 
 /**
@@ -165,16 +196,13 @@ function restorePlatformStates(platformStates) {
 }
 
 /**
- * 设置所有事件监听器
+ * 设置所有事件监听器（rootEl 元素级，每次 mount 由 setupEventListeners 调用前需 elements 已注入，
+ * 并要求 document 级副作用已通过 registerDocumentSideEffects 登记）。
+ *
+ * 注意：platformVisibility 的 onMessage 监听已迁出至 registerDocumentSideEffects——
+ * 它是 document 级（chrome.runtime），不依赖 rootEl 的 DOM 节点，每次 mount 都要重新注册。
  */
 export function setupEventListeners() {
-  // 监听来自options页面的平台可见性更新消息（返回 cleanup：移除 onMessage 监听）
-  const visibilityCleanup = setupPlatformVisibilityMessageListener((settings) => {
-    showTempMessage('平台显示设置已更新');
-    updateSelectAllButton();
-  });
-  if (typeof visibilityCleanup === "function") viewCleanups.push(visibilityCleanup);
-
   // 输入框持久化（shared 原语）
   messageSaver = createDebouncedSaver(async (text) => {
     await saveMessageContent(text);
