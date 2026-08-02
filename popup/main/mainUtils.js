@@ -87,10 +87,9 @@ window.__onImagePasted = ({ dataUrl, fileName }) => {
  */
 export async function initializePopup(rootEl) {
   viewRoot = rootEl;
-  // 每次 mount 重置 cleanup 集合（防止上一轮 teardown 异常遗留）。
-  // 即使 initializePopup 现在不再注册 document 副作用，注册 module 仍可能在 registerDocumentSideEffects
-  // 之前调用——故保持「先清零」以便统一管理。
-  viewCleanups = [];
+  // 注：不再清零 viewCleanups —— onActivate 已在 init 之前把当轮的 cleanups 推入数组，
+  // teardownView 在末尾清零（mainUtils.js:275）。这里再清零会抹掉 onActivate 的注册，
+  // 导致 teardown 跳过所有 document 监听 / alias popup 的清理 → 反复挂载累积。
   elements = {
     platformCheckboxes: rootEl.querySelectorAll(
       '.platform-icon-option input[type="checkbox"]'

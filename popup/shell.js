@@ -5,7 +5,15 @@ import { init as initFunc, teardown as teardownFunc } from "./func_execute/funct
 import { init as initTranslation, teardown as teardownTranslation } from "./translation/translation.js";
 
 const popupBase = chrome.runtime.getURL('popup'); // 形如 chrome-extension://<id>/popup
-const fetchBody = (rel) => fetch(`${popupBase}/${rel}`).then(r => r.text());
+const fetchBody = (rel) => fetch(`${popupBase}/${rel}`)
+  .then(r => {
+    if (!r.ok) throw new Error(`HTTP ${r.status} ${r.statusText}`);
+    return r.text();
+  })
+  .catch(err => {
+    console.error('[shell] fetchBody failed for', rel, err);
+    return `<body><div data-view-content><div data-load-error>视图加载失败: ${rel}</div></div></body>`;
+  });
 
 setMountPoint(document.getElementById('view-mount'));
 register([

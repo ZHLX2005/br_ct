@@ -40,8 +40,20 @@ const viewC = { id:'c', cssHrefs:[], initCalls:0, teardownCalls:0,
   init(el){ this.initCalls++; },
   teardown(el){ this.teardownCalls++; } };
 
+// viewM 模拟 main 的真实模式：onActivate 每次 mount 推一个 cleanup 到模块级共享数组；
+// init 不再清零数组（旧实现下，init 后的 viewCleanups = [] 会把 onActivate 刚推入的 3 个
+// cleanup 全抹掉，导致 teardown 跳过所有 document 监听 / alias popup 的清理 → 反复
+// 挂载累积。移除 init 的清零后，每次 unmount 都应恰好清空当轮 push 的 cleanup）。
+const viewM = { id:'m', cssHrefs:[], initCalls:0, onActivateCalls:0, teardownCalls:0,
+  getBody: async () => '<body><div data-view-content><span id="m-span">m</span></div></body>',
+  init(el){ this.initCalls++; /* 不再清零 viewMCleanups —— 修复点 */ },
+  onActivate(el){ this.onActivateCalls++; viewMCleanups.push(() => { viewM.cleanupCount++; }); },
+  teardown(el){ this.teardownCalls++; for (const c of viewMCleanups) c(); viewMCleanups = []; } };
+let viewMCleanups = [];
+Object.defineProperty(viewM, 'cleanupCount', { value: 0, writable: true });
+
 setMountPoint(document.getElementById('mount'));
-register([viewA, viewB, viewC]);
+register([viewA, viewB, viewC, viewM]);
 
 (async () => {
   await mount('a');
@@ -87,6 +99,42 @@ register([viewA, viewB, viewC]);
   assert('6 c-span 在 DOM', !!document.getElementById('c-span'));
   assert('6 b.teardown 调 2 次（每次 unmount）', viewB.teardownCalls===2, `got ${viewB.teardownCalls}`);
   assert('6 c.teardown 未调（首挂）', viewC.teardownCalls===0);
+
+  // 7 — 回归测试：模拟 main 的 viewCleanups 模式。onActivate 每次 mount push cleanup，
+  // init 不再清零数组（修复前 init 会把当轮 onActivate 推入的 cleanup 全部抹掉 → teardown
+  // 跳过所有清理 → 反复挂载累积监听/DOM）。预期：每次 unmount 恰好 fire 一次 cleanup。
+  // 周期：mount m → mount a (m 卸载) → mount m (a 卸载) → mount a (m 卸载) → 应 fire 3 次。
+  await mount('m');
+  assert('7 m.span 在 DOM', !!document.getElementById('m-span'));
+  assert('7 m.init 调 1 次', viewM.initCalls===1, `got ${viewM.initCalls}`);
+  assert('7 m.onActivate 调 1 次', viewM.onActivateCalls===1, `got ${viewM.onActivateCalls}`);
+  assert('7 m 初始 cleanupCount=0（未发生 unmount）', viewM.cleanupCount===0, `got ${viewM.cleanupCount}`);
+
+  await mount('a'); // 切走 m → 应 fire 1 次 cleanup
+  assert('7 mount a 后 m.span 已卸', !document.getElementById('m-span'));
+  assert('7 m.onActivate 仍为 1（a 切换未触发 m 的 onActivate）', viewM.onActivateCalls===1, `got ${viewM.onActivateCalls}`);
+  assert('7 m.teardown 调 1 次', viewM.teardownCalls===1, `got ${viewM.teardownCalls}`);
+  assert('7 m.cleanupCount=1（首轮 unmount 触发 onActivate 注册的 cleanup）', viewM.cleanupCount===1, `got ${viewM.cleanupCount}`);
+
+  await mount('m'); // 切回 m → 再 onActivate push 一次 cleanup
+  assert('7 m.span 重新挂载', !!document.getElementById('m-span'));
+  assert('7 m.onActivate 调 2 次(每次 mount)', viewM.onActivateCalls===2, `got ${viewM.onActivateCalls}`);
+  assert('7 m.teardown 调 1 次（m 当前在挂）', viewM.teardownCalls===1);
+  assert('7 m.cleanupCount 仍 1（mount 不应 fire cleanup）', viewM.cleanupCount===1, `got ${viewM.cleanupCount}`);
+
+  await mount('a'); // 再切走 m → 应再 fire 1 次 cleanup（回归点：清零的 init 会让 cleanup 静默漏掉）
+  assert('7 m.span 已卸', !document.getElementById('m-span'));
+  assert('7 m.teardown 调 2 次', viewM.teardownCalls===2, `got ${viewM.teardownCalls}`);
+  assert('7 m.cleanupCount=2（每轮 unmount 各 fire 1 次，无遗漏）', viewM.cleanupCount===2, `got ${viewM.cleanupCount}`);
+
+  await mount('c'); // 再切走 a → m 不应被影响
+  assert('7 m.cleanupCount 仍 2（未 unmount m）', viewM.cleanupCount===2, `got ${viewM.cleanupCount}`);
+
+  await mount('m'); // 切回 m → 第三轮 onActivate
+  assert('7 m.onActivate 调 3 次(每次 mount)', viewM.onActivateCalls===3, `got ${viewM.onActivateCalls}`);
+
+  await mount('c'); // 再切走 m → 第三轮 cleanup
+  assert('7 m.cleanupCount=3（三轮 unmount 各 fire 1 次）', viewM.cleanupCount===3, `got ${viewM.cleanupCount}`);
 })();
 </script>
 </body></html>
