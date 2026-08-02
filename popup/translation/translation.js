@@ -3,6 +3,9 @@
  * 管理翻译和OCR相关的设置
  */
 
+// 视图根元素（init 时绑定；事件处理函数中查询使用）
+let viewRoot = null;
+
 // DOM 元素
 let selectionModeRadios;  // 模式单选按钮
 let promptSelector;        // 提示词选择器
@@ -13,6 +16,7 @@ let flowRateControl, flowRateSlider, flowRateValue, flowRateWarning;
 let ocrShortcutInput, clearOcrShortcutBtn;
 let favoritesShortcutInput, clearFavoritesShortcutBtn;
 let todayCountEl, totalCountEl;
+let openFavoritesBtn;
 
 // 快捷键录制状态
 let isRecordingOcrShortcut = false;
@@ -63,27 +67,30 @@ const FLOW_RATE_PRESETS = {
 };
 
 // 初始化
-document.addEventListener('DOMContentLoaded', () => {
-  // 获取 DOM 元素
-  selectionModeRadios = document.querySelectorAll('input[name="selectionMode"]');
-  promptSelector = document.getElementById('promptSelector');
-  promptSelectorContainer = document.getElementById('promptSelectorContainer');
-  selectionStreamToggle = document.getElementById('selectionStreamToggle');
-  selectionThinkingToggle = document.getElementById('selectionThinkingToggle');
-  ocrPromptInput = document.getElementById('ocrPromptInput');
-  ocrStreamToggle = document.getElementById('ocrStreamToggle');
-  ocrThinkingToggle = document.getElementById('ocrThinkingToggle');
-  ocrSilentModeToggle = document.getElementById('ocrSilentModeToggle');
-  flowRateControl = document.getElementById('flowRateControl');
-  flowRateSlider = document.getElementById('flowRateSlider');
-  flowRateValue = document.getElementById('flowRateValue');
-  flowRateWarning = document.getElementById('flowRateWarning');
-  ocrShortcutInput = document.getElementById('ocrShortcutInput');
-  clearOcrShortcutBtn = document.getElementById('clearOcrShortcutBtn');
-  favoritesShortcutInput = document.getElementById('favoritesShortcutInput');
-  clearFavoritesShortcutBtn = document.getElementById('clearFavoritesShortcutBtn');
-  todayCountEl = document.getElementById('todayCount');
-  totalCountEl = document.getElementById('totalCount');
+export function init(rootEl) {
+  viewRoot = rootEl;
+
+  // 获取 DOM 元素（全部 scope 到 rootEl）
+  selectionModeRadios = rootEl.querySelectorAll('input[name="selectionMode"]');
+  promptSelector = rootEl.querySelector('#promptSelector');
+  promptSelectorContainer = rootEl.querySelector('#promptSelectorContainer');
+  selectionStreamToggle = rootEl.querySelector('#selectionStreamToggle');
+  selectionThinkingToggle = rootEl.querySelector('#selectionThinkingToggle');
+  ocrPromptInput = rootEl.querySelector('#ocrPromptInput');
+  ocrStreamToggle = rootEl.querySelector('#ocrStreamToggle');
+  ocrThinkingToggle = rootEl.querySelector('#ocrThinkingToggle');
+  ocrSilentModeToggle = rootEl.querySelector('#ocrSilentModeToggle');
+  flowRateControl = rootEl.querySelector('#flowRateControl');
+  flowRateSlider = rootEl.querySelector('#flowRateSlider');
+  flowRateValue = rootEl.querySelector('#flowRateValue');
+  flowRateWarning = rootEl.querySelector('#flowRateWarning');
+  ocrShortcutInput = rootEl.querySelector('#ocrShortcutInput');
+  clearOcrShortcutBtn = rootEl.querySelector('#clearOcrShortcutBtn');
+  favoritesShortcutInput = rootEl.querySelector('#favoritesShortcutInput');
+  clearFavoritesShortcutBtn = rootEl.querySelector('#clearFavoritesShortcutBtn');
+  todayCountEl = rootEl.querySelector('#todayCount');
+  totalCountEl = rootEl.querySelector('#totalCount');
+  openFavoritesBtn = rootEl.querySelector('#openFavoritesBtn');
 
   // 加载设置
   loadSettings();
@@ -92,7 +99,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 绑定事件
   bindEvents();
-});
+}
+
+// teardown：清理快捷键录制 document 级监听（视图切走时调用）
+// finishOcrShortcutRecording / finishFavoritesShortcutRecording 内部的
+// removeEventListener 是无条件执行的（不依赖 e.key），故合成 keyup Event 可触发清理分支。
+export function teardown(rootEl) {
+  if (isRecordingOcrShortcut) finishOcrShortcutRecording(new Event('keyup'));
+  if (isRecordingFavoritesShortcut) finishFavoritesShortcutRecording(new Event('keyup'));
+}
 
 // 绑定事件
 function bindEvents() {
@@ -137,7 +152,6 @@ function bindEvents() {
   if (clearFavoritesShortcutBtn) clearFavoritesShortcutBtn.addEventListener('click', clearFavoritesShortcut);
 
   // 打开收藏管理
-  const openFavoritesBtn = document.getElementById('openFavoritesBtn');
   if (openFavoritesBtn) {
     openFavoritesBtn.addEventListener('click', () => {
       chrome.tabs.create({
@@ -145,19 +159,11 @@ function bindEvents() {
       });
     });
   }
-
-  // 设置按钮
-  const settingsLink = document.querySelector('.settings-link');
-  if (settingsLink) {
-    settingsLink.addEventListener('click', () => {
-      chrome.runtime.openOptionsPage();
-    });
-  }
 }
 
 // 更新提示词选择器可见性
 function updatePromptSelectorVisibility() {
-  const selectedMode = document.querySelector('input[name="selectionMode"]:checked')?.value;
+  const selectedMode = viewRoot?.querySelector('input[name="selectionMode"]:checked')?.value;
   if (promptSelectorContainer) {
     promptSelectorContainer.style.display = selectedMode === 'auto' ? 'block' : 'none';
   }
@@ -180,7 +186,7 @@ function loadSettings() {
     };
 
     // 应用划词翻译设置
-    const modeRadio = document.querySelector(`input[name="selectionMode"][value="${settings.selectionMode}"]`);
+    const modeRadio = viewRoot?.querySelector(`input[name="selectionMode"][value="${settings.selectionMode}"]`);
     if (modeRadio) modeRadio.checked = true;
     updatePromptSelectorVisibility();
 
@@ -209,7 +215,7 @@ function saveSelectionSettings() {
     const settings = result['translation.settings'] || {};
 
     // 模式
-    const selectedMode = document.querySelector('input[name="selectionMode"]:checked')?.value || 'panel';
+    const selectedMode = viewRoot?.querySelector('input[name="selectionMode"]:checked')?.value || 'panel';
     settings.selectionMode = selectedMode;
 
     // 提示词
@@ -518,4 +524,9 @@ function notifySettingsChanged() {
       console.warn('[Translation] 通知设置更新失败:', chrome.runtime.lastError);
     }
   });
+}
+
+// 直开（非嵌入 popup shell）时自动 init
+if (document.querySelector('[data-view-content]')) {
+  document.addEventListener('DOMContentLoaded', () => init(document.body));
 }
