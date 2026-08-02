@@ -1,52 +1,13 @@
-/* 统一盒模型：width/height 均包含 padding 与 border，
-   避免 content-box 下 width:100%+padding 溢出 popup 边界 */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-:root {
-  --primary-color: #4361ee;
-  --primary-hover: #3a56d4;
-  --text-color: #2d3748;
-  --light-gray: #f7fafc;
-  --border-color: #e2e8f0;
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --transition: all 0.25s ease;
-}
+/*
+ * 主页专属样式。
+ * 变量、盒模型重置、html/body 基础与整套 .header / .header-nav-* 规则
+ * 已上提至 popup/components/theme.css（以本页为基准），此处不再重复声明。
+ * 加载顺序须为 theme.css 在前、main.css 在后。
+ */
 
 body {
-  box-sizing: border-box;
-  width: 420px;
+  /* theme.css 中 body 为 padding:0，主页需要内边距 */
   padding: 16px;
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    sans-serif;
-  background-color: var(--light-gray);
-  color: var(--text-color);
-  line-height: 1.5;
-  position: relative;
-}
-
-/* 标题容器样式 */
-.header {
-  text-align: center;
-  margin-bottom: 1px;
-  position: relative;
-  padding: 0px 0 2px;
-  cursor: default;
-}
-
-.header h1 {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--primary-color);
-  margin: 0;
-  padding: 4px 0;
-  transition: var(--transition);
 }
 
 /* 打开侧边栏按钮 */
@@ -71,76 +32,10 @@ body {
   background: rgba(67, 97, 238, 0.1);
 }
 
-.header:hover h1 {
-  transform: scale(1.03);
-}
-
-.header::after {
-  content: "";
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 60px;
-  height: 2px;
-  background: linear-gradient(90deg, var(--primary-color), #4cc9f0);
-}
-
-/* 横向导航菜单 */
-.header-nav-menu {
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%) translateY(5px);
-  display: flex;
-  gap: 1px;
-  background: white;
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-  border: 1px solid var(--border-color);
-  opacity: 0;
-  visibility: hidden;
-  transition: var(--transition);
-  z-index: 999;
-}
-
-.header:hover .header-nav-menu {
-  opacity: 1;
-  visibility: visible;
-  transform: translateX(-50%) translateY(0);
-}
-
-.header-nav-item {
-  display: block;
-  padding: 8px 18px;
-  color: var(--text-color);
-  text-decoration: none;
-  font-size: 13px;
-  font-weight: 500;
-  transition: var(--transition);
-  white-space: nowrap;
-}
-
-.header-nav-item:hover {
-  background-color: #f0f4ff;
-  color: var(--primary-color);
-}
-
-.header-nav-item.active {
-  background-color: var(--primary-color);
-  color: white;
-  font-weight: 600;
-  border-radius: calc(var(--radius-md) - 1px);
-}
-
-.header-nav-item.settings-link {
-  cursor: pointer;
-}
-
 /* 平台选择区 */
 .platform-selector {
   margin-bottom: 20px;
-  background: white;
+  background: var(--bg-card);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
 
@@ -215,7 +110,6 @@ body {
   align-items: flex-start;
   gap: 5px;
   width: 100%;
-  box-sizing: border-box;
 }
 
 .platform-icon-option {
@@ -229,7 +123,6 @@ body {
   text-align: center;
   position: relative;
   min-width: 0;
-  box-sizing: border-box;
 }
 
 .platform-icon-option:hover .icon-wrapper {
@@ -248,7 +141,7 @@ body {
   width: 40px;
   height: 40px;
   margin-bottom: 4px;
-  background-color: #f0f4ff;
+  background-color: var(--primary-light);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -283,7 +176,7 @@ body {
   border: 1px solid var(--border-color);
   font-size: 13px;
   transition: var(--transition);
-  background-color: white;
+  background-color: var(--bg-card);
   appearance: none;
   background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
   background-repeat: no-repeat;
@@ -310,7 +203,7 @@ body {
   padding: 9px 11px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  background-color: white;
+  background-color: var(--bg-card);
   cursor: pointer;
   font-size: 13px;
 }
@@ -323,7 +216,7 @@ body {
   /* 限制下拉框高度，超出部分内部滚动，避免撑高弹出页导致出现页面滚动条 */
   max-height: 300px;
   overflow-y: auto;
-  background: white;
+  background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);
@@ -352,12 +245,12 @@ body {
 }
 
 .select-group-header:hover {
-  background-color: #f0f4ff;
+  background-color: var(--primary-light);
 }
 
 .select-options {
   display: none;
-  background: white;
+  background: var(--bg-card);
   opacity: 0;
   transition: opacity 0.1s ease;
 }
@@ -379,13 +272,12 @@ body {
 }
 
 .select-option:hover {
-  background-color: #f0f4ff;
+  background-color: var(--primary-light);
   color: var(--primary-color);
 }
 
 /* 输入框样式 */
 .message-input {
-  box-sizing: border-box;
   width: 100%;
   padding: 12px;
   margin-bottom: 14px;
@@ -438,7 +330,7 @@ body {
 
 /* 补充选择组样式 */
 .select-group:hover {
-  background-color: #f0f4ff;
+  background-color: var(--primary-light);
 }
 
 .select-group:hover .select-options {

@@ -1,13 +1,25 @@
 /**
  * 统一主题变量 - 所有 Popup 页面共享
  * 保持色彩、字体、间距一致性
+ *
+ * 基准页面为 popup/main/main.html：变量取值与 header 规则以 main 的实际表现为准，
+ * 其余页面向其对齐。新增共享规则前请确认 main 也需要，避免再次出现两份基础样式。
  */
+
+/* 统一盒模型：width/height 均包含 padding 与 border，
+   避免 content-box 下 width:100%+padding 溢出 popup 边界 */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
 
 :root {
   /* 主色调 - 蓝色系 */
   --primary-color: #4361ee;
   --primary-hover: #3a56d4;
-  --primary-light: #e8edfb;
+  /* 取 main 的浅蓝 #f0f4ff（原为 #e8edfb），统一 hover / focus 底色 */
+  --primary-light: #f0f4ff;
 
   /* 文字颜色 */
   --text-color: #2d3748;
@@ -44,7 +56,11 @@ html, body {
   color: var(--text-color);
   background-color: var(--bg-page);
   line-height: 1.5;
-  box-sizing: border-box;
+}
+
+/* 保留 body 定位上下文（沿用 main 原有声明，供动态插入的浮层参照） */
+body {
+  position: relative;
 }
 
 /* 通用容器 */
@@ -156,6 +172,7 @@ html, body {
   padding: 4px 0;
   transition: var(--transition);
 }
+
 
 .header::after {
   content: "";
