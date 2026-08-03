@@ -27,10 +27,11 @@ export function generatePlatformOptionsHTML() {
 }
 
 /**
- * 初始化平台选项（在 DOM 加载后调用）
+ * 初始化平台选项（在视图 init 时调用，scope 到 rootEl）。
+ * @param {Element} rootEl
  */
-export function initializePlatformOptions() {
-  const container = document.getElementById('platform-options-row');
+export function initializePlatformOptions(rootEl) {
+  const container = rootEl.querySelector('#platform-options-row');
   if (container) {
     const platformCount = Object.keys(PLATFORM_CONFIG).length;
     container.innerHTML = generatePlatformOptionsHTML();

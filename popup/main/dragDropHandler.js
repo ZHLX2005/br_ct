@@ -1,8 +1,10 @@
 /**
  * 设置输入框的拖放事件处理
+ * @param {Element} rootEl 视图根元素
  */
-export function setupDragDropEvents() {
-  const messageInput = document.getElementById("message-input");
+export function setupDragDropEvents(rootEl) {
+  viewRoot = rootEl;
+  const messageInput = rootEl.querySelector("#message-input");
 
   if (!messageInput) {
     console.error("未找到消息输入框");
@@ -30,6 +32,9 @@ export function setupDragDropEvents() {
   messageInput.addEventListener("paste", handlePaste);
 }
 
+// 视图根（setupDragDropEvents 时绑定；highlight/unhighlight/handleDrop 中查询使用）
+let viewRoot = null;
+
 /**
  * 阻止默认拖放行为
  */
@@ -42,23 +47,23 @@ function preventDefaults(e) {
  * 添加高亮效果
  */
 function highlight() {
-  const messageInput = document.getElementById("message-input");
-  messageInput.classList.add("dragover");
+  const messageInput = viewRoot && viewRoot.querySelector("#message-input");
+  if (messageInput) messageInput.classList.add("dragover");
 }
 
 /**
  * 移除高亮效果
  */
 function unhighlight() {
-  const messageInput = document.getElementById("message-input");
-  messageInput.classList.remove("dragover", "drop-error");
+  const messageInput = viewRoot && viewRoot.querySelector("#message-input");
+  if (messageInput) messageInput.classList.remove("dragover", "drop-error");
 }
 
 /**
  * 处理拖放事件
  */
 async function handleDrop(e) {
-  const messageInput = document.getElementById("message-input");
+  const messageInput = viewRoot && viewRoot.querySelector("#message-input");
   const dt = e.dataTransfer;
 
   // 获取所有拖放的项目

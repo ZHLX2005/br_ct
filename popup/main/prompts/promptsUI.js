@@ -180,12 +180,19 @@ function populateOptimizer(promptOptimizerSelect, templates) {
     }
   });
 
-  // 点击外部关闭下拉框
-  document.addEventListener('click', (e) => {
+  // 点击外部关闭下拉框（用具名引用以便 teardown removeEventListener）
+  const onOutsideClick = (e) => {
     if (!promptOptimizerSelect.contains(e.target)) {
       promptOptimizerSelect.classList.remove('active');
     }
-  });
+  };
+  document.addEventListener('click', onOutsideClick);
+
+  // 返回 cleanup：移除本函数注册的 document 级监听。
+  // 由 mainUtils.initializePopup 收集，main.js teardown 调用。
+  return () => {
+    document.removeEventListener('click', onOutsideClick);
+  };
 }
 
 /**
@@ -353,11 +360,23 @@ function initAliasShortcut(textarea, templates, promptOptimizerSelect) {
     }
   });
 
-  document.addEventListener('click', (e) => {
+  // 用具名引用以便 teardown removeEventListener
+  const onOutsideClick = (e) => {
     if (popup && !popup.contains(e.target) && e.target !== textarea) {
       hidePopup();
     }
-  });
+  };
+  document.addEventListener('click', onOutsideClick);
+
+  // 返回 cleanup：移除 document 级监听 + 移除挂到 document.body 的 alias popup。
+  // 由 mainUtils.initializePopup 收集，main.js teardown 调用，避免多次挂载累积 popup 与监听。
+  return () => {
+    document.removeEventListener('click', onOutsideClick);
+    if (popup && popup.parentNode) {
+      popup.parentNode.removeChild(popup);
+    }
+    popup = null;
+  };
 }
 
 export { populateOptimizer, initAliasShortcut };

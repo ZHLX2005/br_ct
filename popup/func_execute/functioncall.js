@@ -17,9 +17,9 @@ const scriptFiles = [
   { name: "B站播放页分P链接提取（pod+合集）", file: "平台专属/bili/extract_bilibili_pod.js" },
 ];
 
-document.addEventListener("DOMContentLoaded", () => {
-  const scriptList = document.getElementById("script-list");
-  const statsCount = document.getElementById("stats-count");
+export function init(rootEl) {
+  const scriptList = rootEl.querySelector("#script-list");
+  const statsCount = rootEl.querySelector("#stats-count");
 
   // 更新统计数量
   if (statsCount) {
@@ -80,12 +80,13 @@ document.addEventListener("DOMContentLoaded", () => {
       );
     }
   });
+}
 
-  // 设置链接点击事件
-  const settingsLink = document.querySelector(".settings-link");
-  if (settingsLink) {
-    settingsLink.addEventListener("click", () => {
-      chrome.runtime.openOptionsPage();
-    });
-  }
-});
+export function teardown(rootEl) {
+  // 无 document 级监听/定时器，no-op
+}
+
+// 直开（非嵌入）时仍自动 init
+if (document.querySelector('[data-view-content]')) {
+  document.addEventListener("DOMContentLoaded", () => init(document.body));
+}

@@ -8,35 +8,23 @@
   <link rel="stylesheet" href="functioncall.css" />
 </head>
 <body>
-  <!-- 标题容器：包含标题 + 横向目录 -->
-  <div class="header">
-    <h1>函数调用库</h1>
-    <!-- 横向展开目录：默认隐藏，hover标题时显示 -->
-    <div class="header-nav-menu">
-      <a href="../main/main.html" class="header-nav-item">主页</a>
-      <a href="./functioncall.html" class="header-nav-item active">函数库</a>
-      <a href="../translation/translation.html" class="header-nav-item">划词翻译</a>
-      <span class="header-nav-item settings-link">设置</span>
-    </div>
-  </div>
-<!-- 主内容区域 -->
-  <div class="main-content">
-    <!-- 统计卡片 -->
-    <div class="stats-card">
-      <div class="stats-info">
-        <div class="stats-icon">⚡</div>
-        <span class="stats-text">可用脚本</span>
+  <div data-view-content>
+    <!-- 主内容区域 -->
+    <div class="main-content">
+      <!-- 统计卡片 -->
+      <div class="stats-card">
+        <div class="stats-info">
+          <div class="stats-icon">⚡</div>
+          <span class="stats-text">可用脚本</span>
+        </div>
+        <span class="stats-count" id="stats-count">0</span>
       </div>
-      <span class="stats-count" id="stats-count">0</span>
-    </div>
 
-    <!-- 脚本列表 -->
-    <div class="script-list" id="script-list"></div>
+      <!-- 脚本列表 -->
+      <div class="script-list" id="script-list"></div>
+    </div>
   </div>
 
-  <!-- 返回主页按钮 -->
-  <a href="/popup/main/main.html" class="back-button">返回主页</a>
-
-  <script src="functioncall.js"></script>
+  <script src="functioncall.js" type="module"></script>
 </body>
 </html>

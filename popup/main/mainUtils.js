@@ -43,7 +43,8 @@ let ocrController = null;
 function getOcrController() {
   if (!ocrController) {
     ocrController = createImageOcrController({
-      getPreviewContainer: () => document.getElementById("image-preview-area"),
+      // scope 到当前视图根（initializePopup 时绑定）；shell 接管后 rootEl 由 viewController 注入
+      getPreviewContainer: () => viewRoot && viewRoot.querySelector("#image-preview-area"),
       showTempMessage: (msg) => showTempMessage(msg),
       onChange: () => {},
     });
@@ -53,6 +54,14 @@ function getOcrController() {
 
 // DOM 元素缓存
 let elements = {};
+
+// 视图根元素（init 时绑定；事件处理函数与 OCR 回调中查询使用，参照 translation.js 模式）
+let viewRoot = null;
+
+// init 链中注册的 cleanup 函数集合（populateOptimizer / initAliasShortcut /
+// setupPlatformVisibilityMessageListener 等返回的 document 级监听与 popup 清理）。
+// 由 teardownView() 在视图卸载时统一调用，避免多次挂载累积监听与 DOM。
+let viewCleanups = [];
 
 // 输入持久化 saver（shared 原语；module-level 以便 startSending 调用 flush）
 let messageSaver = null;
@@ -65,33 +74,68 @@ window.__onImagePasted = ({ dataUrl, fileName }) => {
 };
 
 /**
- * 初始化弹窗，获取并缓存 DOM 元素
+ * 初始化弹窗，获取并缓存 DOM 元素 + 绑定一次性行为（按 rootEl 作用域）。
+ * 一次性 init 中可放心执行的工作：DOM 缓存、元素级事件绑定、输入持久化、平台可见性的
+ * storage 读取与样式应用。这些查询都在 rootEl 内，缓存的 viewRoot 之后被 onActivate
+ * 取代（后者每次 mount 都重新绑定）。
+ *
+ * ⚠️ 注意：document 级副作用（document.addEventListener / document.body.appendChild popup /
+ * chrome.runtime.onMessage.addListener）必须放在 registerDocumentSideEffects(rootEl)
+ * 中，由 main.js 的 onActivate 在每次 mount 时调用——首次 mount 也会调，在 init 之后。
+ *
+ * @param {Element} rootEl 视图根元素（viewController 注入的 .view.view-main 或直开 mainView.html 时的 document.body）
  */
-export async function initializePopup() {
+export async function initializePopup(rootEl) {
+  viewRoot = rootEl;
+  // 注：不再清零 viewCleanups —— onActivate 已在 init 之前把当轮的 cleanups 推入数组，
+  // teardownView 在末尾清零（mainUtils.js:275）。这里再清零会抹掉 onActivate 的注册，
+  // 导致 teardown 跳过所有 document 监听 / alias popup 的清理 → 反复挂载累积。
   elements = {
-    platformCheckboxes: document.querySelectorAll(
+    platformCheckboxes: rootEl.querySelectorAll(
       '.platform-icon-option input[type="checkbox"]'
     ),
-    messageInput: document.getElementById("message-input"),
-    sendButton: document.getElementById("send-button"),
-    closeTabsButton: document.getElementById("close-tabs-button"),
-    selectAllButton: document.getElementById("select-all"),
-    historySelect: document.getElementById("history-select"),
-    promptOptimizerSelect: document.getElementById("prompt-optimizer-select"),
-    openOptionsButton: document.getElementById("open-options"),
+    messageInput: rootEl.querySelector("#message-input"),
+    sendButton: rootEl.querySelector("#send-button"),
+    closeTabsButton: rootEl.querySelector("#close-tabs-button"),
+    selectAllButton: rootEl.querySelector("#select-all"),
+    historySelect: rootEl.querySelector("#history-select"),
+    promptOptimizerSelect: rootEl.querySelector("#prompt-optimizer-select"),
   };
 
   // 自动聚焦输入框
   focusInputAndSetCursor(elements.messageInput);
 
-  // 初始化 /alias 快捷输入
-  initAliasShortcut(elements.messageInput, PROMPT_TEMPLATES, elements.promptOptimizerSelect);
-
-  // 初始化优化器下拉框
-  populateOptimizer(elements.promptOptimizerSelect, PROMPT_TEMPLATES);
-
-  // 加载并应用平台可见性设置
+  // 加载并应用平台可见性设置（一次性的 storage 读取；onActivate 不需要重复做）。
   await loadPlatformVisibilitySettings();
+}
+
+/**
+ * 注册 main 视图的 document 级副作用：每次 mount 都调用（首次 mount 也调）。
+ * 与 init 的差别：副作用登记必须在视图「可见」后（attach 之后）才注册，以便用户在当前视图内
+ * 触发的事件能立即命中监听；同时要求每次 mount 都重新注册——避免上一轮 teardown 移除了监听、
+ * 当前轮缺位导致功能静默失效（这就是 fix round 1 暴露的缺陷）。
+ *
+ * init 链中注册的 cleanup 推入 viewCleanups；teardownView 调用时按 LIFO 顺序清理。
+ *
+ * @param {Element} rootEl 视图根元素
+ */
+export function registerDocumentSideEffects(rootEl) {
+  viewRoot = rootEl;
+
+  // 初始化 /alias 快捷输入（返回 cleanup：移除 document 监听 + 移除 alias popup）
+  const aliasCleanup = initAliasShortcut(elements.messageInput, PROMPT_TEMPLATES, elements.promptOptimizerSelect);
+  if (typeof aliasCleanup === "function") viewCleanups.push(aliasCleanup);
+
+  // 初始化优化器下拉框（返回 cleanup：移除 document 监听）
+  const optimizerCleanup = populateOptimizer(elements.promptOptimizerSelect, PROMPT_TEMPLATES);
+  if (typeof optimizerCleanup === "function") viewCleanups.push(optimizerCleanup);
+
+  // 监听来自 options 页面的平台可见性更新消息（返回 cleanup：移除 onMessage 监听）
+  const visibilityCleanup = setupPlatformVisibilityMessageListener((settings) => {
+    showTempMessage('平台显示设置已更新');
+    updateSelectAllButton();
+  });
+  if (typeof visibilityCleanup === "function") viewCleanups.push(visibilityCleanup);
 }
 
 /**
@@ -151,15 +195,13 @@ function restorePlatformStates(platformStates) {
 }
 
 /**
- * 设置所有事件监听器
+ * 设置所有事件监听器（rootEl 元素级，每次 mount 由 setupEventListeners 调用前需 elements 已注入，
+ * 并要求 document 级副作用已通过 registerDocumentSideEffects 登记）。
+ *
+ * 注意：platformVisibility 的 onMessage 监听已迁出至 registerDocumentSideEffects——
+ * 它是 document 级（chrome.runtime），不依赖 rootEl 的 DOM 节点，每次 mount 都要重新注册。
  */
 export function setupEventListeners() {
-  // 监听来自options页面的平台可见性更新消息
-  setupPlatformVisibilityMessageListener((settings) => {
-    showTempMessage('平台显示设置已更新');
-    updateSelectAllButton();
-  });
-
   // 输入框持久化（shared 原语）
   messageSaver = createDebouncedSaver(async (text) => {
     await saveMessageContent(text);
@@ -212,26 +254,25 @@ export function setupEventListeners() {
   // 关闭AI标签页按钮
   elements.closeTabsButton.addEventListener("click", closeAllAITabs);
 
-  // 打开设置页面按钮
-  elements.openOptionsButton.addEventListener("click", () => {
-    chrome.runtime.openOptionsPage();
-  });
+  // 注：`#open-options`（设置）与 `#open-sidepanel-btn`（侧边栏）属于 shell nav（.header 内），
+  // 不在 mainView 中，改由 shell 绑定（见 Task 5）。
+}
 
-  // 打开侧边栏按钮
-  elements.openSidepanelButton = document.getElementById("open-sidepanel-btn");
-  if (elements.openSidepanelButton) {
-    elements.openSidepanelButton.addEventListener("click", async () => {
-      try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tab) {
-          await chrome.sidePanel.open({ tabId: tab.id });
-          window.close();
-        }
-      } catch (error) {
-        console.error("打开侧边栏失败:", error);
-      }
-    });
+/**
+ * 视图拆解：调用 init 链中各模块注册的 cleanup，移除 document 级监听与 alias popup，
+ * 释放对旧 rootEl 的引用。由 main.js teardown 调用。
+ * view 内的元素监听随 DOM detach 自动失效，无需在此处理。
+ */
+export function teardownView() {
+  for (const cleanup of viewCleanups) {
+    try {
+      cleanup();
+    } catch (e) {
+      console.error("main teardown cleanup 失败:", e);
+    }
   }
+  viewCleanups = [];
+  viewRoot = null;
 }
 
 /**

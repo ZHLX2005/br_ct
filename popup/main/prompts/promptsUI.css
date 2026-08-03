@@ -10,7 +10,7 @@
   padding: 9px 11px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  background-color: white;
+  background-color: var(--bg-card);
   cursor: pointer;
   font-size: 13px;
 }
@@ -61,7 +61,7 @@
 }
 
 .select-option:hover {
-  background-color: #f0f4ff;
+  background-color: var(--primary-light);
   color: var(--primary-color);
 }
 
@@ -70,7 +70,7 @@
   top: 100%;
   left: 0;
   right: 0;
-  background: white;
+  background: var(--bg-card);
   box-shadow: var(--shadow-md);
   z-index: 1000;
   border-radius: var(--radius-md);
@@ -88,7 +88,7 @@
   top: 100%;
   left: 0;
   right: 0;
-  background: white;
+  background: var(--bg-card);
   box-shadow: var(--shadow-md);
   z-index: 1000;
   border-radius: var(--radius-md);
