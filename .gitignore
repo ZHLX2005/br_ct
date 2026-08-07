@@ -2,7 +2,7 @@
 crxjs-demo
 sample
 docs/private
-
+.tool
 # Native host executable
 native_host/*.exe
 

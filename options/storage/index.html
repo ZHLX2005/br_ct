@@ -17,6 +17,53 @@
         </div>
       </header>
 
+      <!-- 云备份 -->
+      <section class="section section--compact">
+        <h2 class="section-title">云备份</h2>
+
+        <!-- 未登录视图 -->
+        <div id="cloud-login-view">
+          <div class="cloud-login-form">
+            <input type="email" id="cloud-email" class="form-input" placeholder="邮箱" autocomplete="email" />
+            <input type="password" id="cloud-password" class="form-input" placeholder="密码" autocomplete="current-password" />
+            <button class="btn btn-primary" id="cloud-login-btn">登录</button>
+          </div>
+          <p class="cloud-hint">
+            登录后可将整个浏览器存储数据作为单个 KV 备份到云端，并在任意设备上恢复。
+          </p>
+        </div>
+
+        <!-- 已登录视图 -->
+        <div id="cloud-logged-view" hidden>
+          <div class="cloud-user-row">
+            <div class="cloud-user-info">
+              <span class="cloud-user-label">已登录</span>
+              <span id="cloud-user-email" class="cloud-user-email"></span>
+            </div>
+            <button class="btn btn-secondary" id="cloud-logout-btn">退出登录</button>
+          </div>
+
+          <div class="cloud-backup-row">
+            <input type="text" id="cloud-backup-name" class="form-input" placeholder="备份名称（尾缀）" />
+            <button class="btn btn-primary" id="cloud-push-btn">备份到云端</button>
+          </div>
+          <p class="cloud-hint">名称留空时自动生成时间戳；同名再次备份会覆盖该备份。</p>
+
+          <div class="cloud-list-row">
+            <select id="cloud-backup-list" class="setting-select">
+              <option value="">加载中...</option>
+            </select>
+            <button class="btn btn-secondary" id="cloud-refresh-btn">刷新</button>
+            <button class="btn btn-danger" id="cloud-pull-btn">从云端恢复</button>
+          </div>
+          <p class="cloud-hint">从下拉框选择一个云端备份后恢复，恢复会覆盖本地数据。</p>
+
+          <div class="cloud-last-backup" id="cloud-last-backup-time">从未备份</div>
+        </div>
+
+        <div id="cloud-status-message" class="status-message"></div>
+      </section>
+
       <!-- 备份状态卡片 -->
       <section class="section section--compact">
         <div class="backup-status-card">

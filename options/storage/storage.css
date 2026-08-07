@@ -356,3 +356,107 @@ input.setting-select {
   font-size: 11px;
   color: var(--muted);
 }
+
+/* ============================================================
+ * 云备份
+ * ============================================================ */
+
+.cloud-login-form {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.cloud-login-form .form-input {
+  flex: 1;
+  min-width: 180px;
+}
+
+.cloud-hint {
+  margin: 0;
+  font-size: var(--font-small);
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.cloud-user-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0 12px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 14px;
+}
+
+.cloud-user-info {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.cloud-user-label {
+  flex-shrink: 0;
+  font-size: var(--font-small);
+  font-weight: 600;
+  color: var(--success-deep);
+  padding: 2px 10px;
+  border: 1px solid rgba(106, 135, 88, 0.35);
+  border-radius: 999px;
+  background: rgba(106, 135, 88, 0.10);
+}
+
+.cloud-user-email {
+  font-size: var(--font-h3);
+  font-weight: 500;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cloud-backup-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.cloud-backup-row .form-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.cloud-list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 14px 0 6px;
+}
+
+.cloud-list-row .setting-select {
+  flex: 1;
+  min-width: 200px;
+}
+
+.cloud-last-backup {
+  margin-top: 12px;
+  font-size: var(--font-small);
+  color: var(--muted);
+}
+
+.cloud-last-backup.never {
+  color: var(--danger-deep);
+  font-style: italic;
+}
+
+/* 危险操作二次确认的待确认态 */
+.btn-confirm-pending {
+  background: rgba(184, 138, 74, 0.15) !important;
+  border-color: #8a6428 !important;
+  color: #8a6428 !important;
+}

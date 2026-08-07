@@ -8,6 +8,7 @@ import {
 import { setupFuncCommandListener, setupMessageListener as setupFuncExecutorListener } from './backgroudtask/func_executor.js';
 import { init as initVideoPlaneServer } from './backgroudtask/video_plane_server.js';
 import { initBackupService, setupBackupMessageListener } from './backgroudtask/backupService.js';
+import { setupCloudBackupModule } from './backgroudtask/cloud_backup/index.js';
 import { setupTranslationModule } from './backgroudtask/translation/index.js';
 import { setupHtmlTextReaderListener } from './backgroudtask/html_text_reader/index.js';
 import { setupSidebarCommandListener } from './backgroudtask/sidebar_toggle.js';
@@ -34,6 +35,9 @@ initBackupService().catch(error => {
   console.error('[Background] 初始化备份服务失败:', error);
 });
 setupBackupMessageListener();
+
+// 初始化云备份模块（登录 + 云 KV 备份/恢复）
+setupCloudBackupModule();
 
 // 初始化翻译/OCR模块
 setupTranslationModule();

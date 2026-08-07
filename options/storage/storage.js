@@ -569,6 +569,269 @@ function restoreFromBackup(data) {
   });
 }
 
+// ==================== 云备份功能 ====================
+
+let cloudLoginView, cloudLoggedView;
+let cloudEmailInput, cloudPasswordInput;
+let cloudUserEmail, cloudLastBackupTime;
+let cloudStatusMessage;
+let cloudBackupNameInput, cloudBackupList;
+
+/**
+ * 初始化云备份功能（登录 + 云端 KV 备份/恢复）
+ */
+function initializeCloudBackup() {
+  cloudLoginView = document.getElementById('cloud-login-view');
+  cloudLoggedView = document.getElementById('cloud-logged-view');
+  cloudUserEmail = document.getElementById('cloud-user-email');
+  cloudLastBackupTime = document.getElementById('cloud-last-backup-time');
+  cloudStatusMessage = document.getElementById('cloud-status-message');
+  cloudEmailInput = document.getElementById('cloud-email');
+  cloudPasswordInput = document.getElementById('cloud-password');
+  cloudBackupNameInput = document.getElementById('cloud-backup-name');
+  cloudBackupList = document.getElementById('cloud-backup-list');
+
+  // 登录（回车触发）
+  document.getElementById('cloud-login-btn').addEventListener('click', handleCloudLogin);
+  cloudPasswordInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') handleCloudLogin();
+  });
+
+  // 退出登录
+  document.getElementById('cloud-logout-btn').addEventListener('click', handleCloudLogout);
+
+  // 云端备份：录入名称回车 / 按钮 / 刷新列表 / 恢复
+  cloudBackupNameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') handleCloudPush();
+  });
+  document.getElementById('cloud-push-btn').addEventListener('click', handleCloudPush);
+  document.getElementById('cloud-refresh-btn').addEventListener('click', refreshCloudBackupList);
+  document.getElementById('cloud-pull-btn').addEventListener('click', handleCloudPull);
+
+  // 加载当前登录态
+  loadCloudState();
+}
+
+/**
+ * 加载云备份登录态
+ */
+function loadCloudState() {
+  chrome.runtime.sendMessage({ action: 'cloudBackup.getState' }, (response) => {
+    if (chrome.runtime.lastError) {
+      showCloudLoginView();
+      return;
+    }
+    if (response && response.loggedIn) {
+      showCloudLoggedView(response);
+    } else {
+      showCloudLoginView();
+    }
+  });
+}
+
+function showCloudLoginView() {
+  cloudLoginView.hidden = false;
+  cloudLoggedView.hidden = true;
+}
+
+function showCloudLoggedView(state) {
+  cloudUserEmail.textContent = state.email || '';
+  updateCloudLastBackupTime(state.lastBackupTime);
+  cloudLoginView.hidden = true;
+  cloudLoggedView.hidden = false;
+  refreshCloudBackupList();
+}
+
+/**
+ * 处理登录
+ */
+function handleCloudLogin() {
+  const email = cloudEmailInput.value.trim();
+  const password = cloudPasswordInput.value;
+
+  if (!email || !password) {
+    showCloudStatusMessage('请输入邮箱和密码', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('cloud-login-btn');
+  btn.disabled = true;
+  btn.textContent = '登录中...';
+
+  chrome.runtime.sendMessage({ action: 'cloudBackup.login', email, password }, (response) => {
+    btn.disabled = false;
+    btn.textContent = '登录';
+
+    if (response && response.success) {
+      showCloudStatusMessage('登录成功', 'success');
+      cloudPasswordInput.value = '';
+      loadCloudState();
+    } else {
+      showCloudStatusMessage(`登录失败: ${response?.error || '未知错误'}`, 'error');
+    }
+  });
+}
+
+/**
+ * 处理退出登录
+ */
+function handleCloudLogout() {
+  chrome.runtime.sendMessage({ action: 'cloudBackup.logout' }, (response) => {
+    if (response && response.success) {
+      showCloudStatusMessage('已退出登录', 'success');
+      showCloudLoginView();
+    }
+  });
+}
+
+/**
+ * 处理云端备份（push）：本地全量存储 → 云端 KV `bro_chat_backup:<尾缀>`
+ */
+function handleCloudPush() {
+  const btn = document.getElementById('cloud-push-btn');
+  let suffix = cloudBackupNameInput.value.trim();
+  if (!suffix) suffix = generateBackupSuffix();
+
+  btn.disabled = true;
+  btn.textContent = '备份中...';
+
+  chrome.runtime.sendMessage({ action: 'cloudBackup.push', suffix }, (response) => {
+    btn.disabled = false;
+    btn.textContent = '备份到云端';
+
+    if (response && response.success) {
+      showCloudStatusMessage(`云端备份成功（${response.suffix || suffix}）`, 'success');
+      updateCloudLastBackupTime(response.backupTime);
+      cloudBackupNameInput.value = '';
+      refreshCloudBackupList();
+    } else {
+      showCloudStatusMessage(`云端备份失败: ${response?.error || '未知错误'}`, 'error');
+    }
+  });
+}
+
+/**
+ * 刷新云端备份下拉列表（前缀扫描 + keysOnly）
+ */
+function refreshCloudBackupList() {
+  cloudBackupList.innerHTML = '<option value="">加载中...</option>';
+
+  chrome.runtime.sendMessage({ action: 'cloudBackup.list' }, (response) => {
+    if (chrome.runtime.lastError) {
+      cloudBackupList.innerHTML = '<option value="">加载失败</option>';
+      return;
+    }
+
+    if (response && response.success && response.backups && response.backups.length) {
+      cloudBackupList.innerHTML = '';
+      // 按尾缀倒序（时间戳命名时新的在前）
+      response.backups
+        .slice()
+        .sort((a, b) => b.suffix.localeCompare(a.suffix))
+        .forEach((backup) => {
+          const option = document.createElement('option');
+          option.value = backup.key;
+          option.textContent = backup.suffix;
+          cloudBackupList.appendChild(option);
+        });
+    } else {
+      cloudBackupList.innerHTML = '<option value="">暂无云端备份</option>';
+    }
+  });
+}
+
+/**
+ * 生成默认备份尾缀（时间戳）：20260807-165530
+ */
+function generateBackupSuffix() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+
+/**
+ * 处理云端恢复（pull）：覆盖本地存储（危险操作，需二次确认）
+ */
+function handleCloudPull() {
+  const btn = document.getElementById('cloud-pull-btn');
+  const key = cloudBackupList.value;
+  if (!key) {
+    showCloudStatusMessage('请先选择一个云端备份', 'error');
+    return;
+  }
+
+  // 二次确认
+  if (!cloudPullConfirm(btn)) return;
+
+  btn.disabled = true;
+  btn.textContent = '恢复中...';
+
+  chrome.runtime.sendMessage({ action: 'cloudBackup.pull', key }, (response) => {
+    btn.disabled = false;
+    btn.textContent = '从云端恢复';
+
+    if (response && response.success) {
+      showCloudStatusMessage(`已从云端恢复 ${response.keyCount} 个存储项`, 'success');
+      updateCloudLastBackupTime(response.backupTime);
+      // 刷新页面各视图
+      loadStorageDebug();
+      loadSettings();
+      loadLastBackupTime();
+      loadStorageSize();
+    } else {
+      showCloudStatusMessage(`恢复失败: ${response?.error || '未知错误'}`, 'error');
+    }
+  });
+}
+
+/**
+ * 危险操作二次确认（云恢复会覆盖本地数据）
+ * 首次点击进入待确认态，2.5s 内再次点击才执行。
+ */
+function cloudPullConfirm(btn) {
+  if (btn.dataset.confirmed === 'true') {
+    btn.dataset.confirmed = '';
+    return true;
+  }
+  btn.dataset.origText = btn.textContent;
+  btn.dataset.confirmed = 'true';
+  btn.textContent = '确认覆盖?';
+  btn.classList.add('btn-confirm-pending');
+  setTimeout(() => {
+    if (btn.dataset.confirmed === 'true') {
+      btn.dataset.confirmed = '';
+      btn.textContent = btn.dataset.origText;
+      btn.classList.remove('btn-confirm-pending');
+    }
+  }, 2500);
+  return false;
+}
+
+/**
+ * 更新云备份时间显示
+ */
+function updateCloudLastBackupTime(timestamp) {
+  if (!timestamp) {
+    cloudLastBackupTime.textContent = '从未备份';
+    cloudLastBackupTime.classList.add('never');
+    return;
+  }
+  cloudLastBackupTime.classList.remove('never');
+  cloudLastBackupTime.textContent = `上次云端备份：${formatDateTime(new Date(timestamp))}`;
+}
+
+/**
+ * 显示云备份状态消息
+ */
+function showCloudStatusMessage(message, type = 'success') {
+  cloudStatusMessage.textContent = message;
+  cloudStatusMessage.className = `status-message show ${type}`;
+
+  setTimeout(() => {
+    cloudStatusMessage.classList.remove('show');
+  }, 3000);
+}
+
 // ==================== 状态消息 ====================
 
 function showStatusMessage(message, type = 'success') {
@@ -591,4 +854,7 @@ function getJsonClass(value) {
 }
 
 // 页面加载时初始化
-document.addEventListener('DOMContentLoaded', initializeStorageDebug);
+document.addEventListener('DOMContentLoaded', () => {
+  initializeStorageDebug();
+  initializeCloudBackup();
+});
