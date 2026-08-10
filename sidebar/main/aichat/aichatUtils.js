@@ -454,15 +454,27 @@ export async function loadStoredData() {
       elements.promptOptimizerSelect.value = miscResult[STORAGE_KEYS.OPTIMIZER];
     }
 
-    // 恢复提示词选择
+    // 恢复提示词选择:从 shared 内存快照查找(与 popup 写入契约一致:alias 优先,缺时 label)
     if (miscResult[STORAGE_KEYS.LAST_PROMPT_TEMPLATE]) {
-      const template = PROMPT_TEMPLATES[miscResult[STORAGE_KEYS.LAST_PROMPT_TEMPLATE]];
-      if (template) {
+      const savedKey = miscResult[STORAGE_KEYS.LAST_PROMPT_TEMPLATE];
+      const all = getCurrentPrompts() || {};
+      let match = null;
+      outer: for (const group of Object.keys(all)) {
+        const items = all[group];
+        if (!Array.isArray(items)) continue;
+        for (const t of items) {
+          if ((t.alias && t.alias === savedKey) || t.label === savedKey) {
+            match = t;
+            break outer;
+          }
+        }
+      }
+      if (match && elements.promptOptimizerSelect) {
         const selectedValue =
           elements.promptOptimizerSelect.querySelector(".selected-value");
-        selectedValue.textContent = template.label;
-        selectedValue.dataset.value = miscResult[STORAGE_KEYS.LAST_PROMPT_TEMPLATE];
-        selectedValue.dataset.template = template.template;
+        selectedValue.textContent = match.label;
+        selectedValue.dataset.value = savedKey;
+        selectedValue.dataset.template = match.template || "";
       }
     }
   } catch (error) {

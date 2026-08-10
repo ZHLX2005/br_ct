@@ -60,7 +60,7 @@ let viewRoot = null;
 // init 链中注册的 cleanup 函数集合（populateOptimizer / initAliasShortcut /
 // setupPlatformVisibilityMessageListener 等返回的 document 级监听与 popup 清理）。
 // 由 teardownView() 在视图卸载时统一调用，避免多次挂载累积监听与 DOM。
-let viewCleanups = [];
+export let viewCleanups = [];
 
 // 输入持久化 saver（shared 原语；module-level 以便 startSending 调用 flush）
 let messageSaver = null;

@@ -5,7 +5,9 @@ import {
   loadStoredData,
   setupEventListeners,
   teardownView,
+  viewCleanups,
 } from "./mainUtils.js";
+import { installOptimizer } from "./prompts/promptsUI.js";
 import { setupDragDropEvents } from "./dragDropHandler.js";
 import { initializePlatformOptions } from "./platformRenderer.js";
 
@@ -40,7 +42,10 @@ export async function init(rootEl) {
     // 必须在 loadStoredData 之前:这一步会跑 populateOptimizer,生成下拉项
     // DOM、若先 loadStoredData 写 selected-value,会被 populateOptimizer 后续
     // 内部逻辑覆盖回"不使用优化"。
-    registerDocumentSideEffects(rootEl);
+    // 注意:仅 installOptimizer,不复用 registerDocumentSideEffects,
+    // 避免 onActivate 再次调用时 promptOptimizerSelect.click 监听器重复注册。
+    const optimizerCleanup = installOptimizer(elements.promptOptimizerSelect);
+    if (typeof optimizerCleanup === 'function') viewCleanups.push(optimizerCleanup);
 
     // 最后恢复 lastPromptTemplate — 与 promptsUI.js 共享的写入端契约
     // (alias 优先,缺时 label),主数据源是 shared 内存快照。
