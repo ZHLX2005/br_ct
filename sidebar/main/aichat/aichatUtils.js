@@ -13,21 +13,17 @@ import {
 } from "../../../shared/sendMessage.js";
 import { setupImageDragDrop } from "./dragDropImageHandler.js";
 import * as promptEditor from "./promptEditor.js";
+import { STORAGE_KEYS } from "../../../shared/core/storageKeys.js";
 import {
-  STORAGE_KEYS,
-  saveMessageContent,
-  savePlatformStates,
-  saveOptimizerSetting,
-  loadStoredData as loadData,
   addToHistory,
-} from "../../../popup/main/modules/storage.js";
+  loadHistory,
+  subscribeToHistory,
+} from "../../../shared/history/historyStore.js";
 import {
-  loadPlatformVisibilitySettings,
-  applyPlatformVisibilitySettings,
-  getVisiblePlatformCheckboxes,
-  areAllVisiblePlatformsChecked,
-  setupPlatformVisibilityMessageListener
-} from "../../../popup/main/modules/platformVisibility.js";
+  loadPlatformVisibility,
+  subscribeToPlatforms,
+  getCurrentPlatformVisibility,
+} from "../../../shared/platforms/platformsStore.js";
 import {
   copyToClipboard,
   showTempMessage,
@@ -41,6 +37,7 @@ import {
 } from "../../../popup/main/modules/uiHelpers.js";
 
 import { PLATFORM_CONFIG } from "../../../config/platformConfig.js";
+import { getCurrentPrompts } from "../../../shared/prompts/promptsStore.js";
 
 // 图片 OCR 控制器（依赖注入 shared/imageOcr.js）
 let ocrController = null;
@@ -57,6 +54,28 @@ function getOcrController() {
 
 // DOM 元素缓存
 let elements = {};
+
+// 平台 checkbox 在 #platform-panel 懒加载;用 getter 而非快照
+// 必须在模块级,这样消费者(平台外的辅助函数)也能调用
+function getPlatformCheckboxes() {
+  return document.querySelectorAll(
+    '#platform-panel .platform-icon-option input[type="checkbox"]'
+  );
+}
+
+// 视图清理钩子:每次 aichat 视图挂载时,所有 push 进数组的 unsub 在
+// 视图卸载时由 teardownView() 统一释放,防止跨重载监听累积(内存泄漏 + 多次触发)
+let viewCleanups = [];
+function pushCleanup(unsub) {
+  if (typeof unsub === 'function') viewCleanups.push(unsub);
+}
+export function teardownView() {
+  const fns = viewCleanups;
+  viewCleanups = [];
+  for (const fn of fns) {
+    try { fn(); } catch (err) { console.warn('aichat teardown cleanup threw:', err); }
+  }
+}
 
 // 提取页面文本相关变量
 let extractButton;
@@ -108,6 +127,114 @@ function getMessageSaver() {
     });
   }
   return messageSaver;
+}
+
+// ==================== Inline storage helpers (替代旧 popup/main/modules/storage.js) ====================
+//
+// 与 popup/main/mainUtils.js 同：仅写一个 key 的本地 chrome.storage.local 包装。
+// 历史与平台可见性已下沉到 shared/history 与 shared/platforms。
+
+function saveMessageContent(content) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [STORAGE_KEYS.LAST_MESSAGE]: content }, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+function savePlatformStates(platformCheckboxes) {
+  const checkedStates = {};
+  platformCheckboxes.forEach((cb) => {
+    checkedStates[cb.dataset.platform] = cb.checked;
+  });
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [STORAGE_KEYS.PLATFORM_STATES]: checkedStates }, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+function saveOptimizerSetting(value) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [STORAGE_KEYS.OPTIMIZER]: value }, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+// ==================== DOM-bound helpers (替代旧 popup/main/modules/platformVisibility.js) ====================
+//
+// shared/platforms 提供数据；DOM 应用必须留在调用方（sidebar 的平台 row 在 #platform-options-row）。
+
+function applyPlatformVisibilitySettings(settings) {
+  const platformOptions = document.querySelectorAll('.platform-icon-option');
+  platformOptions.forEach((option) => {
+    // HTML 在 renderPlatformOptions 里用 data-platform(与 popup 一致),
+    // 早期 data-platform-id 是 popup 旧版本的写法;两个都查,避免漏匹配。
+    const platformId = option.getAttribute('data-platform') || option.getAttribute('data-platform-id');
+    if (platformId) {
+      const isVisible = settings.hasOwnProperty(platformId) ? settings[platformId] : true;
+      if (!isVisible) {
+        option.style.display = 'none';
+        const checkbox = option.querySelector('input[type="checkbox"]');
+        if (checkbox) checkbox.checked = false;
+      } else {
+        option.style.display = '';
+      }
+    }
+  });
+  updateVisiblePlatformColumns();
+}
+
+function updateVisiblePlatformColumns() {
+  const container = document.getElementById('platform-options-row');
+  if (!container) return;
+  const visibleCount = Array.from(
+    container.querySelectorAll('.platform-icon-option')
+  ).filter((option) => option.style.display !== 'none').length;
+  container.style.setProperty('--platform-columns', Math.min(Math.max(visibleCount, 1), 7));
+}
+
+function getVisiblePlatformCheckboxes(allCheckboxes) {
+  return Array.from(allCheckboxes).filter((checkbox) => {
+    const option = checkbox.closest('.platform-icon-option');
+    return option && option.style.display !== 'none';
+  });
+}
+
+function areAllVisiblePlatformsChecked(visibleCheckboxes) {
+  if (visibleCheckboxes.length === 0) return false;
+  return visibleCheckboxes.every((checkbox) => checkbox.checked);
+}
+
+// 跨页面平台可见性同步：原 onMessage 监听替换为 subscribeToPlatforms
+// options 页保存后 → 任何打开的 sidebar/popup 实时更新（Task 9 架构目标）。
+// 返回 unsub 并自动 push 进 viewCleanups,由 teardownView 统一释放
+function setupPlatformVisibilityMessageListener(callback) {
+  const unsub = subscribeToPlatforms((settings) => {
+    applyPlatformVisibilitySettings(settings);
+    if (callback) callback(settings);
+  });
+  pushCleanup(unsub);
+  return unsub;
+}
+
+async function loadPlatformVisibilitySettings() {
+  const visibilitySettings = await loadPlatformVisibility();
+  applyPlatformVisibilitySettings(visibilitySettings);
+  return visibilitySettings;
 }
 
 async function loadAichatSettings() {
@@ -193,15 +320,13 @@ let isSelectionMode = false;
  * 初始化弹窗，获取并缓存 DOM 元素
  */
 export async function initializePopup() {
+  console.log('[boot] aichat.initializePopup: start');
   // 主元素
   elements = {
     messageInput: document.getElementById("chat-input"),
     sendButton: document.getElementById("chat-btn-send"),
     closeTabsButton: document.getElementById("toolbar-close-ai"),
     selectAllButton: document.getElementById("panel-select-all"),
-    platformCheckboxes: document.querySelectorAll(
-      '.platform-icon-option input[type="checkbox"]'
-    ),
     promptOptimizerSelect: document.getElementById("prompt-optimizer-select"),
     workspaceTabAdd: document.getElementById("workspace-tab-add"),
     pagePills: document.getElementById("page-pills"),
@@ -269,6 +394,17 @@ export async function initializePopup() {
   // 加载划词快捷提问设置（与 aichat_settings 独立存储，契约不同）
   await loadSelectionAskSetting();
 
+  // 订阅 history 跨页变更:popup/options 发新消息后,sidebar 历史区即时刷新
+  const unsubHistory = subscribeToHistory((history) => {
+    _historyCache = history;
+    const sec = elements.historySection;
+    if (sec && sec.classList.contains('visible') && _historyCache.length) {
+      _historyRendered = 0;
+      renderHistorySection();
+    }
+  });
+  pushCleanup(unsubHistory);
+
   // 恢复待发送队列
   await loadPendingMessages();
 
@@ -283,41 +419,64 @@ export async function initializePopup() {
  * 加载存储的数据
  */
 export async function loadStoredData() {
+  console.log('[boot] aichat.loadStoredData: start');
   try {
-    const result = await loadData();
+    // 历史走 shared/history；平台可见性已在 initializePopup 中走 shared/platforms 应用过
+    // 这里只处理 lastMessage / platformStates / optimizer / lastPromptTemplate 几个一次性 key。
+    const [history, miscResult] = await Promise.all([
+      loadHistory(),
+      new Promise((resolve) => {
+        chrome.storage.local.get(
+          [STORAGE_KEYS.LAST_MESSAGE, STORAGE_KEYS.PLATFORM_STATES, STORAGE_KEYS.OPTIMIZER, STORAGE_KEYS.LAST_PROMPT_TEMPLATE],
+          (result) => resolve(result || {})
+        );
+      }),
+    ]);
 
     // 恢复最后输入的消息
-    if (result[STORAGE_KEYS.LAST_MESSAGE]) {
-      elements.messageInput.value = result[STORAGE_KEYS.LAST_MESSAGE];
-      console.log("已恢复历史输入内容，长度:", result[STORAGE_KEYS.LAST_MESSAGE].length);
+    if (miscResult[STORAGE_KEYS.LAST_MESSAGE]) {
+      elements.messageInput.value = miscResult[STORAGE_KEYS.LAST_MESSAGE];
+      console.log("已恢复历史输入内容，长度:", miscResult[STORAGE_KEYS.LAST_MESSAGE].length);
       autoResizeInput(elements.messageInput);
       updateSendButton();
     }
 
     // 恢复平台选择状态
-    if (result[STORAGE_KEYS.PLATFORM_STATES]) {
-      restorePlatformStates(result[STORAGE_KEYS.PLATFORM_STATES]);
+    if (miscResult[STORAGE_KEYS.PLATFORM_STATES]) {
+      restorePlatformStates(miscResult[STORAGE_KEYS.PLATFORM_STATES]);
     }
 
     // 缓存历史记录（点击"历史"按钮时才渲染）
-    if (result[STORAGE_KEYS.HISTORY]) {
-      _historyCache = result[STORAGE_KEYS.HISTORY];
+    if (history && history.length) {
+      _historyCache = history;
     }
 
     // 恢复优化器选择
-    if (result[STORAGE_KEYS.OPTIMIZER]) {
-      elements.promptOptimizerSelect.value = result[STORAGE_KEYS.OPTIMIZER];
+    if (miscResult[STORAGE_KEYS.OPTIMIZER]) {
+      elements.promptOptimizerSelect.value = miscResult[STORAGE_KEYS.OPTIMIZER];
     }
 
-    // 恢复提示词选择
-    if (result[STORAGE_KEYS.LAST_PROMPT_TEMPLATE]) {
-      const template = PROMPT_TEMPLATES[result[STORAGE_KEYS.LAST_PROMPT_TEMPLATE]];
-      if (template) {
+    // 恢复提示词选择:从 shared 内存快照查找(与 popup 写入契约一致:alias 优先,缺时 label)
+    if (miscResult[STORAGE_KEYS.LAST_PROMPT_TEMPLATE]) {
+      const savedKey = miscResult[STORAGE_KEYS.LAST_PROMPT_TEMPLATE];
+      const all = getCurrentPrompts() || {};
+      let match = null;
+      outer: for (const group of Object.keys(all)) {
+        const items = all[group];
+        if (!Array.isArray(items)) continue;
+        for (const t of items) {
+          if ((t.alias && t.alias === savedKey) || t.label === savedKey) {
+            match = t;
+            break outer;
+          }
+        }
+      }
+      if (match && elements.promptOptimizerSelect) {
         const selectedValue =
           elements.promptOptimizerSelect.querySelector(".selected-value");
-        selectedValue.textContent = template.label;
-        selectedValue.dataset.value = result[STORAGE_KEYS.LAST_PROMPT_TEMPLATE];
-        selectedValue.dataset.template = template.template;
+        selectedValue.textContent = match.label;
+        selectedValue.dataset.value = savedKey;
+        selectedValue.dataset.template = match.template || "";
       }
     }
   } catch (error) {
@@ -476,6 +635,45 @@ export function setupEventListeners() {
 
   function closePromptPicker() {
     if (promptPicker) { promptPicker.remove(); promptPicker = null; }
+    promptBar?.classList.remove('open');
+  }
+
+  // 简易 HTML 属性转义,避免 label 含引号搞坏 dataset 值
+  function escAttr(s) {
+    return String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  }
+
+  // 下拉行点编辑图标 → 打开 promptEditor 直接编辑(走 shared/promptsEditorApi)
+  async function openInlineEditOnPicker(group, label) {
+    const cache = getCurrentPrompts() || {};
+    // 防御性：先按 group + label 查;group 缺失或异常时退化到跨分组按 label 找一次。
+    let tpl = null;
+    if (group && cache[group]) {
+      tpl = (cache[group] || []).find((p) => p.label === label);
+    }
+    if (!tpl) {
+      outer: for (const g of Object.keys(cache)) {
+        const items = cache[g];
+        if (!Array.isArray(items)) continue;
+        for (const p of items) {
+          if (p && p.label === label) { tpl = p; break outer; }
+        }
+      }
+    }
+    if (!tpl) {
+      console.warn('[aichat] openInlineEditOnPicker: 找不到提示词', { group, label });
+      return;
+    }
+    await promptEditor.open(
+      {
+        key: tpl.alias || tpl.label,
+        label: tpl.label,
+        alias: tpl.alias || '',
+        group: tpl.group,
+        template: tpl.template,
+      },
+      onPromptSaved,
+    );
   }
 
   function buildPromptPicker() {
@@ -492,14 +690,22 @@ export function setupEventListeners() {
       font-family:-apple-system,BlinkMacSystemFont,sans-serif;
     `;
 
-    // 按分组整理
+    // 按分组整理(从 shared/promptsStore 实时快照,跨页同步后立即可见)
     const groups = {};
     const groupNames = [];
-    for (const key in PROMPT_TEMPLATES) {
-      const t = PROMPT_TEMPLATES[key];
-      const g = t.group || "其他";
-      if (!groups[g]) { groups[g] = []; groupNames.push(g); }
-      groups[g].push({ key, label: t.label, template: t.template, alias: t.alias });
+    const cache = getCurrentPrompts() || {};
+    for (const key in cache) {
+      const items = cache[key];
+      if (!Array.isArray(items)) continue;
+      for (const t of items) {
+        const g = t.group || "其他";
+        if (!groups[g]) { groups[g] = []; groupNames.push(g); }
+        // 用 alias 作为 picker key(与 popup 字段一致);缺 alias 时退化用 label
+        const itemKey = t.alias || t.label || key;
+        // 必须带上 group:openInlineEditOnPicker 据此在 cache 里再次定位条目,
+        // 缺了就会 cache[undefined] → 找不到 → 静默 no-op。
+        groups[g].push({ key: itemKey, label: t.label, template: t.template, alias: t.alias, group: g });
+      }
     }
 
     if (groupNames.length === 0) {
@@ -528,12 +734,29 @@ export function setupEventListeners() {
       const items = groups[groupName] || [];
       items.forEach((tpl) => {
         const item = document.createElement("div");
-        const aliasText = tpl.alias ? `  <span style="color:#9ca3af;font-size:10px">/${tpl.alias}</span>` : "";
-        item.innerHTML = `<span>${tpl.label}</span>${aliasText}`;
-        item.style.cssText = "padding:7px 10px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f3f4f6;";
+        item.className = '__sidebar_picker_item__';
+        item.dataset.label = tpl.label;
+        item.dataset.group = tpl.group;
+        item.style.cssText = "padding:7px 10px;cursor:pointer;display:flex;align-items:center;gap:6px;border-bottom:1px solid #f3f4f6;";
+        const labelHtml = `<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${tpl.label}</span>`
+          + (tpl.alias ? `<span style="color:#9ca3af;font-size:10px">/${tpl.alias}</span>` : "");
+        const editHtml = `
+          <svg class="__sidebar_picker_edit__" data-picker-edit="${escAttr(tpl.label)}" data-picker-group="${escAttr(tpl.group)}" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#9ca3af;cursor:pointer;flex-shrink:0;" title="编辑">
+            <path d="M12 20h9"/>
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+          </svg>`;
+        item.innerHTML = labelHtml + editHtml;
         item.addEventListener("mouseenter", () => { item.style.background = "#f3f4f6"; });
         item.addEventListener("mouseleave", () => { item.style.background = ""; });
         item.addEventListener("click", (e) => {
+          // 行内编辑图标命中:不应用,改成进入就地编辑
+          const editHit = e.target.closest('[data-picker-edit]');
+          if (editHit) {
+            e.stopPropagation();
+            closePromptPicker();
+            openInlineEditOnPicker(tpl.group, tpl.label);
+            return;
+          }
           e.stopPropagation();
           const sel = elements.promptOptimizerSelect?.querySelector(".selected-value");
           if (sel) {
@@ -590,10 +813,12 @@ export function setupEventListeners() {
   if (promptBar) {
     promptBar.addEventListener("click", (e) => {
       if (e.target.closest(".prompt-bar-clear")) return;
+      if (e.target.closest(".prompt-bar-edit")) return;
       if (promptPicker) {
         closePromptPicker();
       } else {
         buildPromptPicker();
+        promptBar?.classList.add("open");
       }
     });
   }
@@ -722,6 +947,9 @@ function renderPlatformOptions() {
     cb.addEventListener('change', updateVisual);
     updateVisual();
   });
+
+  // 懒加载面板首次渲染后立即应用 visibility(避免用户首开看不到隐藏平台)
+  applyPlatformVisibilitySettings(getCurrentPlatformVisibility());
 }
 
 function updatePlatformCount() {
@@ -820,10 +1048,16 @@ function syncPromptIndicator() {
 
   if (value && value !== '' && label !== '不使用优化') {
     let alias = '';
-    for (const key in PROMPT_TEMPLATES) {
-      if (key === value && PROMPT_TEMPLATES[key].alias) {
-        alias = '/' + PROMPT_TEMPLATES[key].alias;
-        break;
+    // value 在 popup 写出时是 alias(无 "/" 前缀);若旧契约是 label,用同算法匹配
+    const cache = getCurrentPrompts() || {};
+    outer: for (const group in cache) {
+      const items = cache[group];
+      if (!Array.isArray(items)) continue;
+      for (const t of items) {
+        if ((t.alias && t.alias === value) || t.label === value) {
+          if (t.alias) alias = '/' + t.alias;
+          break outer;
+        }
       }
     }
     elements.promptBarName.textContent = label;
@@ -1014,17 +1248,17 @@ function toggleHistoryView() {
 /**
  * 发送成功后刷新缓存（如果历史正显示则重绘）
  */
-export function refreshHistoryCache() {
-  chrome.storage.local.get(STORAGE_KEYS.HISTORY, (result) => {
-    const oldLen = _historyCache.length;
-    _historyCache = result[STORAGE_KEYS.HISTORY] || [];
-    const sec = elements.historySection;
-    if (sec && sec.classList.contains('visible') && _historyCache.length !== oldLen) {
-      _historyRendered = 0;
-      renderHistorySection();
-      fillHistoryIfNeeded();
-    }
-  });
+export async function refreshHistoryCache() {
+  // 走 shared/history：从 chrome.storage.local 读 + 同步内部 cache
+  const history = await loadHistory();
+  const oldLen = _historyCache.length;
+  _historyCache = history;
+  const sec = elements.historySection;
+  if (sec && sec.classList.contains('visible') && _historyCache.length !== oldLen) {
+    _historyRendered = 0;
+    renderHistorySection();
+    fillHistoryIfNeeded();
+  }
 }
 
 
@@ -1081,7 +1315,7 @@ async function startSending() {
   const originalMessage = validateMessageInput(elements.messageInput.value);
   if (!originalMessage) return;
 
-  const selectedPlatforms = getSelectedPlatformIdsShared(elements.platformCheckboxes);
+  const selectedPlatforms = getSelectedPlatformIdsShared(getPlatformCheckboxes());
   if (!validatePlatformSelection(selectedPlatforms)) return;
 
   const sendTimestamp = Date.now();
@@ -1282,7 +1516,7 @@ function renderMessageBody(message) {
  * 计算当前平台下所有被阻塞的消息总数
  */
 function countBlockedMessages() {
-  const selectedPlatforms = new Set(getSelectedPlatformIdsShared(elements.platformCheckboxes));
+  const selectedPlatforms = new Set(getSelectedPlatformIdsShared(getPlatformCheckboxes()));
   let count = 0;
   platformStates.forEach((ps, platformId) => {
     if (!selectedPlatforms.has(platformId)) return;
@@ -1300,7 +1534,7 @@ function countBlockedMessages() {
  * @returns {{ refs: object[], queue: {content:string,timestamp:number,extractedText:string}[] }}
  */
 function collectBlockedMessages() {
-  const selectedSet = new Set(getSelectedPlatformIdsShared(elements.platformCheckboxes));
+  const selectedSet = new Set(getSelectedPlatformIdsShared(getPlatformCheckboxes()));
   const refs = [];
   const uniqueByContent = new Map();
   platformStates.forEach((ps, platformId) => {
@@ -1601,7 +1835,7 @@ async function toggleSelectAll() {
 
   updatePlatformCount();
 
-  const platforms = getSelectedPlatformIdsShared(elements.platformCheckboxes);
+  const platforms = getSelectedPlatformIdsShared(getPlatformCheckboxes());
   if (platforms.length) {
     activePlatformId = platforms[0];
     renderCurrentPlatform();
@@ -1711,7 +1945,7 @@ function handleSidebarSelection(text, title, url) {
 }
 
 // ==================== Prompt 占位符 ====================
-// applyPromptTemplate 已收敛到 ../../../popup/main/prompts/promptsCore.js
+// applyPromptTemplate 已收敛到 ../../../../shared/prompts/promptsCore.js
 // 本文件仅 import 调用，不再保留本地实现。
 
 /**
@@ -2024,7 +2258,7 @@ function renderPendingMessages() {
 async function sendBlockedMessage(message) {
   if (!message || !message.blocked) return;
 
-  const selectedPlatforms = getSelectedPlatformIdsShared(elements.platformCheckboxes);
+  const selectedPlatforms = getSelectedPlatformIdsShared(getPlatformCheckboxes());
   if (selectedPlatforms.length === 0) return;
 
   // 在选中平台中找出所有同内容的阻塞消息，统一取消阻塞样式
@@ -2071,7 +2305,7 @@ function removeBlockedMessage(message) {
  * 而不是发到消息阻塞时所属的平台——这样用户在阻塞期间调整平台勾选也能即时生效。
  */
 async function flushPendingMessages() {
-  const selectedPlatforms = getSelectedPlatformIdsShared(elements.platformCheckboxes);
+  const selectedPlatforms = getSelectedPlatformIdsShared(getPlatformCheckboxes());
   if (selectedPlatforms.length === 0) return;
 
   const { refs, queue } = collectBlockedMessages();
@@ -2093,7 +2327,7 @@ async function flushPendingMessages() {
  * （每条一行）。用于把阻塞下来的问题快速粘贴进笔记软件做双向链接。
  */
 async function copyBlockedAsLinks() {
-  const selectedPlatforms = getSelectedPlatformIdsShared(elements.platformCheckboxes);
+  const selectedPlatforms = getSelectedPlatformIdsShared(getPlatformCheckboxes());
   if (selectedPlatforms.length === 0) {
     showTempMessage("未选中平台");
     return;
@@ -2244,7 +2478,7 @@ async function importAndBlock() {
     return;
   }
 
-  const selectedPlatforms = getSelectedPlatformIdsShared(elements.platformCheckboxes);
+  const selectedPlatforms = getSelectedPlatformIdsShared(getPlatformCheckboxes());
   if (!validatePlatformSelection(selectedPlatforms)) {
     return;
   }

@@ -1,6 +1,8 @@
 import { mount as mountAichat, unmount as unmountAichat } from "./aichat/aichat.js";
 import { mount as mountCc, unmount as unmountCc } from "./cc/cc.js";
 
+console.log('[boot] sidebar/main.js module loaded');
+
 const MODES = { AICHAT: "aichat", CLAUDE_CODE: "claude-code" };
 let currentMode = MODES.AICHAT;
 
@@ -31,6 +33,14 @@ function toggleMode() {
 
 // 首次加载
 document.addEventListener("DOMContentLoaded", () => {
+  console.log('[boot] sidebar: DOMContentLoaded');
+  const view = document.getElementById("app-view");
+  console.log('[boot] sidebar: app-view element =', !!view);
   document.getElementById("cc-toggle")?.addEventListener("click", toggleMode);
-  mountAichat(document.getElementById("app-view"));
+  try {
+    mountAichat(view);
+    console.log('[boot] sidebar: mountAichat dispatched');
+  } catch (e) {
+    console.error('[boot] sidebar: mountAichat threw:', e?.message, e?.stack);
+  }
 });

@@ -8,7 +8,7 @@
 
 // 导入统一平台配置
 import { PLATFORM_CONFIG, getPlatformIds } from '../config/platformConfig.js';
-import { applyPromptTemplate } from '../popup/main/prompts/promptsCore.js';
+import { applyPromptTemplate } from '../shared/prompts/promptsCore.js';
 
 // 可配置的端口和域名
 const SERVER_PORT = 8902;

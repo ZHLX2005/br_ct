@@ -1,5 +1,5 @@
 // mainUtils.js - 核心popup功能模块
-import { populateOptimizer, initAliasShortcut } from "./prompts/promptsUI.js";
+import { initAliasShortcut, installOptimizer } from "./prompts/promptsUI.js";
 import { PROMPT_TEMPLATES } from "./prompts/prompts.js";
 import { createImageOcrController } from "../../shared/imageOcr.js";
 import { createDebouncedSaver } from "../../shared/debouncedSave.js";
@@ -11,20 +11,19 @@ import {
   saveMessageHistory,
 } from "../../shared/sendMessage.js";
 import {
-  STORAGE_KEYS,
-  saveMessageContent,
-  savePlatformStates,
-  saveOptimizerSetting,
-  loadStoredData as loadData,
-  addToHistory
-} from "./modules/storage.js";
+  loadAllPrompts,
+  subscribeToPrompts,
+  getCurrentPrompts,
+} from "../../shared/prompts/promptsStore.js";
+import { STORAGE_KEYS } from "../../shared/core/storageKeys.js";
 import {
-  loadPlatformVisibilitySettings,
-  applyPlatformVisibilitySettings,
-  getVisiblePlatformCheckboxes,
-  areAllVisiblePlatformsChecked,
-  setupPlatformVisibilityMessageListener
-} from "./modules/platformVisibility.js";
+  addToHistory,
+  loadHistory,
+} from "../../shared/history/historyStore.js";
+import {
+  loadPlatformVisibility,
+  subscribeToPlatforms,
+} from "../../shared/platforms/platformsStore.js";
 import {
   copyToClipboard,
   showTempMessage,
@@ -44,7 +43,7 @@ function getOcrController() {
   if (!ocrController) {
     ocrController = createImageOcrController({
       // scope 到当前视图根（initializePopup 时绑定）；shell 接管后 rootEl 由 viewController 注入
-      getPreviewContainer: () => viewRoot && viewRoot.querySelector("#image-preview-area"),
+      getPreviewContainer: () => _viewRoot && _viewRoot.querySelector("#image-preview-area"),
       showTempMessage: (msg) => showTempMessage(msg),
       onChange: () => {},
     });
@@ -53,18 +52,147 @@ function getOcrController() {
 }
 
 // DOM 元素缓存
-let elements = {};
+// 注:使用 getter 而非纯 let——platformCheckboxes 必须在 init 时已经渲染好,
+// 任何时机偏差(视图挂载异步、reset 后重渲染)都让快照失效;getter 每次访问 live query。
+// 见 commit 6bbcf58 与 memory/platform-checkboxes-snapshot-pattern.md。
+let _elements = {};
+export const elements = {
+  get platformCheckboxes() {
+    return (_viewRoot || document).querySelectorAll(
+      '.platform-icon-option input[type="checkbox"]'
+    );
+  },
+  get messageInput() { return _elements.messageInput; },
+  get sendButton() { return _elements.sendButton; },
+  get closeTabsButton() { return _elements.closeTabsButton; },
+  get selectAllButton() { return _elements.selectAllButton; },
+  get historySelect() { return _elements.historySelect; },
+  get promptOptimizerSelect() { return _elements.promptOptimizerSelect; },
+};
 
 // 视图根元素（init 时绑定；事件处理函数与 OCR 回调中查询使用，参照 translation.js 模式）
-let viewRoot = null;
+let _viewRoot = null;
 
 // init 链中注册的 cleanup 函数集合（populateOptimizer / initAliasShortcut /
 // setupPlatformVisibilityMessageListener 等返回的 document 级监听与 popup 清理）。
 // 由 teardownView() 在视图卸载时统一调用，避免多次挂载累积监听与 DOM。
-let viewCleanups = [];
+export let viewCleanups = [];
 
 // 输入持久化 saver（shared 原语；module-level 以便 startSending 调用 flush）
 let messageSaver = null;
+
+// ==================== Inline storage helpers (替代旧 popup/main/modules/storage.js) ====================
+//
+// 这些是直接基于 chrome.storage.local 的小包装。原本由旧 storage.js 提供的 5 个 save 函数
+// 在 popup/sidebar 中只被少量调用，且都只写一个 key，没有共享复用价值——保留为本地包装更轻量。
+// 之所以放在这里（而不是下沉到 shared），是为了坚持"shared 层只放数据原语，不沾边 DOM/UI 状态"。
+// 历史/平台可见性等真正共享的数据已下沉到 shared/history、shared/platforms。
+
+function saveMessageContent(content) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [STORAGE_KEYS.LAST_MESSAGE]: content }, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+function savePlatformStates(platformCheckboxes) {
+  const checkedStates = {};
+  platformCheckboxes.forEach((cb) => {
+    checkedStates[cb.dataset.platform] = cb.checked;
+  });
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [STORAGE_KEYS.PLATFORM_STATES]: checkedStates }, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+function saveOptimizerSetting(value) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [STORAGE_KEYS.OPTIMIZER]: value }, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+// ==================== DOM-bound helpers (替代旧 popup/main/modules/platformVisibility.js) ====================
+//
+// 可见性 *数据* 由 shared/platforms/platformsStore 提供；可见性 *DOM 应用* 必须留在调用方，
+// 因为 shared 层不应触及具体页面的 DOM 结构。
+
+function applyPlatformVisibilitySettings(settings) {
+  const platformOptions = _viewRoot
+    ? _viewRoot.querySelectorAll('.platform-icon-option')
+    : document.querySelectorAll('.platform-icon-option');
+  platformOptions.forEach((option) => {
+    const platformId = option.getAttribute('data-platform-id');
+    if (platformId) {
+      const isVisible = settings.hasOwnProperty(platformId) ? settings[platformId] : true;
+      if (!isVisible) {
+        option.style.display = 'none';
+        const checkbox = option.querySelector('input[type="checkbox"]');
+        if (checkbox) checkbox.checked = false;
+      } else {
+        option.style.display = '';
+      }
+    }
+  });
+  updateVisiblePlatformColumns();
+}
+
+function updateVisiblePlatformColumns() {
+  const container = _viewRoot
+    ? _viewRoot.querySelector('#platform-options-row')
+    : document.getElementById('platform-options-row');
+  if (!container) return;
+  const visibleCount = Array.from(
+    container.querySelectorAll('.platform-icon-option')
+  ).filter((option) => option.style.display !== 'none').length;
+  container.style.setProperty('--platform-columns', Math.min(Math.max(visibleCount, 1), 7));
+}
+
+function getVisiblePlatformCheckboxes(allCheckboxes) {
+  return Array.from(allCheckboxes).filter((checkbox) => {
+    const option = checkbox.closest('.platform-icon-option');
+    return option && option.style.display !== 'none';
+  });
+}
+
+function areAllVisiblePlatformsChecked(visibleCheckboxes) {
+  if (visibleCheckboxes.length === 0) return false;
+  return visibleCheckboxes.every((checkbox) => checkbox.checked);
+}
+
+// ==================== 旧 init 中加载平台可见性 + 跨页同步 ====================
+
+async function loadPlatformVisibilitySettings() {
+  const visibilitySettings = await loadPlatformVisibility();
+  applyPlatformVisibilitySettings(visibilitySettings);
+  return visibilitySettings;
+}
+
+// 注册跨页面平台可见性同步（options 页保存后 → 任何打开的 popup/sidebar 实时更新）
+// 这是 Task 9 的"架构目标"：把原本依赖 onMessage 的方式替换为 storage.onChanged + subscribable
+function setupPlatformVisibilityMessageListener(callback) {
+  const unsub = subscribeToPlatforms((settings) => {
+    applyPlatformVisibilitySettings(settings);
+    if (callback) callback(settings);
+  });
+  return unsub;
+}
 
 /**
  * 注册全局回调（dragDropHandler 调用）
@@ -86,14 +214,14 @@ window.__onImagePasted = ({ dataUrl, fileName }) => {
  * @param {Element} rootEl 视图根元素（viewController 注入的 .view.view-main 或直开 mainView.html 时的 document.body）
  */
 export async function initializePopup(rootEl) {
-  viewRoot = rootEl;
+  console.log('[boot] initializePopup: start, rootEl =', rootEl?.tagName);
+  _viewRoot = rootEl;
   // 注：不再清零 viewCleanups —— onActivate 已在 init 之前把当轮的 cleanups 推入数组，
   // teardownView 在末尾清零（mainUtils.js:275）。这里再清零会抹掉 onActivate 的注册，
   // 导致 teardown 跳过所有 document 监听 / alias popup 的清理 → 反复挂载累积。
-  elements = {
-    platformCheckboxes: rootEl.querySelectorAll(
-      '.platform-icon-option input[type="checkbox"]'
-    ),
+  // elements 是模块顶部导出的 getter 对象（platformCheckboxes 用 live query,其它字段存 _elements），
+  // 一次性写入 rootEl 派生的 DOM 引用到 _elements,后续 elements.* 访问都从这里读。
+  _elements = {
     messageInput: rootEl.querySelector("#message-input"),
     sendButton: rootEl.querySelector("#send-button"),
     closeTabsButton: rootEl.querySelector("#close-tabs-button"),
@@ -101,12 +229,33 @@ export async function initializePopup(rootEl) {
     historySelect: rootEl.querySelector("#history-select"),
     promptOptimizerSelect: rootEl.querySelector("#prompt-optimizer-select"),
   };
+  console.log('[boot] initializePopup: cached elements count =', Object.values(_elements).filter(v => v !== undefined && v !== null).length, 'messageInput?', !!elements.messageInput, 'promptOptimizerSelect?', !!elements.promptOptimizerSelect);
 
   // 自动聚焦输入框
   focusInputAndSetCursor(elements.messageInput);
 
   // 加载并应用平台可见性设置（一次性的 storage 读取；onActivate 不需要重复做）。
   await loadPlatformVisibilitySettings();
+
+  // 启动时异步从 disk 拉取，覆盖编译期硬编码（失败时 fallback 到硬编码）。
+  // 注意：这里不需要派发 prompts:changed——下拉框第一次安装由 registerDocumentSideEffects
+  // 调用 installOptimizer 完成，届时 buildPromptMap() 会读到 loadAllPrompts 写入的新 cache。
+  // 只在「缓存更新发生在下拉框已挂载之后」才需要派发（即下方 subscribeToPrompts 的回调）。
+  try {
+    await loadAllPrompts();
+  } catch (e) {
+    console.warn("[popup] loadAllPrompts failed:", e);
+  }
+
+  // 订阅其他页面的修改（保存后自动重渲染下拉框）。
+  // 每次 PROMPTS_VERSION bump 时 promptsStore 的订阅会触发本回调；
+  // 我们把它转成 document 级 CustomEvent，让 promptsUI 的模块监听器负责重建 UI。
+  // 返回的 unsubscribe 推入 viewCleanups，避免多次挂载累积。
+  const unsubscribePrompts = subscribeToPrompts(() => {
+    document.dispatchEvent(new CustomEvent("prompts:changed"));
+  });
+  if (typeof unsubscribePrompts === "function") viewCleanups.push(unsubscribePrompts);
+  console.log('[boot] initializePopup: done');
 }
 
 /**
@@ -120,14 +269,17 @@ export async function initializePopup(rootEl) {
  * @param {Element} rootEl 视图根元素
  */
 export function registerDocumentSideEffects(rootEl) {
-  viewRoot = rootEl;
+  _viewRoot = rootEl;
 
   // 初始化 /alias 快捷输入（返回 cleanup：移除 document 监听 + 移除 alias popup）
   const aliasCleanup = initAliasShortcut(elements.messageInput, PROMPT_TEMPLATES, elements.promptOptimizerSelect);
   if (typeof aliasCleanup === "function") viewCleanups.push(aliasCleanup);
 
-  // 初始化优化器下拉框（返回 cleanup：移除 document 监听）
-  const optimizerCleanup = populateOptimizer(elements.promptOptimizerSelect, PROMPT_TEMPLATES);
+  // 初始化优化器下拉框（走 installOptimizer 入口：第一次安装的 cleanup 会登记在
+  // promptsUI 模块的 WeakMap 里，后续 subscribe → prompts:changed 重渲染时会自动
+  // 卸掉旧 outside-click 监听再装新监听；这里再取回 cleanup 推入 viewCleanups，
+  // 让 teardownView 在视图卸载时统一清理）。
+  const optimizerCleanup = installOptimizer(elements.promptOptimizerSelect);
   if (typeof optimizerCleanup === "function") viewCleanups.push(optimizerCleanup);
 
   // 监听来自 options 页面的平台可见性更新消息（返回 cleanup：移除 onMessage 监听）
@@ -143,38 +295,60 @@ export function registerDocumentSideEffects(rootEl) {
  */
 export async function loadStoredData() {
   try {
-    const result = await loadData();
+    // 历史走 shared/history；平台可见性已在 initializePopup 中走 shared/platforms 应用过
+    // 这里只处理 lastMessage / platformStates / optimizer / lastPromptTemplate 几个一次性 key。
+    const [history, miscResult] = await Promise.all([
+      loadHistory(),
+      new Promise((resolve) => {
+        chrome.storage.local.get(
+          [STORAGE_KEYS.LAST_MESSAGE, STORAGE_KEYS.PLATFORM_STATES, STORAGE_KEYS.OPTIMIZER, STORAGE_KEYS.LAST_PROMPT_TEMPLATE],
+          (result) => resolve(result || {})
+        );
+      }),
+    ]);
 
     // 恢复最后输入的消息
-    if (result[STORAGE_KEYS.LAST_MESSAGE]) {
-      elements.messageInput.value = result[STORAGE_KEYS.LAST_MESSAGE];
-      console.log("已恢复历史输入内容，长度:", result[STORAGE_KEYS.LAST_MESSAGE].length);
+    if (miscResult[STORAGE_KEYS.LAST_MESSAGE]) {
+      elements.messageInput.value = miscResult[STORAGE_KEYS.LAST_MESSAGE];
+      console.log("已恢复历史输入内容，长度:", miscResult[STORAGE_KEYS.LAST_MESSAGE].length);
     }
 
     // 恢复平台选择状态
-    if (result[STORAGE_KEYS.PLATFORM_STATES]) {
-      restorePlatformStates(result[STORAGE_KEYS.PLATFORM_STATES]);
+    if (miscResult[STORAGE_KEYS.PLATFORM_STATES]) {
+      restorePlatformStates(miscResult[STORAGE_KEYS.PLATFORM_STATES]);
     }
 
-    // 恢复历史记录
-    if (result[STORAGE_KEYS.HISTORY]) {
-      populateHistoryUI(elements.historySelect, result[STORAGE_KEYS.HISTORY]);
+    // 恢复历史记录（shared 层已有 cache，loadHistory 返回副本即可）
+    if (history && history.length) {
+      populateHistoryUI(elements.historySelect, history);
     }
 
     // 恢复优化器选择
-    if (result[STORAGE_KEYS.OPTIMIZER]) {
-      elements.promptOptimizerSelect.value = result[STORAGE_KEYS.OPTIMIZER];
+    if (miscResult[STORAGE_KEYS.OPTIMIZER]) {
+      elements.promptOptimizerSelect.value = miscResult[STORAGE_KEYS.OPTIMIZER];
     }
 
-    // 恢复提示词选择
-    if (result[STORAGE_KEYS.LAST_PROMPT_TEMPLATE]) {
-      const template = PROMPT_TEMPLATES[result[STORAGE_KEYS.LAST_PROMPT_TEMPLATE]];
-      if (template) {
+    // 恢复提示词选择(从 shared 内存快照查找,与 write 端契约一致:alias 优先,缺时 label)
+    if (miscResult[STORAGE_KEYS.LAST_PROMPT_TEMPLATE]) {
+      const savedKey = miscResult[STORAGE_KEYS.LAST_PROMPT_TEMPLATE];
+      const all = getCurrentPrompts() || {};
+      let match = null;
+      outer: for (const group of Object.keys(all)) {
+        const items = all[group];
+        if (!Array.isArray(items)) continue;
+        for (const t of items) {
+          if ((t.alias && t.alias === savedKey) || t.label === savedKey) {
+            match = t;
+            break outer;
+          }
+        }
+      }
+      if (match) {
         const selectedValue =
           elements.promptOptimizerSelect.querySelector(".selected-value");
-        selectedValue.textContent = template.label;
-        selectedValue.dataset.value = result[STORAGE_KEYS.LAST_PROMPT_TEMPLATE];
-        selectedValue.dataset.template = template.template;
+        selectedValue.textContent = match.label;
+        selectedValue.dataset.value = savedKey;
+        selectedValue.dataset.template = match.template || "";
       }
     }
   } catch (error) {
@@ -186,11 +360,18 @@ export async function loadStoredData() {
  * 恢复平台选择状态
  */
 function restorePlatformStates(platformStates) {
-  elements.platformCheckboxes.forEach((cb) => {
+  // 用 live query 而非缓存：getter 保证当前 DOM 状态;若 restore 在 render 之前触发,这次不命中,
+  // 下一次 (例如 visibility toggle 重渲染面板) 会自动按已存数据应用——但更稳的策略是 render 之前不调 restore。
+  // 当前 init 顺序是 render → initializePopup → loadStoredData,DOM 此时已存在;此处保险起见 live query。
+  const cbs = (_viewRoot || document).querySelectorAll('.platform-icon-option input[type="checkbox"]');
+  let applied = 0;
+  cbs.forEach((cb) => {
     if (platformStates.hasOwnProperty(cb.dataset.platform)) {
       togglePlatformCheckbox(cb, platformStates[cb.dataset.platform]);
+      applied++;
     }
   });
+  console.log('[boot] restorePlatformStates: applied', applied, '/', cbs.length, 'keys =', Object.keys(platformStates).join(','));
   updateSelectAllButton();
 }
 
@@ -209,7 +390,9 @@ export function setupEventListeners() {
   attachMessageInputPersistence(elements.messageInput, messageSaver, {
     onShowMessage: (msg) => showTempMessage(msg),
     getStoredValue: async () => {
-      const result = await loadData(STORAGE_KEYS.LAST_MESSAGE);
+      const result = await new Promise((resolve) =>
+        chrome.storage.local.get([STORAGE_KEYS.LAST_MESSAGE], (r) => resolve(r || {}))
+      );
       return result[STORAGE_KEYS.LAST_MESSAGE] || "";
     },
   });
@@ -272,7 +455,7 @@ export function teardownView() {
     }
   }
   viewCleanups = [];
-  viewRoot = null;
+  _viewRoot = null;
 }
 
 /**

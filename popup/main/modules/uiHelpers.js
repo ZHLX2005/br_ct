@@ -1,6 +1,9 @@
 // uiHelpers.js - UI交互和消息显示模块
-
-import { getVisiblePlatformCheckboxes, areAllVisiblePlatformsChecked } from './platformVisibility.js';
+//
+// 注意：早期版本曾 import './platformVisibility.js'，但 platformVisibility.js
+// 已被 Task 9 删除并把可见性数据迁到了 shared/platforms/platformsStore.js，
+// 可见性 DOM 应用保留在 mainUtils.js。updateSelectAllText 需要的两个工具
+// (getVisiblePlatformCheckboxes / areAllVisiblePlatformsChecked) 也已内联在此处。
 
 /**
  * 复制文本到剪切板
@@ -96,14 +99,17 @@ export function populateHistory(historySelect, history, maxDisplay = 5) {
  * 更新全选按钮文本
  */
 export function updateSelectAllText(platformCheckboxes) {
-  // 只考虑可见的平台复选框
-  const visibleCheckboxes = getVisiblePlatformCheckboxes(platformCheckboxes);
+  // 只考虑可见的平台复选框——inline 复刻原 platformVisibility.js 的两个工具
+  const visibleCheckboxes = Array.from(platformCheckboxes).filter((checkbox) => {
+    const option = checkbox.closest('.platform-icon-option');
+    return option && option.style.display !== 'none';
+  });
 
   if (visibleCheckboxes.length === 0) {
     return "全选";
   }
 
-  const allChecked = areAllVisiblePlatformsChecked(visibleCheckboxes);
+  const allChecked = visibleCheckboxes.every((checkbox) => checkbox.checked);
   return allChecked ? "取消全选" : "全选";
 }
 

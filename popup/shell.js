@@ -1,4 +1,5 @@
 // popup/shell.js
+console.log('[boot] shell.js module loaded');
 import { setMountPoint, setViewDom, register, mount, getCurrent } from "./viewSystem/viewController.js";
 import { init as initMain, onActivate as onActivateMain, teardown as teardownMain } from "./main/main.js";
 import { init as initFunc, teardown as teardownFunc } from "./func_execute/functioncall.js";
@@ -34,6 +35,7 @@ const VIEW_BY_HASH = { '#main': 'main', '#func': 'func', '#translation': 'transl
 // 启动时若 hash 不是 main（直接打开 #func 等），先把 inline 节点从 #view-mount 移走暂存，
 // controller 在 mount('main') 时会重新 append 回来（appendChild 对已存在节点会 move 而非复制）。
 const mainInline = document.querySelector('#view-mount > .view[data-view-content]');
+console.log('[boot] shell: mainInline present =', !!mainInline, 'location.hash =', location.hash);
 if (mainInline) {
   setViewDom('main', mainInline);
   const initialTarget = VIEW_BY_HASH[location.hash] || 'main';
@@ -59,9 +61,24 @@ window.addEventListener('hashchange', activeFromHash);
 document.getElementById('open-options').addEventListener('click', () => chrome.runtime.openOptionsPage());
 const sideBtn = document.getElementById('open-sidepanel-btn');
 sideBtn.addEventListener('click', async () => {
+  console.log('[boot] sidepanel button clicked');
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab) { await chrome.sidePanel.open({ tabId: tab.id }); window.close(); }
+  console.log('[boot] sidepanel: active tab =', tab?.id, tab?.url);
+  if (tab) {
+    try {
+      await chrome.sidePanel.open({ tabId: tab.id });
+      console.log('[boot] sidepanel opened OK');
+    } catch (e) {
+      console.error('[boot] sidePanel.open failed:', e?.message, e);
+    }
+    window.close();
+  } else {
+    console.warn('[boot] sidepanel: no active tab');
+  }
 });
 
 // 启动
-document.addEventListener('DOMContentLoaded', activeFromHash);
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('[boot] shell: DOMContentLoaded, hash =', location.hash);
+  activeFromHash();
+});

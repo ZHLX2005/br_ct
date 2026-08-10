@@ -20,7 +20,7 @@
  *   - getExtractedContentText（sidebar 特有）
  */
 
-import { applyPromptTemplate } from "../popup/main/prompts/promptsCore.js";
+import { applyPromptTemplate } from "./prompts/promptsCore.js";
 
 /**
  * 模板拼接核心。统一走 promptsCore.applyPromptTemplate 决策树，

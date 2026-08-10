@@ -1,11 +1,14 @@
 // main.js
 import {
+  elements,
   initializePopup,
   registerDocumentSideEffects,
   loadStoredData,
   setupEventListeners,
   teardownView,
+  viewCleanups,
 } from "./mainUtils.js";
+import { installOptimizer } from "./prompts/promptsUI.js";
 import { setupDragDropEvents } from "./dragDropHandler.js";
 import { initializePlatformOptions } from "./platformRenderer.js";
 
@@ -21,15 +24,13 @@ import { initializePlatformOptions } from "./platformRenderer.js";
  * 否则会产生「document 监听被清掉、视图仍 visible 但外点 / 平台可见性更新失效」的 bug。
  */
 export async function init(rootEl) {
+  console.log('[boot] main.init: start, rootEl =', rootEl?.tagName, 'id =', rootEl?.id);
   try {
     // 动态生成平台选项（从统一配置）
     initializePlatformOptions(rootEl);
 
     // 初始化弹窗（缓存 DOM、绑定输入持久化前置逻辑）
     await initializePopup(rootEl);
-
-    // 加载存储的数据
-    await loadStoredData();
 
     // 设置所有元素级事件监听器（依赖 elements 缓存；只调一次足够——重挂载同一个 viewRoot
     // 实例的同一组元素会保留绑定，再调一次会在每个元素上重复注册 change/click，违反约束）。
@@ -38,8 +39,23 @@ export async function init(rootEl) {
 
     // 初始化指定输入框的拖放事件（element-level，仅一次足够）
     setupDragDropEvents(rootEl);
+
+    // 必须在 loadStoredData 之前:这一步会跑 populateOptimizer,生成下拉项
+    // DOM、若先 loadStoredData 写 selected-value,会被 populateOptimizer 后续
+    // 内部逻辑覆盖回"不使用优化"。
+    // 注意:仅 installOptimizer,不复用 registerDocumentSideEffects,
+    // 避免 onActivate 再次调用时 promptOptimizerSelect.click 监听器重复注册。
+    const optimizerCleanup = installOptimizer(elements.promptOptimizerSelect);
+    if (typeof optimizerCleanup === 'function') viewCleanups.push(optimizerCleanup);
+
+    // 最后恢复 lastPromptTemplate — 与 promptsUI.js 共享的写入端契约
+    // (alias 优先,缺时 label),主数据源是 shared 内存快照。
+    await loadStoredData();
+
+    console.log('[boot] main.init: done');
   } catch (error) {
     console.error("初始化 main 视图失败:", error);
+    console.error('[boot] main.init: stack =', error?.stack);
   }
 }
 
@@ -55,10 +71,13 @@ export async function init(rootEl) {
  * 之前会调用 teardownView() 统一清理。
  */
 export function onActivate(rootEl) {
+  console.log('[boot] main.onActivate: start');
   try {
     registerDocumentSideEffects(rootEl);
+    console.log('[boot] main.onActivate: done');
   } catch (error) {
     console.error("main onActivate 失败:", error);
+    console.error('[boot] main.onActivate: stack =', error?.stack);
   }
 }
 

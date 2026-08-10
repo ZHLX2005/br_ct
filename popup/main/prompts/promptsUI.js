@@ -1,10 +1,40 @@
+// promptsUI.js - popup 提示词下拉框（消费 shared 内存快照 + 就地编辑）
+import { getCurrentPrompts } from "../../../shared/prompts/promptsStore.js";
+import { updatePrompt } from "../../../shared/prompts/promptsEditorApi.js";
+
 /**
- * 填充优化器下拉框
+ * 把 shared cache (`{group: [{group,label,alias,template}, ...]}`)
+ * 扁平化为 label-keyed map (`{label: {group,label,alias,template}}`)，
+ * 供现有渲染逻辑继续按 label 取值。
+ * @returns {{[label: string]: {group: string, label: string, alias: string, template: string}}}
+ */
+function buildPromptMap() {
+  const all = getCurrentPrompts();
+  const map = {};
+  if (!all) return map;
+  for (const group of Object.keys(all)) {
+    const items = all[group];
+    if (!Array.isArray(items)) continue;
+    for (const item of items) {
+      if (!item || !item.label) continue;
+      map[item.label] = {
+        group: item.group || group,
+        label: item.label,
+        alias: item.alias || "",
+        template: item.template || "",
+      };
+    }
+  }
+  return map;
+}
+
+/**
+ * 填充优化器下拉框（数据源：shared 内存快照，templates 参数已弃用保留签名兼容）。
  * @param {HTMLElement} promptOptimizerSelect - 下拉框元素
- * @param {Object} templates - PROMPT_TEMPLATES 模板对象（可选，默认使用全局）
+ * @param {Object} [templates] - 兼容旧调用方；忽略，统一从 shared 快照取
  */
 function populateOptimizer(promptOptimizerSelect, templates) {
-  const PROMPT_TEMPLATES = templates || (typeof window !== 'undefined' && window.PROMPT_TEMPLATES) || {};
+  const PROMPT_TEMPLATES = buildPromptMap();
   const optionsContainer = promptOptimizerSelect.querySelector('.custom-select-options');
   const selectedValue = promptOptimizerSelect.querySelector('.selected-value');
   
@@ -23,18 +53,10 @@ function populateOptimizer(promptOptimizerSelect, templates) {
   const optionsList = document.createElement('div');
   optionsList.className = 'options-list';
 
-  // 修改恢复逻辑，同时获取lastPromptTemplate和对应的模板内容
-  chrome.storage.sync.get(['lastPromptTemplate'], (result) => {
-    if (result.lastPromptTemplate) {
-      const template = PROMPT_TEMPLATES[result.lastPromptTemplate];
-      if (template) {
-        selectedValue.textContent = template.label;
-        selectedValue.dataset.value = result.lastPromptTemplate;
-        selectedValue.dataset.template = template.template;
-      }
-    }
-  });
-  
+  // 修改恢复逻辑,改由 mainUtils.loadStoredData 统一从 chrome.storage.sync
+  // 读 lastPromptTemplate 并在 populateOptimizer 之后写回 selected-value,
+  // 避免此处与 mainUtils 两处分别触发 sync.get 时发生竞态(谁后到谁覆盖 UI)。
+
   // 获取所有分组
   const groups = {};
   for (const key in PROMPT_TEMPLATES) {
@@ -111,9 +133,31 @@ function populateOptimizer(promptOptimizerSelect, templates) {
       option.dataset.value = template.key;
       option.dataset.template = template.template;
       option.dataset.alias = template.alias || '';
-      
+
+      // 就地编辑图标（SVG，hover 时 opacity 0.5 → 1）
+      const editIcon = document.createElement('span');
+      editIcon.className = 'prompt-edit-icon';
+      editIcon.dataset.promptEdit = '';
+      editIcon.title = '编辑该提示词';
+      editIcon.innerHTML = `
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 20h9"/>
+          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+        </svg>`;
+      option.appendChild(editIcon);
+
+      // 注册就地编辑（点 icon → label/alias/template 输入 + 确认/取消）
+      bindEditIcon(option, {
+        group: template.group,
+        label: template.label,
+        alias: template.alias || '',
+        template: template.template,
+      });
+
       option.addEventListener('click', (e) => {
         e.stopPropagation();
+        // 点 edit icon 时不切换选中
+        if (e.target.closest('[data-prompt-edit]')) return;
         // 更新选中值的所有数据属性
         selectedValue.textContent = template.label;
         selectedValue.dataset.value = template.key;
@@ -121,13 +165,13 @@ function populateOptimizer(promptOptimizerSelect, templates) {
         promptOptimizerSelect.classList.remove('active');
 
         // 只保存模板的key，恢复时从PROMPT_TEMPLATES中获取完整信息
-        chrome.storage.sync.set({ 
+        chrome.storage.sync.set({
           lastPromptTemplate: template.key
         });
 
         // 触发change事件
-        const event = new CustomEvent('change', { 
-          detail: { 
+        const event = new CustomEvent('change', {
+          detail: {
             value: template.key,
             template: template.template,
             label: template.label
@@ -155,15 +199,15 @@ function populateOptimizer(promptOptimizerSelect, templates) {
   }
 
   // 修改点击事件切换下拉框显示状态
-  promptOptimizerSelect.addEventListener('click', () => {
+  const onToggleClick = () => {
     const isOpening = !promptOptimizerSelect.classList.contains('active');
     promptOptimizerSelect.classList.toggle('active');
-    
+
     // 当下拉框打开时，显示对应分组
     if (isOpening) {
       chrome.storage.sync.get(['lastActiveGroup', 'lastPromptTemplate'], (result) => {
         let groupToShow = firstGroup; // 默认显示第一个分组
-        
+
         if (result.lastPromptTemplate) {
           // 如果有上次选中的模板，优先使用其分组
           const template = PROMPT_TEMPLATES[result.lastPromptTemplate];
@@ -174,23 +218,31 @@ function populateOptimizer(promptOptimizerSelect, templates) {
           // 其次使用上次激活的分组
           groupToShow = result.lastActiveGroup;
         }
-        
+
         showGroupOptions(groupToShow);
       });
     }
-  });
+  };
+  promptOptimizerSelect.addEventListener('click', onToggleClick);
 
   // 点击外部关闭下拉框（用具名引用以便 teardown removeEventListener）
+  // 注：当存在就地编辑中的 row（.inline-editing）时，保留下拉打开——
+  // 用户可能想点输入框 / 别处切换焦点，inline edit 的 click 已被 swallow 吞掉，
+  // 但外点仍会把下拉关掉，让编辑 UI 消失。先把这种状态放行：用户取消/确认后再走正常关闭。
   const onOutsideClick = (e) => {
+    if (e.target?.closest && e.target.closest('#prompt-optimizer-select .select-option.inline-editing')) {
+      return;
+    }
     if (!promptOptimizerSelect.contains(e.target)) {
       promptOptimizerSelect.classList.remove('active');
     }
   };
   document.addEventListener('click', onOutsideClick);
 
-  // 返回 cleanup：移除本函数注册的 document 级监听。
-  // 由 mainUtils.initializePopup 收集，main.js teardown 调用。
+  // 返回 cleanup：移除本函数注册的所有监听。
+  // installOptimizer 通过 prevCleanup() 在重装前清掉旧的,避免切换 -> active 双 toggle。
   return () => {
+    promptOptimizerSelect.removeEventListener('click', onToggleClick);
     document.removeEventListener('click', onOutsideClick);
   };
 }
@@ -199,11 +251,11 @@ function populateOptimizer(promptOptimizerSelect, templates) {
  * 初始化输入框的 /alias 快捷触发
  * 用户输入 /alias 时弹出匹配列表，选择后自动切换下拉框模板并删除 /alias
  * @param {HTMLElement} textarea - 消息输入框
- * @param {Object} templates - PROMPT_TEMPLATES 模板对象
+ * @param {Object} [templates] - 兼容旧签名；忽略，从 shared 快照取
  * @param {HTMLElement} promptOptimizerSelect - 提示词下拉框容器
  */
 function initAliasShortcut(textarea, templates, promptOptimizerSelect) {
-  const PROMPT_TEMPLATES = templates || {};
+  const PROMPT_TEMPLATES = buildPromptMap();
   let popup = null;
   let selectedIndex = -1;
   let matches = [];
@@ -379,4 +431,181 @@ function initAliasShortcut(textarea, templates, promptOptimizerSelect) {
   };
 }
 
-export { populateOptimizer, initAliasShortcut };
+// ============================================================
+// 就地编辑（点击 option 内的编辑 icon → 原位变 input/textarea + 确认/取消）
+// 仅支持修改现有提示词（label/alias/template）；新增/删除走 options 页 editor。
+// ============================================================
+
+/**
+ * 把当前 optionEl 内的编辑图标与就地编辑入口绑定。
+ * 抽成命名函数以便 restore() 在 innerHTML 重置后重新绑定新生成的 icon。
+ * @param {HTMLElement} optionEl - 选项 div（含 data-prompt-edit 的子元素）
+ * @param {{group: string, label: string, alias: string, template: string}} currentItem
+ */
+function bindEditIcon(optionEl, currentItem) {
+  const editBtn = optionEl.querySelector('[data-prompt-edit]');
+  if (!editBtn) return;
+  editBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    startInlineEdit(optionEl, currentItem);
+  });
+}
+
+/**
+ * 把 optionEl 转为编辑态：label/alias/template 三输入 + 确认/取消按钮。
+ * 确认按钮 → updatePrompt → 触发 subscribe → 重渲染。
+ * @param {HTMLElement} optionEl
+ * @param {{group: string, label: string, alias: string, template: string}} currentItem
+ */
+function startInlineEdit(optionEl, currentItem) {
+  // 保存原文，编辑失败/取消时回滚
+  const original = optionEl.innerHTML;
+
+  const labelInput = document.createElement('input');
+  labelInput.type = 'text';
+  labelInput.className = 'inline-edit-label';
+  labelInput.value = currentItem.label || '';
+
+  const aliasInput = document.createElement('input');
+  aliasInput.type = 'text';
+  aliasInput.className = 'inline-edit-alias';
+  aliasInput.placeholder = '/alias（可空）';
+  aliasInput.value = currentItem.alias || '';
+
+  const templateArea = document.createElement('textarea');
+  templateArea.className = 'inline-edit-template';
+  templateArea.value = currentItem.template || '';
+
+  const actions = document.createElement('div');
+  actions.className = 'inline-edit-actions';
+
+  const confirmBtn = document.createElement('button');
+  confirmBtn.type = 'button';
+  confirmBtn.className = 'inline-confirm';
+  confirmBtn.textContent = '确认';
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'inline-cancel';
+  cancelBtn.textContent = '取消';
+
+  actions.appendChild(confirmBtn);
+  actions.appendChild(cancelBtn);
+
+  // 清空原内容，挂入编辑控件
+  optionEl.innerHTML = '';
+  optionEl.appendChild(labelInput);
+  optionEl.appendChild(aliasInput);
+  optionEl.appendChild(templateArea);
+  optionEl.appendChild(actions);
+  optionEl.classList.add('inline-editing');
+
+  labelInput.focus();
+  labelInput.select();
+
+  // 阻止 click 冒泡到 option / document，避免触发选中切换或外点关闭
+  const swallow = (e) => e.stopPropagation();
+  optionEl.addEventListener('click', swallow);
+
+  const restore = () => {
+    optionEl.innerHTML = original;
+    optionEl.classList.remove('inline-editing');
+    // innerHTML 重置会替换掉原 edit-icon DOM 节点，原监听随之丢失。
+    // 重新绑定新的 edit-icon，使其恢复后可再次点开就地编辑。
+    bindEditIcon(optionEl, currentItem);
+  };
+
+  cancelBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    restore();
+  });
+
+  confirmBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const newLabel = labelInput.value.trim();
+    const newAlias = aliasInput.value.trim();
+    const newTemplate = templateArea.value;
+    if (!newLabel) {
+      showInlineError(optionEl, '标题不能为空');
+      return;
+    }
+    confirmBtn.disabled = true;
+    cancelBtn.disabled = true;
+    try {
+      await updatePrompt({
+        group: currentItem.group,
+        oldLabel: currentItem.label,
+        newLabel,
+        newAlias,
+        newTemplate,
+      });
+      // savePromptFile 已 bump version，subscribe 会触发 prompts:changed → 重渲染
+      // 这里不需要手动 restore；重渲染会重建整张下拉框
+    } catch (err) {
+      confirmBtn.disabled = false;
+      cancelBtn.disabled = false;
+      showInlineError(optionEl, err && err.message ? err.message : '保存失败');
+    }
+  });
+
+  // Escape 键取消
+  const onKey = (e) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      restore();
+      document.removeEventListener('keydown', onKey, true);
+    }
+  };
+  document.addEventListener('keydown', onKey, true);
+}
+
+function showInlineError(host, msg) {
+  // 移除旧错误
+  const old = host.querySelector('.inline-error');
+  if (old) old.remove();
+  const e = document.createElement('div');
+  e.className = 'inline-error';
+  e.textContent = msg;
+  host.appendChild(e);
+}
+
+// 模块级事件监听：shared cache 更新 → 重渲染下拉框。
+// 由 mainUtils.initializePopup 调 loadAllPrompts / subscribeToPrompts 触发 document 上的
+// `prompts:changed` 事件，populateOptimizer 重建整张下拉框。
+//
+// 设计：把外部"重建一次"的入口封装成 installOptimizer，事件触发时调用。
+// 注意：重建会调用 populateOptimizer 注册一组新的 outside-click 监听；为避免泄漏，
+// 每次重建前先调用上一次安装时记录的 cleanup（由 _optimizerRegistry 维护）。
+const _optimizerRegistry = new WeakMap(); // optimizerEl → 上一轮 cleanup
+
+/**
+ * 安装/重装提示词下拉框。返回 cleanup（与 populateOptimizer 兼容）。
+ * 同一元素多次调用时，先卸掉前一轮的 outside-click 监听再装新监听，避免泄漏。
+ * @param {HTMLElement} optimizerEl
+ * @returns {() => void} cleanup
+ */
+function installOptimizer(optimizerEl) {
+  if (!optimizerEl || !optimizerEl.isConnected) {
+    return () => {};
+  }
+  const prevCleanup = _optimizerRegistry.get(optimizerEl);
+  if (typeof prevCleanup === 'function') {
+    try { prevCleanup(); } catch (_) { /* noop */ }
+  }
+  const cleanup = populateOptimizer(optimizerEl, null);
+  _optimizerRegistry.set(optimizerEl, cleanup);
+  return cleanup;
+}
+
+document.addEventListener('prompts:changed', () => {
+  const optimizerEl = document.querySelector('#prompt-optimizer-select');
+  if (!optimizerEl) return;
+  installOptimizer(optimizerEl);
+});
+
+export {
+  populateOptimizer,
+  initAliasShortcut,
+  installOptimizer,
+};
