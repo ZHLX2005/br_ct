@@ -38,6 +38,7 @@ import {
 
 import { PLATFORM_CONFIG } from "../../../config/platformConfig.js";
 import { getCurrentPrompts } from "../../../shared/prompts/promptsStore.js";
+import { addPrompt } from "../../../shared/prompts/promptsEditorApi.js";
 
 // 图片 OCR 控制器（依赖注入 shared/imageOcr.js）
 let ocrController = null;
@@ -725,12 +726,27 @@ export function setupEventListeners() {
 
     // === 右侧模板列 ===
     const rightCol = document.createElement("div");
-    rightCol.style.cssText = "flex:1;overflow-y:auto;";
+    rightCol.style.cssText = "flex:1;display:flex;flex-direction:column;overflow:hidden;";
+
+    // 右侧顶部：新建按钮（固定，不随列表滚动）
+    const addHeader = document.createElement("div");
+    addHeader.style.cssText = "flex-shrink:0;padding:6px 10px;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;justify-content:flex-end;";
+    addHeader.innerHTML = '<button type="button" class="__sidebar_picker_add_btn__" style="display:inline-flex;align-items:center;gap:3px;padding:4px 10px;border:1px solid #4361ee;border-radius:4px;background:#4361ee;color:#fff;font-size:11px;font-weight:500;cursor:pointer;">✚ 新建</button>';
+    addHeader.addEventListener("click", (e) => {
+      e.stopPropagation();
+      showAddPromptModal(activeGroup);
+    });
+    rightCol.appendChild(addHeader);
+
+    // 右侧列表容器（可滚动）
+    const listEl = document.createElement("div");
+    listEl.style.cssText = "flex:1;overflow-y:auto;";
+    rightCol.appendChild(listEl);
 
     let activeGroup = groupNames[0];
 
     function renderGroupOptions(groupName) {
-      rightCol.innerHTML = "";
+      listEl.innerHTML = "";
       const items = groups[groupName] || [];
       items.forEach((tpl) => {
         const item = document.createElement("div");
@@ -771,7 +787,7 @@ export function setupEventListeners() {
           syncPromptIndicator();
           closePromptPicker();
         });
-        rightCol.appendChild(item);
+        listEl.appendChild(item);
       });
     }
 
@@ -808,6 +824,149 @@ export function setupEventListeners() {
     document.body.appendChild(container);
     promptPicker = container;
     registerOutsideClose(container);
+  }
+
+  // ===== 新建提示词模态框函数 =====
+  function showAddPromptModal(group) {
+    // 移除旧模态框（如果存在）
+    hideAddPromptModal();
+
+    // 创建遮罩层
+    const overlay = document.createElement("div");
+    overlay.id = "__sidebar_add_prompt_modal__";
+    overlay.className = "sidebar-add-modal-overlay";
+
+    // 创建模态框
+    const panel = document.createElement("div");
+    panel.className = "sidebar-add-modal-panel";
+    panel.innerHTML = `
+      <div class="sidebar-add-modal-header">
+        <h3>新建提示词</h3>
+        <button class="sidebar-add-modal-close" type="button">×</button>
+      </div>
+      <div class="sidebar-add-modal-body">
+        <div class="sidebar-add-modal-error" style="display:none;"></div>
+        <div class="sidebar-add-modal-field">
+          <label>标题 <span class="required">*</span></label>
+          <input type="text" id="add-prompt-label" placeholder="提示词名称">
+        </div>
+        <div class="sidebar-add-modal-field">
+          <label>别名 <span class="hint">（可选，如 /fix）</span></label>
+          <input type="text" id="add-prompt-alias" placeholder="留空则无别名">
+        </div>
+        <div class="sidebar-add-modal-field">
+          <label>模板 <span class="required">*</span></label>
+          <textarea id="add-prompt-template" rows="6" placeholder="提示词正文，用 %s 表示用户消息占位"></textarea>
+        </div>
+        <div class="sidebar-add-modal-actions">
+          <button class="sidebar-add-modal-btn sidebar-add-modal-cancel" type="button">取消</button>
+          <button class="sidebar-add-modal-btn sidebar-add-modal-confirm" type="button">确认</button>
+        </div>
+      </div>
+    `;
+
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+
+    // 自动聚焦
+    setTimeout(() => {
+      const labelInput = document.getElementById("add-prompt-label");
+      if (labelInput) labelInput.focus();
+    }, 50);
+
+    // 绑定事件
+    const closeBtn = panel.querySelector(".sidebar-add-modal-close");
+    const cancelBtn = panel.querySelector(".sidebar-add-modal-cancel");
+    const confirmBtn = panel.querySelector(".sidebar-add-modal-confirm");
+
+    const closeFn = () => hideAddPromptModal();
+    closeBtn.addEventListener("click", closeFn);
+    cancelBtn.addEventListener("click", closeFn);
+
+    confirmBtn.addEventListener("click", () => createNewPrompt(group));
+
+    // 键盘快捷键
+    overlay.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        createNewPrompt(group);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        hideAddPromptModal();
+      }
+    });
+
+    // 点击遮罩层关闭
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) hideAddPromptModal();
+    });
+  }
+
+  function hideAddPromptModal() {
+    const existing = document.getElementById("__sidebar_add_prompt_modal__");
+    if (existing) existing.remove();
+  }
+
+  async function createNewPrompt(group) {
+    const labelInput = document.getElementById("add-prompt-label");
+    const aliasInput = document.getElementById("add-prompt-alias");
+    const templateInput = document.getElementById("add-prompt-template");
+    const errorEl = document.querySelector(".sidebar-add-modal-error");
+    const confirmBtn = document.querySelector(".sidebar-add-modal-confirm");
+
+    const label = labelInput?.value.trim() || "";
+    const alias = aliasInput?.value.trim() || "";
+    const template = templateInput?.value || "";
+
+    if (!label) {
+      showError("标题不能为空");
+      return;
+    }
+    if (!template) {
+      showError("模板不能为空");
+      return;
+    }
+
+    // 禁用按钮，防止重复提交
+    if (confirmBtn) confirmBtn.disabled = true;
+    if (errorEl) errorEl.style.display = "none";
+
+    try {
+      await addPrompt({ group, label, alias, template });
+
+      // 成功：toast + 关闭
+      showToast("提示词已创建", "success");
+      hideAddPromptModal();
+      closePromptPicker(); // 关闭 picker，等待 subscribeToPrompts 自动刷新
+
+    } catch (err) {
+      // 失败：显示错误
+      showError(err.message || "创建失败");
+      if (confirmBtn) confirmBtn.disabled = false;
+    }
+
+    function showError(msg) {
+      if (errorEl) {
+        errorEl.textContent = msg;
+        errorEl.style.display = "block";
+      }
+    }
+
+    function showToast(msg, type = "success") {
+      const toast = document.createElement("div");
+      toast.className = "sidebar-add-toast";
+      toast.textContent = msg;
+      toast.style.cssText = `
+        position:fixed; bottom:24px; right:24px; z-index:10003;
+        padding:10px 16px; font-size:12px; font-weight:500;
+        border-radius:6px; box-shadow:0 6px 20px rgba(15,23,42,0.18);
+        ${type === "success"
+          ? "background:#16a34a; color:#fff;"
+          : "background:#dc2626; color:#fff;"}
+      `;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
   }
 
   if (promptBar) {
