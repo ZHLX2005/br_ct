@@ -110,9 +110,16 @@ export async function savePromptFile(group, list) {
     throw new Error('savePromptFile: list must be an array');
   }
 
+  // Resolve the full path the same way loadAllPrompts does for parsePrompts:
+  // getPromptsDir + '\\' + group.js. The native host's SavePromptsFile writes to
+  // req.Path verbatim, so a bare basename would land in the extension CWD.
+  const dirResp = await sendNativeMessage({ command: 'getPromptsDir' });
+  const dir = dirResp && dirResp.data;
+  if (!dir) throw new Error('getPromptsDir returned no data');
+
   await sendNativeMessage({
     command: 'savePrompts',
-    path: `${group}.js`,
+    path: `${dir}\\${group}.js`,
     content: serializeGroup(list),
   });
 

@@ -18,7 +18,6 @@ import { STORAGE_KEYS } from "../../shared/core/storageKeys.js";
 import {
   addToHistory,
   loadHistory,
-  subscribeToHistory,
 } from "../../shared/history/historyStore.js";
 import {
   loadPlatformVisibility,
@@ -176,13 +175,6 @@ function setupPlatformVisibilityMessageListener(callback) {
     if (callback) callback(settings);
   });
   return unsub;
-}
-
-// 注册跨页面历史记录同步（其他页面新增历史 → 当前页面刷新历史下拉）
-function subscribeToHistoryRefresh(callback) {
-  return subscribeToHistory((history) => {
-    if (callback) callback(history);
-  });
 }
 
 /**
