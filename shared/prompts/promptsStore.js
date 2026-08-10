@@ -13,10 +13,13 @@
 import { STORAGE_KEYS } from '../core/storageKeys.js';
 import { sendNativeMessage } from '../core/nativeBridge.js';
 import { getBootstrapPrompts } from './promptsBootstrap.js';
+import { createSubscribable } from '../core/subscribable.js';
 
 const VERSION_KEY = STORAGE_KEYS.PROMPTS_VERSION;
 let cache = getBootstrapPrompts(); // current snapshot; replaced on disk load
 let loaded = false;                // true after first successful loadAllPrompts
+// 与 platformsStore/historyStore 对称:写完后进程内 emit,跨页靠 chrome.storage.onChanged
+const subs = createSubscribable();
 
 function serializeGroup(list) {
   return `export default ${JSON.stringify(list, null, 2)};\n`;
@@ -58,6 +61,7 @@ export function getCurrentPrompts() { return cache; }
 export function isLoaded() { return loaded; }
 
 export function subscribeToPrompts(cb) {
+  const unsub = subs.subscribe(cb);
   const handler = (changes, area) => {
     if (area !== 'local' || !changes || !(VERSION_KEY in changes)) return;
     try { cb(cache); } catch (err) {
@@ -65,10 +69,8 @@ export function subscribeToPrompts(cb) {
     }
   };
   chrome.storage.onChanged.addListener(handler);
-  let done = false;
-  return function unsubscribe() {
-    if (done) return;
-    done = true;
+  return () => {
+    unsub();
     chrome.storage.onChanged.removeListener(handler);
   };
 }
@@ -128,4 +130,7 @@ export async function savePromptFile(group, list) {
 
   const current = await readVersion();
   await writeVersion(current + 1);
+  // 进程内 emit：与 platformsStore.savePlatformVisibility 对称，
+  // 确保 savePromptFile 完成后同页面订阅者立即拿到新 cache（不再依赖 onChanged 时序）。
+  subs.emit(cache);
 }

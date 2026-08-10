@@ -57,6 +57,14 @@ const getBootstrapPrompts = () => ({
   xxxx_ask: [{group:"xxxx_ask", label:"l", alias:"a", template:"t"}],
   xxxx_trans: [{group:"xxxx_trans", label:"l", alias:"a", template:"t"}],
 });
+// createSubscribable stub mirrors shared/core/subscribable.js for tests
+const createSubscribable = () => {
+  const subs = new Set();
+  return {
+    subscribe: (cb) => { subs.add(cb); return () => subs.delete(cb); },
+    emit: (v) => { for (const cb of [...subs]) { try { cb(v); } catch (e) { console.error(e); } } },
+  };
+};
 `;
 
 const src = readFileSync(SRC_PATH, 'utf8');
@@ -65,16 +73,17 @@ const tmpDir = mkdtempSync(join(tmpdir(), 'promptsStore-test-'));
 const tmpFile = join(tmpDir, 'promptsStore.mjs');
 writeFileSync(tmpFile, STUBS + stripped);
 
-let getCurrentPrompts, isLoaded, subscribeToPrompts;
+let getCurrentPrompts, isLoaded, subscribeToPrompts, savePromptFile;
 try {
-  ({ getCurrentPrompts, isLoaded, subscribeToPrompts } = await import(pathToFileURL(tmpFile).href));
+  ({ getCurrentPrompts, isLoaded, subscribeToPrompts, savePromptFile } = await import(pathToFileURL(tmpFile).href));
 } finally {
   try { rmSync(tmpDir, { recursive: true, force: true }); } catch {}
 }
 
 if (typeof getCurrentPrompts !== 'function' ||
     typeof isLoaded !== 'function' ||
-    typeof subscribeToPrompts !== 'function') {
+    typeof subscribeToPrompts !== 'function' ||
+    typeof savePromptFile !== 'function') {
   console.error('Required exports missing from stripped promptsStore.js');
   process.exit(2);
 }
@@ -99,6 +108,35 @@ await test('isLoaded() returns false before loadAllPrompts succeeds', () => {
 await test('subscribeToPrompts returns an unsubscribe function', () => {
   const unsub = subscribeToPrompts(() => {});
   assert.equal(typeof unsub, 'function');
+});
+
+// 新增:进程内 emit 验证。override STUBS 里的 sendNativeMessage,让 savePromptFile
+// 走完整流程,断言已订阅的 cb 在进程内同步触发。
+await test('savePromptFile triggers in-process emit on subscribed cb (symmetric with platformsStore)', async () => {
+  const tmpDir2 = mkdtempSync(join(tmpdir(), 'promptsStore-test-'));
+  const tmpFile2 = join(tmpDir2, 'promptsStore.mjs');
+  // 复用原 STUBS,但替换 sendNativeMessage 为成功 stub
+  const stub2 = STUBS.replace(
+    'const sendNativeMessage = () => Promise.reject(new Error("not used in tests"));',
+    `const sendNativeMessage = (m) => {
+      if (m && m.command === 'getPromptsDir') return Promise.resolve({ data: 'C:/fake/prompts' });
+      if (m && m.command === 'savePrompts') return Promise.resolve({ data: { ok: true } });
+      return Promise.resolve({ data: null });
+    };`
+  );
+  writeFileSync(tmpFile2, stub2 + stripped);
+  try {
+    const mod = await import(pathToFileURL(tmpFile2).href);
+    let emitCount = 0;
+    let lastCache = null;
+    const unsub = mod.subscribeToPrompts((cache) => { emitCount++; lastCache = cache; });
+    await mod.savePromptFile('code_gen', [{ group: 'code_gen', label: 'l', alias: 'a', template: 't' }]);
+    assert.ok(emitCount >= 1, `cb should fire at least once after savePromptFile, got ${emitCount}`);
+    assert.ok(lastCache && lastCache.code_gen, 'last cache should contain code_gen group');
+    unsub();
+  } finally {
+    try { rmSync(tmpDir2, { recursive: true, force: true }); } catch {}
+  }
 });
 
 console.log(`\nResults: ${passed} passed / ${failed} failed`);
