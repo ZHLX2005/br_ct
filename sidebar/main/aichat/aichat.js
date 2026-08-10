@@ -14,9 +14,7 @@ import {
 
 console.log('[boot] aichat.js module loaded');
 
-let _runtimeInit = false;
 let _cssLoaded = false;
-
 export async function mount(container) {
   console.log('[boot] aichat.mount: start, container =', container?.id);
   // 加载 aichat.css
@@ -47,11 +45,10 @@ export async function mount(container) {
   console.log('[aichat] response-content element:', !!document.getElementById('response-content'));
   console.log('[aichat] response-status element:', !!document.getElementById('response-status'));
 
-  // 每次 mount 都重新缓存 DOM + 绑定事件（DOM 全新注入，无重复风险）
-  if (!_runtimeInit) {
-    initializePlatformOptions();
-    _runtimeInit = true;
-  }
+  // 每次 mount 重新跑 platformRenderer:它对 aichat.html 内 `#platform-options-row`
+  // 调用 innerHTML 注入平台选项,幂等且廉价;不缓存可以避免 aichat ← → cc 切换后
+  // 旧 DOM 被 unmount 清除后再注入不重复的错误。
+  initializePlatformOptions(container);
   try {
     await initializePopup();
     console.log('[boot] aichat.mount: initializePopup done');
