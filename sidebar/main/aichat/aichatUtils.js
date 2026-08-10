@@ -181,7 +181,9 @@ function saveOptimizerSetting(value) {
 function applyPlatformVisibilitySettings(settings) {
   const platformOptions = document.querySelectorAll('.platform-icon-option');
   platformOptions.forEach((option) => {
-    const platformId = option.getAttribute('data-platform-id');
+    // HTML 在 renderPlatformOptions 里用 data-platform(与 popup 一致),
+    // 早期 data-platform-id 是 popup 旧版本的写法;两个都查,避免漏匹配。
+    const platformId = option.getAttribute('data-platform') || option.getAttribute('data-platform-id');
     if (platformId) {
       const isVisible = settings.hasOwnProperty(platformId) ? settings[platformId] : true;
       if (!isVisible) {
