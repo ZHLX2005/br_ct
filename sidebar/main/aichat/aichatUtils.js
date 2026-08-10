@@ -13,21 +13,15 @@ import {
 } from "../../../shared/sendMessage.js";
 import { setupImageDragDrop } from "./dragDropImageHandler.js";
 import * as promptEditor from "./promptEditor.js";
+import { STORAGE_KEYS } from "../../../shared/core/storageKeys.js";
 import {
-  STORAGE_KEYS,
-  saveMessageContent,
-  savePlatformStates,
-  saveOptimizerSetting,
-  loadStoredData as loadData,
   addToHistory,
-} from "../../../popup/main/modules/storage.js";
+  loadHistory,
+} from "../../../shared/history/historyStore.js";
 import {
-  loadPlatformVisibilitySettings,
-  applyPlatformVisibilitySettings,
-  getVisiblePlatformCheckboxes,
-  areAllVisiblePlatformsChecked,
-  setupPlatformVisibilityMessageListener
-} from "../../../popup/main/modules/platformVisibility.js";
+  loadPlatformVisibility,
+  subscribeToPlatforms,
+} from "../../../shared/platforms/platformsStore.js";
 import {
   copyToClipboard,
   showTempMessage,
@@ -108,6 +102,109 @@ function getMessageSaver() {
     });
   }
   return messageSaver;
+}
+
+// ==================== Inline storage helpers (替代旧 popup/main/modules/storage.js) ====================
+//
+// 与 popup/main/mainUtils.js 同：仅写一个 key 的本地 chrome.storage.local 包装。
+// 历史与平台可见性已下沉到 shared/history 与 shared/platforms。
+
+function saveMessageContent(content) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [STORAGE_KEYS.LAST_MESSAGE]: content }, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+function savePlatformStates(platformCheckboxes) {
+  const checkedStates = {};
+  platformCheckboxes.forEach((cb) => {
+    checkedStates[cb.dataset.platform] = cb.checked;
+  });
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [STORAGE_KEYS.PLATFORM_STATES]: checkedStates }, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+function saveOptimizerSetting(value) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [STORAGE_KEYS.OPTIMIZER]: value }, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+// ==================== DOM-bound helpers (替代旧 popup/main/modules/platformVisibility.js) ====================
+//
+// shared/platforms 提供数据；DOM 应用必须留在调用方（sidebar 的平台 row 在 #platform-options-row）。
+
+function applyPlatformVisibilitySettings(settings) {
+  const platformOptions = document.querySelectorAll('.platform-icon-option');
+  platformOptions.forEach((option) => {
+    const platformId = option.getAttribute('data-platform-id');
+    if (platformId) {
+      const isVisible = settings.hasOwnProperty(platformId) ? settings[platformId] : true;
+      if (!isVisible) {
+        option.style.display = 'none';
+        const checkbox = option.querySelector('input[type="checkbox"]');
+        if (checkbox) checkbox.checked = false;
+      } else {
+        option.style.display = '';
+      }
+    }
+  });
+  updateVisiblePlatformColumns();
+}
+
+function updateVisiblePlatformColumns() {
+  const container = document.getElementById('platform-options-row');
+  if (!container) return;
+  const visibleCount = Array.from(
+    container.querySelectorAll('.platform-icon-option')
+  ).filter((option) => option.style.display !== 'none').length;
+  container.style.setProperty('--platform-columns', Math.min(Math.max(visibleCount, 1), 7));
+}
+
+function getVisiblePlatformCheckboxes(allCheckboxes) {
+  return Array.from(allCheckboxes).filter((checkbox) => {
+    const option = checkbox.closest('.platform-icon-option');
+    return option && option.style.display !== 'none';
+  });
+}
+
+function areAllVisiblePlatformsChecked(visibleCheckboxes) {
+  if (visibleCheckboxes.length === 0) return false;
+  return visibleCheckboxes.every((checkbox) => checkbox.checked);
+}
+
+// 跨页面平台可见性同步：原 onMessage 监听替换为 subscribeToPlatforms
+// options 页保存后 → 任何打开的 sidebar/popup 实时更新（Task 9 架构目标）。
+function setupPlatformVisibilityMessageListener(callback) {
+  return subscribeToPlatforms((settings) => {
+    applyPlatformVisibilitySettings(settings);
+    if (callback) callback(settings);
+  });
+}
+
+async function loadPlatformVisibilitySettings() {
+  const visibilitySettings = await loadPlatformVisibility();
+  applyPlatformVisibilitySettings(visibilitySettings);
+  return visibilitySettings;
 }
 
 async function loadAichatSettings() {
@@ -284,39 +381,49 @@ export async function initializePopup() {
  */
 export async function loadStoredData() {
   try {
-    const result = await loadData();
+    // 历史走 shared/history；平台可见性已在 initializePopup 中走 shared/platforms 应用过
+    // 这里只处理 lastMessage / platformStates / optimizer / lastPromptTemplate 几个一次性 key。
+    const [history, miscResult] = await Promise.all([
+      loadHistory(),
+      new Promise((resolve) => {
+        chrome.storage.local.get(
+          [STORAGE_KEYS.LAST_MESSAGE, STORAGE_KEYS.PLATFORM_STATES, STORAGE_KEYS.OPTIMIZER, STORAGE_KEYS.LAST_PROMPT_TEMPLATE],
+          (result) => resolve(result || {})
+        );
+      }),
+    ]);
 
     // 恢复最后输入的消息
-    if (result[STORAGE_KEYS.LAST_MESSAGE]) {
-      elements.messageInput.value = result[STORAGE_KEYS.LAST_MESSAGE];
-      console.log("已恢复历史输入内容，长度:", result[STORAGE_KEYS.LAST_MESSAGE].length);
+    if (miscResult[STORAGE_KEYS.LAST_MESSAGE]) {
+      elements.messageInput.value = miscResult[STORAGE_KEYS.LAST_MESSAGE];
+      console.log("已恢复历史输入内容，长度:", miscResult[STORAGE_KEYS.LAST_MESSAGE].length);
       autoResizeInput(elements.messageInput);
       updateSendButton();
     }
 
     // 恢复平台选择状态
-    if (result[STORAGE_KEYS.PLATFORM_STATES]) {
-      restorePlatformStates(result[STORAGE_KEYS.PLATFORM_STATES]);
+    if (miscResult[STORAGE_KEYS.PLATFORM_STATES]) {
+      restorePlatformStates(miscResult[STORAGE_KEYS.PLATFORM_STATES]);
     }
 
     // 缓存历史记录（点击"历史"按钮时才渲染）
-    if (result[STORAGE_KEYS.HISTORY]) {
-      _historyCache = result[STORAGE_KEYS.HISTORY];
+    if (history && history.length) {
+      _historyCache = history;
     }
 
     // 恢复优化器选择
-    if (result[STORAGE_KEYS.OPTIMIZER]) {
-      elements.promptOptimizerSelect.value = result[STORAGE_KEYS.OPTIMIZER];
+    if (miscResult[STORAGE_KEYS.OPTIMIZER]) {
+      elements.promptOptimizerSelect.value = miscResult[STORAGE_KEYS.OPTIMIZER];
     }
 
     // 恢复提示词选择
-    if (result[STORAGE_KEYS.LAST_PROMPT_TEMPLATE]) {
-      const template = PROMPT_TEMPLATES[result[STORAGE_KEYS.LAST_PROMPT_TEMPLATE]];
+    if (miscResult[STORAGE_KEYS.LAST_PROMPT_TEMPLATE]) {
+      const template = PROMPT_TEMPLATES[miscResult[STORAGE_KEYS.LAST_PROMPT_TEMPLATE]];
       if (template) {
         const selectedValue =
           elements.promptOptimizerSelect.querySelector(".selected-value");
         selectedValue.textContent = template.label;
-        selectedValue.dataset.value = result[STORAGE_KEYS.LAST_PROMPT_TEMPLATE];
+        selectedValue.dataset.value = miscResult[STORAGE_KEYS.LAST_PROMPT_TEMPLATE];
         selectedValue.dataset.template = template.template;
       }
     }
@@ -1014,17 +1121,17 @@ function toggleHistoryView() {
 /**
  * 发送成功后刷新缓存（如果历史正显示则重绘）
  */
-export function refreshHistoryCache() {
-  chrome.storage.local.get(STORAGE_KEYS.HISTORY, (result) => {
-    const oldLen = _historyCache.length;
-    _historyCache = result[STORAGE_KEYS.HISTORY] || [];
-    const sec = elements.historySection;
-    if (sec && sec.classList.contains('visible') && _historyCache.length !== oldLen) {
-      _historyRendered = 0;
-      renderHistorySection();
-      fillHistoryIfNeeded();
-    }
-  });
+export async function refreshHistoryCache() {
+  // 走 shared/history：从 chrome.storage.local 读 + 同步内部 cache
+  const history = await loadHistory();
+  const oldLen = _historyCache.length;
+  _historyCache = history;
+  const sec = elements.historySection;
+  if (sec && sec.classList.contains('visible') && _historyCache.length !== oldLen) {
+    _historyRendered = 0;
+    renderHistorySection();
+    fillHistoryIfNeeded();
+  }
 }
 
 

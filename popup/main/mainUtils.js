@@ -14,21 +14,16 @@ import {
   loadAllPrompts,
   subscribeToPrompts,
 } from "../../shared/prompts/promptsStore.js";
+import { STORAGE_KEYS } from "../../shared/core/storageKeys.js";
 import {
-  STORAGE_KEYS,
-  saveMessageContent,
-  savePlatformStates,
-  saveOptimizerSetting,
-  loadStoredData as loadData,
-  addToHistory
-} from "./modules/storage.js";
+  addToHistory,
+  loadHistory,
+  subscribeToHistory,
+} from "../../shared/history/historyStore.js";
 import {
-  loadPlatformVisibilitySettings,
-  applyPlatformVisibilitySettings,
-  getVisiblePlatformCheckboxes,
-  areAllVisiblePlatformsChecked,
-  setupPlatformVisibilityMessageListener
-} from "./modules/platformVisibility.js";
+  loadPlatformVisibility,
+  subscribeToPlatforms,
+} from "../../shared/platforms/platformsStore.js";
 import {
   copyToClipboard,
   showTempMessage,
@@ -69,6 +64,126 @@ let viewCleanups = [];
 
 // 输入持久化 saver（shared 原语；module-level 以便 startSending 调用 flush）
 let messageSaver = null;
+
+// ==================== Inline storage helpers (替代旧 popup/main/modules/storage.js) ====================
+//
+// 这些是直接基于 chrome.storage.local 的小包装。原本由旧 storage.js 提供的 5 个 save 函数
+// 在 popup/sidebar 中只被少量调用，且都只写一个 key，没有共享复用价值——保留为本地包装更轻量。
+// 之所以放在这里（而不是下沉到 shared），是为了坚持"shared 层只放数据原语，不沾边 DOM/UI 状态"。
+// 历史/平台可见性等真正共享的数据已下沉到 shared/history、shared/platforms。
+
+function saveMessageContent(content) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [STORAGE_KEYS.LAST_MESSAGE]: content }, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+function savePlatformStates(platformCheckboxes) {
+  const checkedStates = {};
+  platformCheckboxes.forEach((cb) => {
+    checkedStates[cb.dataset.platform] = cb.checked;
+  });
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [STORAGE_KEYS.PLATFORM_STATES]: checkedStates }, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+function saveOptimizerSetting(value) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [STORAGE_KEYS.OPTIMIZER]: value }, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+// ==================== DOM-bound helpers (替代旧 popup/main/modules/platformVisibility.js) ====================
+//
+// 可见性 *数据* 由 shared/platforms/platformsStore 提供；可见性 *DOM 应用* 必须留在调用方，
+// 因为 shared 层不应触及具体页面的 DOM 结构。
+
+function applyPlatformVisibilitySettings(settings) {
+  const platformOptions = viewRoot
+    ? viewRoot.querySelectorAll('.platform-icon-option')
+    : document.querySelectorAll('.platform-icon-option');
+  platformOptions.forEach((option) => {
+    const platformId = option.getAttribute('data-platform-id');
+    if (platformId) {
+      const isVisible = settings.hasOwnProperty(platformId) ? settings[platformId] : true;
+      if (!isVisible) {
+        option.style.display = 'none';
+        const checkbox = option.querySelector('input[type="checkbox"]');
+        if (checkbox) checkbox.checked = false;
+      } else {
+        option.style.display = '';
+      }
+    }
+  });
+  updateVisiblePlatformColumns();
+}
+
+function updateVisiblePlatformColumns() {
+  const container = viewRoot
+    ? viewRoot.querySelector('#platform-options-row')
+    : document.getElementById('platform-options-row');
+  if (!container) return;
+  const visibleCount = Array.from(
+    container.querySelectorAll('.platform-icon-option')
+  ).filter((option) => option.style.display !== 'none').length;
+  container.style.setProperty('--platform-columns', Math.min(Math.max(visibleCount, 1), 7));
+}
+
+function getVisiblePlatformCheckboxes(allCheckboxes) {
+  return Array.from(allCheckboxes).filter((checkbox) => {
+    const option = checkbox.closest('.platform-icon-option');
+    return option && option.style.display !== 'none';
+  });
+}
+
+function areAllVisiblePlatformsChecked(visibleCheckboxes) {
+  if (visibleCheckboxes.length === 0) return false;
+  return visibleCheckboxes.every((checkbox) => checkbox.checked);
+}
+
+// ==================== 旧 init 中加载平台可见性 + 跨页同步 ====================
+
+async function loadPlatformVisibilitySettings() {
+  const visibilitySettings = await loadPlatformVisibility();
+  applyPlatformVisibilitySettings(visibilitySettings);
+  return visibilitySettings;
+}
+
+// 注册跨页面平台可见性同步（options 页保存后 → 任何打开的 popup/sidebar 实时更新）
+// 这是 Task 9 的"架构目标"：把原本依赖 onMessage 的方式替换为 storage.onChanged + subscribable
+function setupPlatformVisibilityMessageListener(callback) {
+  const unsub = subscribeToPlatforms((settings) => {
+    applyPlatformVisibilitySettings(settings);
+    if (callback) callback(settings);
+  });
+  return unsub;
+}
+
+// 注册跨页面历史记录同步（其他页面新增历史 → 当前页面刷新历史下拉）
+function subscribeToHistoryRefresh(callback) {
+  return subscribeToHistory((history) => {
+    if (callback) callback(history);
+  });
+}
 
 /**
  * 注册全局回调（dragDropHandler 调用）
@@ -169,37 +284,47 @@ export function registerDocumentSideEffects(rootEl) {
  */
 export async function loadStoredData() {
   try {
-    const result = await loadData();
+    // 历史走 shared/history；平台可见性已在 initializePopup 中走 shared/platforms 应用过
+    // 这里只处理 lastMessage / platformStates / optimizer / lastPromptTemplate 几个一次性 key。
+    const [history, miscResult] = await Promise.all([
+      loadHistory(),
+      new Promise((resolve) => {
+        chrome.storage.local.get(
+          [STORAGE_KEYS.LAST_MESSAGE, STORAGE_KEYS.PLATFORM_STATES, STORAGE_KEYS.OPTIMIZER, STORAGE_KEYS.LAST_PROMPT_TEMPLATE],
+          (result) => resolve(result || {})
+        );
+      }),
+    ]);
 
     // 恢复最后输入的消息
-    if (result[STORAGE_KEYS.LAST_MESSAGE]) {
-      elements.messageInput.value = result[STORAGE_KEYS.LAST_MESSAGE];
-      console.log("已恢复历史输入内容，长度:", result[STORAGE_KEYS.LAST_MESSAGE].length);
+    if (miscResult[STORAGE_KEYS.LAST_MESSAGE]) {
+      elements.messageInput.value = miscResult[STORAGE_KEYS.LAST_MESSAGE];
+      console.log("已恢复历史输入内容，长度:", miscResult[STORAGE_KEYS.LAST_MESSAGE].length);
     }
 
     // 恢复平台选择状态
-    if (result[STORAGE_KEYS.PLATFORM_STATES]) {
-      restorePlatformStates(result[STORAGE_KEYS.PLATFORM_STATES]);
+    if (miscResult[STORAGE_KEYS.PLATFORM_STATES]) {
+      restorePlatformStates(miscResult[STORAGE_KEYS.PLATFORM_STATES]);
     }
 
-    // 恢复历史记录
-    if (result[STORAGE_KEYS.HISTORY]) {
-      populateHistoryUI(elements.historySelect, result[STORAGE_KEYS.HISTORY]);
+    // 恢复历史记录（shared 层已有 cache，loadHistory 返回副本即可）
+    if (history && history.length) {
+      populateHistoryUI(elements.historySelect, history);
     }
 
     // 恢复优化器选择
-    if (result[STORAGE_KEYS.OPTIMIZER]) {
-      elements.promptOptimizerSelect.value = result[STORAGE_KEYS.OPTIMIZER];
+    if (miscResult[STORAGE_KEYS.OPTIMIZER]) {
+      elements.promptOptimizerSelect.value = miscResult[STORAGE_KEYS.OPTIMIZER];
     }
 
     // 恢复提示词选择
-    if (result[STORAGE_KEYS.LAST_PROMPT_TEMPLATE]) {
-      const template = PROMPT_TEMPLATES[result[STORAGE_KEYS.LAST_PROMPT_TEMPLATE]];
+    if (miscResult[STORAGE_KEYS.LAST_PROMPT_TEMPLATE]) {
+      const template = PROMPT_TEMPLATES[miscResult[STORAGE_KEYS.LAST_PROMPT_TEMPLATE]];
       if (template) {
         const selectedValue =
           elements.promptOptimizerSelect.querySelector(".selected-value");
         selectedValue.textContent = template.label;
-        selectedValue.dataset.value = result[STORAGE_KEYS.LAST_PROMPT_TEMPLATE];
+        selectedValue.dataset.value = miscResult[STORAGE_KEYS.LAST_PROMPT_TEMPLATE];
         selectedValue.dataset.template = template.template;
       }
     }
@@ -235,7 +360,9 @@ export function setupEventListeners() {
   attachMessageInputPersistence(elements.messageInput, messageSaver, {
     onShowMessage: (msg) => showTempMessage(msg),
     getStoredValue: async () => {
-      const result = await loadData(STORAGE_KEYS.LAST_MESSAGE);
+      const result = await new Promise((resolve) =>
+        chrome.storage.local.get([STORAGE_KEYS.LAST_MESSAGE], (r) => resolve(r || {}))
+      );
       return result[STORAGE_KEYS.LAST_MESSAGE] || "";
     },
   });
