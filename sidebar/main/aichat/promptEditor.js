@@ -9,7 +9,7 @@
  * - 解析与还原统一在 promptsCore.js，前端自闭环
  */
 
-import { parseTemplate, composeTemplate } from '../../../../shared/prompts/promptsCore.js';
+import { parseTemplate, composeTemplate } from '../../../shared/prompts/promptsCore.js';
 
 // ============== native 通信 ==============
 
