@@ -17,6 +17,7 @@ import { STORAGE_KEYS } from "../../../shared/core/storageKeys.js";
 import {
   addToHistory,
   loadHistory,
+  subscribeToHistory,
 } from "../../../shared/history/historyStore.js";
 import {
   loadPlatformVisibility,
@@ -390,6 +391,17 @@ export async function initializePopup() {
   await loadAichatSettings();
   // 加载划词快捷提问设置（与 aichat_settings 独立存储，契约不同）
   await loadSelectionAskSetting();
+
+  // 订阅 history 跨页变更:popup/options 发新消息后,sidebar 历史区即时刷新
+  const unsubHistory = subscribeToHistory((history) => {
+    _historyCache = history;
+    const sec = elements.historySection;
+    if (sec && sec.classList.contains('visible') && _historyCache.length) {
+      _historyRendered = 0;
+      renderHistorySection();
+    }
+  });
+  pushCleanup(unsubHistory);
 
   // 恢复待发送队列
   await loadPendingMessages();
