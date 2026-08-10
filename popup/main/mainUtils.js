@@ -197,6 +197,7 @@ window.__onImagePasted = ({ dataUrl, fileName }) => {
  * @param {Element} rootEl 视图根元素（viewController 注入的 .view.view-main 或直开 mainView.html 时的 document.body）
  */
 export async function initializePopup(rootEl) {
+  console.log('[boot] initializePopup: start, rootEl =', rootEl?.tagName);
   viewRoot = rootEl;
   // 注：不再清零 viewCleanups —— onActivate 已在 init 之前把当轮的 cleanups 推入数组，
   // teardownView 在末尾清零（mainUtils.js:275）。这里再清零会抹掉 onActivate 的注册，
@@ -212,6 +213,7 @@ export async function initializePopup(rootEl) {
     historySelect: rootEl.querySelector("#history-select"),
     promptOptimizerSelect: rootEl.querySelector("#prompt-optimizer-select"),
   };
+  console.log('[boot] initializePopup: cached elements count =', Object.values(elements).filter(v => v !== undefined && v !== null).length, 'messageInput?', !!elements.messageInput, 'promptOptimizerSelect?', !!elements.promptOptimizerSelect);
 
   // 自动聚焦输入框
   focusInputAndSetCursor(elements.messageInput);
@@ -237,6 +239,7 @@ export async function initializePopup(rootEl) {
     document.dispatchEvent(new CustomEvent("prompts:changed"));
   });
   if (typeof unsubscribePrompts === "function") viewCleanups.push(unsubscribePrompts);
+  console.log('[boot] initializePopup: done');
 }
 
 /**

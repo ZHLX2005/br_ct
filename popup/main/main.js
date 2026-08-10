@@ -21,6 +21,7 @@ import { initializePlatformOptions } from "./platformRenderer.js";
  * 否则会产生「document 监听被清掉、视图仍 visible 但外点 / 平台可见性更新失效」的 bug。
  */
 export async function init(rootEl) {
+  console.log('[boot] main.init: start, rootEl =', rootEl?.tagName, 'id =', rootEl?.id);
   try {
     // 动态生成平台选项（从统一配置）
     initializePlatformOptions(rootEl);
@@ -38,8 +39,11 @@ export async function init(rootEl) {
 
     // 初始化指定输入框的拖放事件（element-level，仅一次足够）
     setupDragDropEvents(rootEl);
+
+    console.log('[boot] main.init: done');
   } catch (error) {
     console.error("初始化 main 视图失败:", error);
+    console.error('[boot] main.init: stack =', error?.stack);
   }
 }
 
@@ -55,10 +59,13 @@ export async function init(rootEl) {
  * 之前会调用 teardownView() 统一清理。
  */
 export function onActivate(rootEl) {
+  console.log('[boot] main.onActivate: start');
   try {
     registerDocumentSideEffects(rootEl);
+    console.log('[boot] main.onActivate: done');
   } catch (error) {
     console.error("main onActivate 失败:", error);
+    console.error('[boot] main.onActivate: stack =', error?.stack);
   }
 }
 

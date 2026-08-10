@@ -290,6 +290,7 @@ let isSelectionMode = false;
  * 初始化弹窗，获取并缓存 DOM 元素
  */
 export async function initializePopup() {
+  console.log('[boot] aichat.initializePopup: start');
   // 主元素
   elements = {
     messageInput: document.getElementById("chat-input"),
@@ -380,6 +381,7 @@ export async function initializePopup() {
  * 加载存储的数据
  */
 export async function loadStoredData() {
+  console.log('[boot] aichat.loadStoredData: start');
   try {
     // 历史走 shared/history；平台可见性已在 initializePopup 中走 shared/platforms 应用过
     // 这里只处理 lastMessage / platformStates / optimizer / lastPromptTemplate 几个一次性 key。
