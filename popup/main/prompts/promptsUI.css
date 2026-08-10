@@ -99,3 +99,71 @@
 .custom-select.active .custom-select-options {
   display: block;
 }
+
+/* 就地编辑图标 + 编辑态样式（Task 6） */
+.prompt-edit-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  cursor: pointer;
+  vertical-align: middle;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+  color: var(--text-secondary, #6b7280);
+}
+.prompt-edit-icon:hover { opacity: 1; color: var(--primary-color, #4361ee); }
+
+/* 编辑态：option 内变输入控件 */
+.select-option.inline-editing {
+  display: block;
+  padding: 8px;
+  cursor: default;
+  background-color: var(--primary-light, #f0f4ff);
+}
+.inline-edit-label,
+.inline-edit-alias,
+.inline-edit-template {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 4px 0;
+  padding: 4px 6px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 13px;
+}
+.inline-edit-template {
+  min-height: 60px;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.inline-edit-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.inline-confirm,
+.inline-cancel {
+  padding: 3px 10px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+}
+.inline-confirm {
+  background: #4361ee;
+  color: #fff;
+  border-color: #4361ee;
+}
+.inline-confirm:disabled,
+.inline-cancel:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.inline-error {
+  color: red;
+  font-size: 12px;
+  margin-top: 4px;
+}

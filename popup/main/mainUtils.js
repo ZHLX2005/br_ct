@@ -1,5 +1,5 @@
 // mainUtils.js - 核心popup功能模块
-import { populateOptimizer, initAliasShortcut } from "./prompts/promptsUI.js";
+import { initAliasShortcut, installOptimizer } from "./prompts/promptsUI.js";
 import { PROMPT_TEMPLATES } from "./prompts/prompts.js";
 import { createImageOcrController } from "../../shared/imageOcr.js";
 import { createDebouncedSaver } from "../../shared/debouncedSave.js";
@@ -10,6 +10,10 @@ import {
   closeAllAITabs as closeAllAITabsShared,
   saveMessageHistory,
 } from "../../shared/sendMessage.js";
+import {
+  loadAllPrompts,
+  subscribeToPrompts,
+} from "../../shared/prompts/promptsStore.js";
 import {
   STORAGE_KEYS,
   saveMessageContent,
@@ -107,6 +111,25 @@ export async function initializePopup(rootEl) {
 
   // 加载并应用平台可见性设置（一次性的 storage 读取；onActivate 不需要重复做）。
   await loadPlatformVisibilitySettings();
+
+  // 启动时异步从 disk 拉取，覆盖编译期硬编码（失败时 fallback 到硬编码）。
+  // 注意：这里不需要派发 prompts:changed——下拉框第一次安装由 registerDocumentSideEffects
+  // 调用 installOptimizer 完成，届时 buildPromptMap() 会读到 loadAllPrompts 写入的新 cache。
+  // 只在「缓存更新发生在下拉框已挂载之后」才需要派发（即下方 subscribeToPrompts 的回调）。
+  try {
+    await loadAllPrompts();
+  } catch (e) {
+    console.warn("[popup] loadAllPrompts failed:", e);
+  }
+
+  // 订阅其他页面的修改（保存后自动重渲染下拉框）。
+  // 每次 PROMPTS_VERSION bump 时 promptsStore 的订阅会触发本回调；
+  // 我们把它转成 document 级 CustomEvent，让 promptsUI 的模块监听器负责重建 UI。
+  // 返回的 unsubscribe 推入 viewCleanups，避免多次挂载累积。
+  const unsubscribePrompts = subscribeToPrompts(() => {
+    document.dispatchEvent(new CustomEvent("prompts:changed"));
+  });
+  if (typeof unsubscribePrompts === "function") viewCleanups.push(unsubscribePrompts);
 }
 
 /**
@@ -126,8 +149,11 @@ export function registerDocumentSideEffects(rootEl) {
   const aliasCleanup = initAliasShortcut(elements.messageInput, PROMPT_TEMPLATES, elements.promptOptimizerSelect);
   if (typeof aliasCleanup === "function") viewCleanups.push(aliasCleanup);
 
-  // 初始化优化器下拉框（返回 cleanup：移除 document 监听）
-  const optimizerCleanup = populateOptimizer(elements.promptOptimizerSelect, PROMPT_TEMPLATES);
+  // 初始化优化器下拉框（走 installOptimizer 入口：第一次安装的 cleanup 会登记在
+  // promptsUI 模块的 WeakMap 里，后续 subscribe → prompts:changed 重渲染时会自动
+  // 卸掉旧 outside-click 监听再装新监听；这里再取回 cleanup 推入 viewCleanups，
+  // 让 teardownView 在视图卸载时统一清理）。
+  const optimizerCleanup = installOptimizer(elements.promptOptimizerSelect);
   if (typeof optimizerCleanup === "function") viewCleanups.push(optimizerCleanup);
 
   // 监听来自 options 页面的平台可见性更新消息（返回 cleanup：移除 onMessage 监听）
