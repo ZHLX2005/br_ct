@@ -29,12 +29,10 @@ export async function mountPromptsPanel(container, rootEl) {
   // 启动时拉 disk（幂等；popup/options 已加载也行）。
   await loadAllPrompts().catch(() => {});
 
-  renderInto(container);
-
-  // 订阅：其他页面修改 → 重渲染。
+  // subscribe 仍保留:其它页面修改(promptsStore 版本号变更)→ 通知主视图重建 picker
   unsub = subscribeToPrompts(() => {
     if (!mounted) return;
-    renderInto(container);
+    // 不再渲染本面板;若有 buildPromptPicker 打开,下次用户点击 prompt-bar 会读到新 cache
   });
 }
 
@@ -44,8 +42,10 @@ export function unmountPromptsPanel() {
 }
 
 function renderInto(container) {
-  container.innerHTML = renderPanel(getCurrentPrompts());
-  bindEvents(container);
+  // 容器默认隐藏;由 aichatUtils 的 prompt-bar 点击 buildPromptPicker 弹浮层接管。
+  // 保留 mount 是为了让 aichat.html 留一个挂载点,#app-view 注入即生效。
+  container.style.display = 'none';
+  container.innerHTML = '';
 }
 
 function renderPanel(grouped) {

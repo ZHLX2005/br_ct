@@ -637,6 +637,29 @@ export function setupEventListeners() {
     if (promptPicker) { promptPicker.remove(); promptPicker = null; }
   }
 
+  // 简易 HTML 属性转义,避免 label 含引号搞坏 dataset 值
+  function escAttr(s) {
+    return String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  }
+
+  // 下拉行点编辑图标 → 打开 promptEditor 直接编辑(走 shared/promptsEditorApi)
+  async function openInlineEditOnPicker(group, label) {
+    const cache = getCurrentPrompts() || {};
+    const items = cache[group] || [];
+    const tpl = items.find((p) => p.label === label);
+    if (!tpl) return;
+    await promptEditor.open(
+      {
+        key: tpl.alias || tpl.label,
+        label: tpl.label,
+        alias: tpl.alias || '',
+        group: tpl.group,
+        template: tpl.template,
+      },
+      onPromptSaved,
+    );
+  }
+
   function buildPromptPicker() {
     closePromptPicker();
     const barRect = promptBar.getBoundingClientRect();
@@ -693,12 +716,29 @@ export function setupEventListeners() {
       const items = groups[groupName] || [];
       items.forEach((tpl) => {
         const item = document.createElement("div");
-        const aliasText = tpl.alias ? `  <span style="color:#9ca3af;font-size:10px">/${tpl.alias}</span>` : "";
-        item.innerHTML = `<span>${tpl.label}</span>${aliasText}`;
-        item.style.cssText = "padding:7px 10px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f3f4f6;";
+        item.className = '__sidebar_picker_item__';
+        item.dataset.label = tpl.label;
+        item.dataset.group = tpl.group;
+        item.style.cssText = "padding:7px 10px;cursor:pointer;display:flex;align-items:center;gap:6px;border-bottom:1px solid #f3f4f6;";
+        const labelHtml = `<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${tpl.label}</span>`
+          + (tpl.alias ? `<span style="color:#9ca3af;font-size:10px">/${tpl.alias}</span>` : "");
+        const editHtml = `
+          <svg class="__sidebar_picker_edit__" data-picker-edit="${escAttr(tpl.label)}" data-picker-group="${escAttr(tpl.group)}" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#9ca3af;cursor:pointer;flex-shrink:0;" title="编辑">
+            <path d="M12 20h9"/>
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+          </svg>`;
+        item.innerHTML = labelHtml + editHtml;
         item.addEventListener("mouseenter", () => { item.style.background = "#f3f4f6"; });
         item.addEventListener("mouseleave", () => { item.style.background = ""; });
         item.addEventListener("click", (e) => {
+          // 行内编辑图标命中:不应用,改成进入就地编辑
+          const editHit = e.target.closest('[data-picker-edit]');
+          if (editHit) {
+            e.stopPropagation();
+            closePromptPicker();
+            openInlineEditOnPicker(tpl.group, tpl.label);
+            return;
+          }
           e.stopPropagation();
           const sel = elements.promptOptimizerSelect?.querySelector(".selected-value");
           if (sel) {
