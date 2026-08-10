@@ -1711,7 +1711,7 @@ function handleSidebarSelection(text, title, url) {
 }
 
 // ==================== Prompt 占位符 ====================
-// applyPromptTemplate 已收敛到 ../../../popup/main/prompts/promptsCore.js
+// applyPromptTemplate 已收敛到 ../../../../shared/prompts/promptsCore.js
 // 本文件仅 import 调用，不再保留本地实现。
 
 /**
