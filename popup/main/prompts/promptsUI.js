@@ -199,15 +199,15 @@ function populateOptimizer(promptOptimizerSelect, templates) {
   }
 
   // 修改点击事件切换下拉框显示状态
-  promptOptimizerSelect.addEventListener('click', () => {
+  const onToggleClick = () => {
     const isOpening = !promptOptimizerSelect.classList.contains('active');
     promptOptimizerSelect.classList.toggle('active');
-    
+
     // 当下拉框打开时，显示对应分组
     if (isOpening) {
       chrome.storage.sync.get(['lastActiveGroup', 'lastPromptTemplate'], (result) => {
         let groupToShow = firstGroup; // 默认显示第一个分组
-        
+
         if (result.lastPromptTemplate) {
           // 如果有上次选中的模板，优先使用其分组
           const template = PROMPT_TEMPLATES[result.lastPromptTemplate];
@@ -218,11 +218,12 @@ function populateOptimizer(promptOptimizerSelect, templates) {
           // 其次使用上次激活的分组
           groupToShow = result.lastActiveGroup;
         }
-        
+
         showGroupOptions(groupToShow);
       });
     }
-  });
+  };
+  promptOptimizerSelect.addEventListener('click', onToggleClick);
 
   // 点击外部关闭下拉框（用具名引用以便 teardown removeEventListener）
   const onOutsideClick = (e) => {
@@ -232,9 +233,10 @@ function populateOptimizer(promptOptimizerSelect, templates) {
   };
   document.addEventListener('click', onOutsideClick);
 
-  // 返回 cleanup：移除本函数注册的 document 级监听。
-  // 由 mainUtils.initializePopup 收集，main.js teardown 调用。
+  // 返回 cleanup：移除本函数注册的所有监听。
+  // installOptimizer 通过 prevCleanup() 在重装前清掉旧的,避免切换 -> active 双 toggle。
   return () => {
+    promptOptimizerSelect.removeEventListener('click', onToggleClick);
     document.removeEventListener('click', onOutsideClick);
   };
 }
