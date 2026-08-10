@@ -1,9 +1,5 @@
 // promptsUI.js - popup 提示词下拉框（消费 shared 内存快照 + 就地编辑）
-import {
-  getCurrentPrompts,
-  loadAllPrompts,
-  subscribeToPrompts,
-} from "../../../shared/prompts/promptsStore.js";
+import { getCurrentPrompts } from "../../../shared/prompts/promptsStore.js";
 import { updatePrompt } from "../../../shared/prompts/promptsEditorApi.js";
 
 /**
@@ -159,7 +155,7 @@ function populateOptimizer(promptOptimizerSelect, templates) {
       option.appendChild(editIcon);
 
       // 注册就地编辑（点 icon → label/alias/template 输入 + 确认/取消）
-      attachInlineEditor(option, {
+      bindEditIcon(option, {
         group: template.group,
         label: template.label,
         alias: template.alias || '',
@@ -442,10 +438,11 @@ function initAliasShortcut(textarea, templates, promptOptimizerSelect) {
 
 /**
  * 把当前 optionEl 内的编辑图标与就地编辑入口绑定。
+ * 抽成命名函数以便 restore() 在 innerHTML 重置后重新绑定新生成的 icon。
  * @param {HTMLElement} optionEl - 选项 div（含 data-prompt-edit 的子元素）
  * @param {{group: string, label: string, alias: string, template: string}} currentItem
  */
-export function attachInlineEditor(optionEl, currentItem) {
+function bindEditIcon(optionEl, currentItem) {
   const editBtn = optionEl.querySelector('[data-prompt-edit]');
   if (!editBtn) return;
   editBtn.addEventListener('click', (e) => {
@@ -514,6 +511,9 @@ function startInlineEdit(optionEl, currentItem) {
   const restore = () => {
     optionEl.innerHTML = original;
     optionEl.classList.remove('inline-editing');
+    // innerHTML 重置会替换掉原 edit-icon DOM 节点，原监听随之丢失。
+    // 重新绑定新的 edit-icon，使其恢复后可再次点开就地编辑。
+    bindEditIcon(optionEl, currentItem);
   };
 
   cancelBtn.addEventListener('click', (e) => {
@@ -607,6 +607,5 @@ document.addEventListener('prompts:changed', () => {
 export {
   populateOptimizer,
   initAliasShortcut,
-  attachInlineEditor,
   installOptimizer,
 };
