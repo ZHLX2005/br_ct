@@ -5,10 +5,12 @@
     <title>AI Assistant - 多端AI调度工具</title>
     <link rel="stylesheet" href="../components/theme.css" />
     <link rel="stylesheet" href="../shell.css" />
-    <!-- 预取非主页 CSS：切到 func/translation 时浏览器已缓存，link load 几乎瞬时，避免无样式跳变 -->
-    <link rel="preload" as="style" href="../func_execute/functioncall.css" />
-    <link rel="preload" as="style" href="../translation/translation.css" />
-    <!-- promptsUI.css 属主页，inline 主页时无需 preload -->
+    <!--
+      func/translation 视图的 CSS 由 shell.js view-controller 在切换视图时按需注入
+      (chrome.runtime.getURL(...) + <link> append)。这里不再 preload，否则浏览器
+      会检测到 "preloaded but not used within a few seconds" 报错（默认 main 视图
+      不会立刻消费这两个 CSS）。参见 docs/superpowers/specs/2026-08-02-popup-view-controller-design.md
+    -->
     <script type="module" src="../shell.js"></script>
   </head>
   <body>
