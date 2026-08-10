@@ -79,6 +79,35 @@ function bindEvents(container) {
     const cur = (all[group] || []).find((p) => p.label === label);
     if (!cur) return;
     bindEditIcon(itemEl, cur);
+    bindApplyHandler(itemEl, cur);
+  });
+}
+
+/**
+ * 点击 prompt 标签 → 写入 #prompt-optimizer-select .selected-value →
+ * 派发 change → syncPromptIndicator 刷新顶部指示器。用户期望侧栏
+ * 点 prompt 即"采用",而非必须去 popup 下拉里选。
+ */
+function bindApplyHandler(itemEl, currentItem) {
+  itemEl.addEventListener('click', (e) => {
+    // 进入就地编辑/点击编辑图标时,不要触发 apply
+    if (itemEl.classList.contains('sidebar-inline-editing')) return;
+    const target = e.target;
+    if (target && target.closest && target.closest('[data-prompt-edit]')) return;
+    const select = document.getElementById('prompt-optimizer-select');
+    if (!select) return;
+    const sel = select.querySelector('.selected-value');
+    const key = currentItem.alias || currentItem.label;
+    if (sel) {
+      sel.textContent = currentItem.label;
+      sel.dataset.value = key;
+      sel.dataset.template = currentItem.template || '';
+    }
+    // 同步持久化(沿用 popup 已用路径,sidebar / popup 共享同一选择)
+    try { chrome.storage.sync.set({ lastPromptTemplate: key }); } catch (_) {}
+    select.dispatchEvent(
+      new CustomEvent('change', { detail: { value: key, template: currentItem.template, label: currentItem.label } })
+    );
   });
 }
 

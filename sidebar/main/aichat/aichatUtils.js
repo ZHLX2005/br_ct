@@ -36,6 +36,7 @@ import {
 } from "../../../popup/main/modules/uiHelpers.js";
 
 import { PLATFORM_CONFIG } from "../../../config/platformConfig.js";
+import { getCurrentPrompts } from "../../../shared/prompts/promptsStore.js";
 
 // 图片 OCR 控制器（依赖注入 shared/imageOcr.js）
 let ocrController = null;
@@ -624,14 +625,20 @@ export function setupEventListeners() {
       font-family:-apple-system,BlinkMacSystemFont,sans-serif;
     `;
 
-    // 按分组整理
+    // 按分组整理(从 shared/promptsStore 实时快照,跨页同步后立即可见)
     const groups = {};
     const groupNames = [];
-    for (const key in PROMPT_TEMPLATES) {
-      const t = PROMPT_TEMPLATES[key];
-      const g = t.group || "其他";
-      if (!groups[g]) { groups[g] = []; groupNames.push(g); }
-      groups[g].push({ key, label: t.label, template: t.template, alias: t.alias });
+    const cache = getCurrentPrompts() || {};
+    for (const key in cache) {
+      const items = cache[key];
+      if (!Array.isArray(items)) continue;
+      for (const t of items) {
+        const g = t.group || "其他";
+        if (!groups[g]) { groups[g] = []; groupNames.push(g); }
+        // 用 alias 作为 picker key(与 popup 字段一致);缺 alias 时退化用 label
+        const itemKey = t.alias || t.label || key;
+        groups[g].push({ key: itemKey, label: t.label, template: t.template, alias: t.alias });
+      }
     }
 
     if (groupNames.length === 0) {
@@ -955,10 +962,16 @@ function syncPromptIndicator() {
 
   if (value && value !== '' && label !== '不使用优化') {
     let alias = '';
-    for (const key in PROMPT_TEMPLATES) {
-      if (key === value && PROMPT_TEMPLATES[key].alias) {
-        alias = '/' + PROMPT_TEMPLATES[key].alias;
-        break;
+    // value 在 popup 写出时是 alias(无 "/" 前缀);若旧契约是 label,用同算法匹配
+    const cache = getCurrentPrompts() || {};
+    outer: for (const group in cache) {
+      const items = cache[group];
+      if (!Array.isArray(items)) continue;
+      for (const t of items) {
+        if ((t.alias && t.alias === value) || t.label === value) {
+          if (t.alias) alias = '/' + t.alias;
+          break outer;
+        }
       }
     }
     elements.promptBarName.textContent = label;
