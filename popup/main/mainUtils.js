@@ -204,9 +204,13 @@ export async function initializePopup(rootEl) {
   // teardownView 在末尾清零（mainUtils.js:275）。这里再清零会抹掉 onActivate 的注册，
   // 导致 teardown 跳过所有 document 监听 / alias popup 的清理 → 反复挂载累积。
   elements = {
-    platformCheckboxes: rootEl.querySelectorAll(
-      '.platform-icon-option input[type="checkbox"]'
-    ),
+    // 用 getter 而非快照：#platform-options-row 在视图挂载时已由 initializePlatformOptions 渲染，
+    // 但若重挂载顺序变化导致首次快照为空，用 getter 可保证后续读取始终反映当前 DOM。
+    get platformCheckboxes() {
+      return (viewRoot || document).querySelectorAll(
+        '.platform-icon-option input[type="checkbox"]'
+      );
+    },
     messageInput: rootEl.querySelector("#message-input"),
     sendButton: rootEl.querySelector("#send-button"),
     closeTabsButton: rootEl.querySelector("#close-tabs-button"),
@@ -345,11 +349,18 @@ export async function loadStoredData() {
  * 恢复平台选择状态
  */
 function restorePlatformStates(platformStates) {
-  elements.platformCheckboxes.forEach((cb) => {
+  // 用 live query 而非缓存：getter 保证当前 DOM 状态;若 restore 在 render 之前触发,这次不命中,
+  // 下一次 (例如 visibility toggle 重渲染面板) 会自动按已存数据应用——但更稳的策略是 render 之前不调 restore。
+  // 当前 init 顺序是 render → initializePopup → loadStoredData,DOM 此时已存在;此处保险起见 live query。
+  const cbs = (viewRoot || document).querySelectorAll('.platform-icon-option input[type="checkbox"]');
+  let applied = 0;
+  cbs.forEach((cb) => {
     if (platformStates.hasOwnProperty(cb.dataset.platform)) {
       togglePlatformCheckbox(cb, platformStates[cb.dataset.platform]);
+      applied++;
     }
   });
+  console.log('[boot] restorePlatformStates: applied', applied, '/', cbs.length, 'keys =', Object.keys(platformStates).join(','));
   updateSelectAllButton();
 }
 
