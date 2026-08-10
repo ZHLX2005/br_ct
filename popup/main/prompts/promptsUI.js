@@ -226,7 +226,13 @@ function populateOptimizer(promptOptimizerSelect, templates) {
   promptOptimizerSelect.addEventListener('click', onToggleClick);
 
   // 点击外部关闭下拉框（用具名引用以便 teardown removeEventListener）
+  // 注：当存在就地编辑中的 row（.inline-editing）时，保留下拉打开——
+  // 用户可能想点输入框 / 别处切换焦点，inline edit 的 click 已被 swallow 吞掉，
+  // 但外点仍会把下拉关掉，让编辑 UI 消失。先把这种状态放行：用户取消/确认后再走正常关闭。
   const onOutsideClick = (e) => {
+    if (e.target?.closest && e.target.closest('#prompt-optimizer-select .select-option.inline-editing')) {
+      return;
+    }
     if (!promptOptimizerSelect.contains(e.target)) {
       promptOptimizerSelect.classList.remove('active');
     }

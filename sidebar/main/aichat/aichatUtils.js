@@ -646,9 +646,24 @@ export function setupEventListeners() {
   // 下拉行点编辑图标 → 打开 promptEditor 直接编辑(走 shared/promptsEditorApi)
   async function openInlineEditOnPicker(group, label) {
     const cache = getCurrentPrompts() || {};
-    const items = cache[group] || [];
-    const tpl = items.find((p) => p.label === label);
-    if (!tpl) return;
+    // 防御性：先按 group + label 查;group 缺失或异常时退化到跨分组按 label 找一次。
+    let tpl = null;
+    if (group && cache[group]) {
+      tpl = (cache[group] || []).find((p) => p.label === label);
+    }
+    if (!tpl) {
+      outer: for (const g of Object.keys(cache)) {
+        const items = cache[g];
+        if (!Array.isArray(items)) continue;
+        for (const p of items) {
+          if (p && p.label === label) { tpl = p; break outer; }
+        }
+      }
+    }
+    if (!tpl) {
+      console.warn('[aichat] openInlineEditOnPicker: 找不到提示词', { group, label });
+      return;
+    }
     await promptEditor.open(
       {
         key: tpl.alias || tpl.label,
@@ -687,7 +702,9 @@ export function setupEventListeners() {
         if (!groups[g]) { groups[g] = []; groupNames.push(g); }
         // 用 alias 作为 picker key(与 popup 字段一致);缺 alias 时退化用 label
         const itemKey = t.alias || t.label || key;
-        groups[g].push({ key: itemKey, label: t.label, template: t.template, alias: t.alias });
+        // 必须带上 group:openInlineEditOnPicker 据此在 cache 里再次定位条目,
+        // 缺了就会 cache[undefined] → 找不到 → 静默 no-op。
+        groups[g].push({ key: itemKey, label: t.label, template: t.template, alias: t.alias, group: g });
       }
     }
 
