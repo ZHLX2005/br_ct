@@ -29,9 +29,6 @@ export async function init(rootEl) {
     // 初始化弹窗（缓存 DOM、绑定输入持久化前置逻辑）
     await initializePopup(rootEl);
 
-    // 加载存储的数据
-    await loadStoredData();
-
     // 设置所有元素级事件监听器（依赖 elements 缓存；只调一次足够——重挂载同一个 viewRoot
     // 实例的同一组元素会保留绑定，再调一次会在每个元素上重复注册 change/click，违反约束）。
     // platformVisibility 的 onMessage 是 document 级，已迁出至 onActivate，见 registerDocumentSideEffects。
@@ -39,6 +36,15 @@ export async function init(rootEl) {
 
     // 初始化指定输入框的拖放事件（element-level，仅一次足够）
     setupDragDropEvents(rootEl);
+
+    // 必须在 loadStoredData 之前:这一步会跑 populateOptimizer,生成下拉项
+    // DOM、若先 loadStoredData 写 selected-value,会被 populateOptimizer 后续
+    // 内部逻辑覆盖回"不使用优化"。
+    registerDocumentSideEffects(rootEl);
+
+    // 最后恢复 lastPromptTemplate — 与 promptsUI.js 共享的写入端契约
+    // (alias 优先,缺时 label),主数据源是 shared 内存快照。
+    await loadStoredData();
 
     console.log('[boot] main.init: done');
   } catch (error) {

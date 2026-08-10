@@ -53,18 +53,10 @@ function populateOptimizer(promptOptimizerSelect, templates) {
   const optionsList = document.createElement('div');
   optionsList.className = 'options-list';
 
-  // 修改恢复逻辑，同时获取lastPromptTemplate和对应的模板内容
-  chrome.storage.sync.get(['lastPromptTemplate'], (result) => {
-    if (result.lastPromptTemplate) {
-      const template = PROMPT_TEMPLATES[result.lastPromptTemplate];
-      if (template) {
-        selectedValue.textContent = template.label;
-        selectedValue.dataset.value = result.lastPromptTemplate;
-        selectedValue.dataset.template = template.template;
-      }
-    }
-  });
-  
+  // 修改恢复逻辑,改由 mainUtils.loadStoredData 统一从 chrome.storage.sync
+  // 读 lastPromptTemplate 并在 populateOptimizer 之后写回 selected-value,
+  // 避免此处与 mainUtils 两处分别触发 sync.get 时发生竞态(谁后到谁覆盖 UI)。
+
   // 获取所有分组
   const groups = {};
   for (const key in PROMPT_TEMPLATES) {
