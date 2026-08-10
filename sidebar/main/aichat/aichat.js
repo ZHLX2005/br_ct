@@ -43,6 +43,10 @@ export async function mount(container) {
   initResponse();
   await loadStoredData().catch(() => {});
   setupEventListeners();
+
+  // 挂载 sidebar 独立提示词面板（与 popup 下拉互不引用 DOM/CSS，仅共用 shared 数据层）。
+  const { mountPromptsPanel } = await import('./promptsPanel.js');
+  mountPromptsPanel(document.getElementById('prompts-panel-mount'), document.body);
 }
 
 export function unmount(container) {
