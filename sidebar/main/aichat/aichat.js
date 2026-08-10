@@ -9,6 +9,7 @@ import {
   setupEventListeners,
   loadStoredData,
   initializeResponseDisplay as initResponse,
+  teardownView,
 } from './aichatUtils.js';
 
 console.log('[boot] aichat.js module loaded');
@@ -72,7 +73,9 @@ export async function mount(container) {
   console.log('[boot] aichat.mount: done');
 }
 
-export function unmount(container) {
+export async function unmount(container) {
   console.log('[boot] aichat.unmount: container =', container?.id);
+  // 释放订阅/监听(onChanged 等)避免跨重载累积
+  try { teardownView(); } catch (e) { console.warn('[boot] aichat.unmount: teardownView failed:', e?.message); }
   container.innerHTML = '';
 }

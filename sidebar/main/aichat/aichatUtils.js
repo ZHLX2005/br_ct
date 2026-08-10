@@ -21,6 +21,7 @@ import {
 import {
   loadPlatformVisibility,
   subscribeToPlatforms,
+  getCurrentPlatformVisibility,
 } from "../../../shared/platforms/platformsStore.js";
 import {
   copyToClipboard,
@@ -51,6 +52,28 @@ function getOcrController() {
 
 // DOM 元素缓存
 let elements = {};
+
+// 平台 checkbox 在 #platform-panel 懒加载;用 getter 而非快照
+// 必须在模块级,这样消费者(平台外的辅助函数)也能调用
+function getPlatformCheckboxes() {
+  return document.querySelectorAll(
+    '#platform-panel .platform-icon-option input[type="checkbox"]'
+  );
+}
+
+// 视图清理钩子:每次 aichat 视图挂载时,所有 push 进数组的 unsub 在
+// 视图卸载时由 teardownView() 统一释放,防止跨重载监听累积(内存泄漏 + 多次触发)
+let viewCleanups = [];
+function pushCleanup(unsub) {
+  if (typeof unsub === 'function') viewCleanups.push(unsub);
+}
+export function teardownView() {
+  const fns = viewCleanups;
+  viewCleanups = [];
+  for (const fn of fns) {
+    try { fn(); } catch (err) { console.warn('aichat teardown cleanup threw:', err); }
+  }
+}
 
 // 提取页面文本相关变量
 let extractButton;
@@ -194,11 +217,14 @@ function areAllVisiblePlatformsChecked(visibleCheckboxes) {
 
 // 跨页面平台可见性同步：原 onMessage 监听替换为 subscribeToPlatforms
 // options 页保存后 → 任何打开的 sidebar/popup 实时更新（Task 9 架构目标）。
+// 返回 unsub 并自动 push 进 viewCleanups,由 teardownView 统一释放
 function setupPlatformVisibilityMessageListener(callback) {
-  return subscribeToPlatforms((settings) => {
+  const unsub = subscribeToPlatforms((settings) => {
     applyPlatformVisibilitySettings(settings);
     if (callback) callback(settings);
   });
+  pushCleanup(unsub);
+  return unsub;
 }
 
 async function loadPlatformVisibilitySettings() {
@@ -297,9 +323,6 @@ export async function initializePopup() {
     sendButton: document.getElementById("chat-btn-send"),
     closeTabsButton: document.getElementById("toolbar-close-ai"),
     selectAllButton: document.getElementById("panel-select-all"),
-    platformCheckboxes: document.querySelectorAll(
-      '.platform-icon-option input[type="checkbox"]'
-    ),
     promptOptimizerSelect: document.getElementById("prompt-optimizer-select"),
     workspaceTabAdd: document.getElementById("workspace-tab-add"),
     pagePills: document.getElementById("page-pills"),
@@ -831,6 +854,9 @@ function renderPlatformOptions() {
     cb.addEventListener('change', updateVisual);
     updateVisual();
   });
+
+  // 懒加载面板首次渲染后立即应用 visibility(避免用户首开看不到隐藏平台)
+  applyPlatformVisibilitySettings(getCurrentPlatformVisibility());
 }
 
 function updatePlatformCount() {
@@ -1190,7 +1216,7 @@ async function startSending() {
   const originalMessage = validateMessageInput(elements.messageInput.value);
   if (!originalMessage) return;
 
-  const selectedPlatforms = getSelectedPlatformIdsShared(elements.platformCheckboxes);
+  const selectedPlatforms = getSelectedPlatformIdsShared(getPlatformCheckboxes());
   if (!validatePlatformSelection(selectedPlatforms)) return;
 
   const sendTimestamp = Date.now();
@@ -1391,7 +1417,7 @@ function renderMessageBody(message) {
  * 计算当前平台下所有被阻塞的消息总数
  */
 function countBlockedMessages() {
-  const selectedPlatforms = new Set(getSelectedPlatformIdsShared(elements.platformCheckboxes));
+  const selectedPlatforms = new Set(getSelectedPlatformIdsShared(getPlatformCheckboxes()));
   let count = 0;
   platformStates.forEach((ps, platformId) => {
     if (!selectedPlatforms.has(platformId)) return;
@@ -1409,7 +1435,7 @@ function countBlockedMessages() {
  * @returns {{ refs: object[], queue: {content:string,timestamp:number,extractedText:string}[] }}
  */
 function collectBlockedMessages() {
-  const selectedSet = new Set(getSelectedPlatformIdsShared(elements.platformCheckboxes));
+  const selectedSet = new Set(getSelectedPlatformIdsShared(getPlatformCheckboxes()));
   const refs = [];
   const uniqueByContent = new Map();
   platformStates.forEach((ps, platformId) => {
@@ -1710,7 +1736,7 @@ async function toggleSelectAll() {
 
   updatePlatformCount();
 
-  const platforms = getSelectedPlatformIdsShared(elements.platformCheckboxes);
+  const platforms = getSelectedPlatformIdsShared(getPlatformCheckboxes());
   if (platforms.length) {
     activePlatformId = platforms[0];
     renderCurrentPlatform();
@@ -2133,7 +2159,7 @@ function renderPendingMessages() {
 async function sendBlockedMessage(message) {
   if (!message || !message.blocked) return;
 
-  const selectedPlatforms = getSelectedPlatformIdsShared(elements.platformCheckboxes);
+  const selectedPlatforms = getSelectedPlatformIdsShared(getPlatformCheckboxes());
   if (selectedPlatforms.length === 0) return;
 
   // 在选中平台中找出所有同内容的阻塞消息，统一取消阻塞样式
@@ -2180,7 +2206,7 @@ function removeBlockedMessage(message) {
  * 而不是发到消息阻塞时所属的平台——这样用户在阻塞期间调整平台勾选也能即时生效。
  */
 async function flushPendingMessages() {
-  const selectedPlatforms = getSelectedPlatformIdsShared(elements.platformCheckboxes);
+  const selectedPlatforms = getSelectedPlatformIdsShared(getPlatformCheckboxes());
   if (selectedPlatforms.length === 0) return;
 
   const { refs, queue } = collectBlockedMessages();
@@ -2202,7 +2228,7 @@ async function flushPendingMessages() {
  * （每条一行）。用于把阻塞下来的问题快速粘贴进笔记软件做双向链接。
  */
 async function copyBlockedAsLinks() {
-  const selectedPlatforms = getSelectedPlatformIdsShared(elements.platformCheckboxes);
+  const selectedPlatforms = getSelectedPlatformIdsShared(getPlatformCheckboxes());
   if (selectedPlatforms.length === 0) {
     showTempMessage("未选中平台");
     return;
@@ -2353,7 +2379,7 @@ async function importAndBlock() {
     return;
   }
 
-  const selectedPlatforms = getSelectedPlatformIdsShared(elements.platformCheckboxes);
+  const selectedPlatforms = getSelectedPlatformIdsShared(getPlatformCheckboxes());
   if (!validatePlatformSelection(selectedPlatforms)) {
     return;
   }
