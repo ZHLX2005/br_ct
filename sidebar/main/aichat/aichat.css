@@ -995,3 +995,173 @@
   font-size: 10px;
   line-height: 1.4;
 }
+
+/* ===== 新建提示词按钮（右侧列表顶部） ===== */
+.__sidebar_picker_add_btn__ {
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.__sidebar_picker_add_btn__:hover {
+  background: #3551d8 !important;
+  border-color: #3551d8 !important;
+}
+
+/* ===== 新建提示词模态框 ===== */
+.sidebar-add-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10002;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 17, 21, 0.5);
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.sidebar-add-modal-panel {
+  width: min(480px, calc(100% - 32px));
+  max-height: calc(100% - 32px);
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-add-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.sidebar-add-modal-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f1115;
+}
+
+.sidebar-add-modal-close {
+  background: transparent;
+  border: none;
+  font-size: 22px;
+  line-height: 1;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0 6px;
+  border-radius: 4px;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.sidebar-add-modal-close:hover {
+  background: #f3f4f6;
+  color: #0f1115;
+}
+
+.sidebar-add-modal-body {
+  padding: 16px 18px;
+  overflow-y: auto;
+}
+
+.sidebar-add-modal-error {
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background: rgba(220, 38, 38, 0.08);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  border-radius: 4px;
+  color: #dc2626;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.sidebar-add-modal-field {
+  margin-bottom: 12px;
+}
+
+.sidebar-add-modal-field label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.sidebar-add-modal-field .required {
+  color: #dc2626;
+}
+
+.sidebar-add-modal-field .hint {
+  color: #6b7280;
+  font-weight: 400;
+}
+
+.sidebar-add-modal-field input,
+.sidebar-add-modal-field textarea {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+  color: #0f1115;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.sidebar-add-modal-field input:focus,
+.sidebar-add-modal-field textarea:focus {
+  border-color: #4361ee;
+  box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.1);
+}
+
+.sidebar-add-modal-field textarea {
+  min-height: 80px;
+  resize: vertical;
+  font-family: "SF Mono", "Monaco", "Consolas", monospace;
+  line-height: 1.5;
+}
+
+.sidebar-add-modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.sidebar-add-modal-btn {
+  padding: 6px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  background: white;
+  color: #374151;
+  transition: all 0.12s ease;
+}
+
+.sidebar-add-modal-confirm {
+  background: #4361ee;
+  color: white;
+  border-color: #4361ee;
+}
+
+.sidebar-add-modal-confirm:hover:not(:disabled) {
+  background: #3551d8;
+  border-color: #3551d8;
+}
+
+.sidebar-add-modal-cancel:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.sidebar-add-modal-confirm:disabled,
+.sidebar-add-modal-cancel:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
