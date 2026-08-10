@@ -45,7 +45,20 @@ async function init() {
   unsubscribePrompts = subscribeToPrompts(() => {
     refreshCurrentView();
   });
+  // 探测 native host 连接状态：成功 → 显示 已连接 / 关闭；失败 → 未连接 / 启动。
+  checkStatus();
   await loadFiles();
+}
+
+/**
+ * Probe native-host availability via getPromptsDir and reflect it in the UI.
+ * Independent of loadFiles() so the connect state is correct even if the
+ * subsequent file listing fails (e.g. permission/IO error after handshake).
+ */
+function checkStatus() {
+  sendNativeMessage({ command: 'getPromptsDir' })
+    .then(() => updateStatus(true))
+    .catch(() => updateStatus(false));
 }
 
 function initEvents() {
