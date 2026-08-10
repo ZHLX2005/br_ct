@@ -1,5 +1,6 @@
 // main.js
 import {
+  elements,
   initializePopup,
   registerDocumentSideEffects,
   loadStoredData,

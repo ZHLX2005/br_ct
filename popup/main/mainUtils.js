@@ -43,7 +43,7 @@ function getOcrController() {
   if (!ocrController) {
     ocrController = createImageOcrController({
       // scope 到当前视图根（initializePopup 时绑定）；shell 接管后 rootEl 由 viewController 注入
-      getPreviewContainer: () => viewRoot && viewRoot.querySelector("#image-preview-area"),
+      getPreviewContainer: () => _viewRoot && _viewRoot.querySelector("#image-preview-area"),
       showTempMessage: (msg) => showTempMessage(msg),
       onChange: () => {},
     });
@@ -52,10 +52,26 @@ function getOcrController() {
 }
 
 // DOM 元素缓存
-let elements = {};
+// 注:使用 getter 而非纯 let——platformCheckboxes 必须在 init 时已经渲染好,
+// 任何时机偏差(视图挂载异步、reset 后重渲染)都让快照失效;getter 每次访问 live query。
+// 见 commit 6bbcf58 与 memory/platform-checkboxes-snapshot-pattern.md。
+let _elements = {};
+export const elements = {
+  get platformCheckboxes() {
+    return (_viewRoot || document).querySelectorAll(
+      '.platform-icon-option input[type="checkbox"]'
+    );
+  },
+  get messageInput() { return _elements.messageInput; },
+  get sendButton() { return _elements.sendButton; },
+  get closeTabsButton() { return _elements.closeTabsButton; },
+  get selectAllButton() { return _elements.selectAllButton; },
+  get historySelect() { return _elements.historySelect; },
+  get promptOptimizerSelect() { return _elements.promptOptimizerSelect; },
+};
 
 // 视图根元素（init 时绑定；事件处理函数与 OCR 回调中查询使用，参照 translation.js 模式）
-let viewRoot = null;
+let _viewRoot = null;
 
 // init 链中注册的 cleanup 函数集合（populateOptimizer / initAliasShortcut /
 // setupPlatformVisibilityMessageListener 等返回的 document 级监听与 popup 清理）。
@@ -118,8 +134,8 @@ function saveOptimizerSetting(value) {
 // 因为 shared 层不应触及具体页面的 DOM 结构。
 
 function applyPlatformVisibilitySettings(settings) {
-  const platformOptions = viewRoot
-    ? viewRoot.querySelectorAll('.platform-icon-option')
+  const platformOptions = _viewRoot
+    ? _viewRoot.querySelectorAll('.platform-icon-option')
     : document.querySelectorAll('.platform-icon-option');
   platformOptions.forEach((option) => {
     const platformId = option.getAttribute('data-platform-id');
@@ -138,8 +154,8 @@ function applyPlatformVisibilitySettings(settings) {
 }
 
 function updateVisiblePlatformColumns() {
-  const container = viewRoot
-    ? viewRoot.querySelector('#platform-options-row')
+  const container = _viewRoot
+    ? _viewRoot.querySelector('#platform-options-row')
     : document.getElementById('platform-options-row');
   if (!container) return;
   const visibleCount = Array.from(
@@ -199,18 +215,13 @@ window.__onImagePasted = ({ dataUrl, fileName }) => {
  */
 export async function initializePopup(rootEl) {
   console.log('[boot] initializePopup: start, rootEl =', rootEl?.tagName);
-  viewRoot = rootEl;
+  _viewRoot = rootEl;
   // 注：不再清零 viewCleanups —— onActivate 已在 init 之前把当轮的 cleanups 推入数组，
   // teardownView 在末尾清零（mainUtils.js:275）。这里再清零会抹掉 onActivate 的注册，
   // 导致 teardown 跳过所有 document 监听 / alias popup 的清理 → 反复挂载累积。
-  elements = {
-    // 用 getter 而非快照：#platform-options-row 在视图挂载时已由 initializePlatformOptions 渲染，
-    // 但若重挂载顺序变化导致首次快照为空，用 getter 可保证后续读取始终反映当前 DOM。
-    get platformCheckboxes() {
-      return (viewRoot || document).querySelectorAll(
-        '.platform-icon-option input[type="checkbox"]'
-      );
-    },
+  // elements 是模块顶部导出的 getter 对象（platformCheckboxes 用 live query,其它字段存 _elements），
+  // 一次性写入 rootEl 派生的 DOM 引用到 _elements,后续 elements.* 访问都从这里读。
+  _elements = {
     messageInput: rootEl.querySelector("#message-input"),
     sendButton: rootEl.querySelector("#send-button"),
     closeTabsButton: rootEl.querySelector("#close-tabs-button"),
@@ -218,7 +229,7 @@ export async function initializePopup(rootEl) {
     historySelect: rootEl.querySelector("#history-select"),
     promptOptimizerSelect: rootEl.querySelector("#prompt-optimizer-select"),
   };
-  console.log('[boot] initializePopup: cached elements count =', Object.values(elements).filter(v => v !== undefined && v !== null).length, 'messageInput?', !!elements.messageInput, 'promptOptimizerSelect?', !!elements.promptOptimizerSelect);
+  console.log('[boot] initializePopup: cached elements count =', Object.values(_elements).filter(v => v !== undefined && v !== null).length, 'messageInput?', !!elements.messageInput, 'promptOptimizerSelect?', !!elements.promptOptimizerSelect);
 
   // 自动聚焦输入框
   focusInputAndSetCursor(elements.messageInput);
@@ -258,7 +269,7 @@ export async function initializePopup(rootEl) {
  * @param {Element} rootEl 视图根元素
  */
 export function registerDocumentSideEffects(rootEl) {
-  viewRoot = rootEl;
+  _viewRoot = rootEl;
 
   // 初始化 /alias 快捷输入（返回 cleanup：移除 document 监听 + 移除 alias popup）
   const aliasCleanup = initAliasShortcut(elements.messageInput, PROMPT_TEMPLATES, elements.promptOptimizerSelect);
@@ -352,7 +363,7 @@ function restorePlatformStates(platformStates) {
   // 用 live query 而非缓存：getter 保证当前 DOM 状态;若 restore 在 render 之前触发,这次不命中,
   // 下一次 (例如 visibility toggle 重渲染面板) 会自动按已存数据应用——但更稳的策略是 render 之前不调 restore。
   // 当前 init 顺序是 render → initializePopup → loadStoredData,DOM 此时已存在;此处保险起见 live query。
-  const cbs = (viewRoot || document).querySelectorAll('.platform-icon-option input[type="checkbox"]');
+  const cbs = (_viewRoot || document).querySelectorAll('.platform-icon-option input[type="checkbox"]');
   let applied = 0;
   cbs.forEach((cb) => {
     if (platformStates.hasOwnProperty(cb.dataset.platform)) {
@@ -444,7 +455,7 @@ export function teardownView() {
     }
   }
   viewCleanups = [];
-  viewRoot = null;
+  _viewRoot = null;
 }
 
 /**
