@@ -635,6 +635,7 @@ export function setupEventListeners() {
 
   function closePromptPicker() {
     if (promptPicker) { promptPicker.remove(); promptPicker = null; }
+    promptBar?.classList.remove('open');
   }
 
   // 简易 HTML 属性转义,避免 label 含引号搞坏 dataset 值
@@ -795,10 +796,12 @@ export function setupEventListeners() {
   if (promptBar) {
     promptBar.addEventListener("click", (e) => {
       if (e.target.closest(".prompt-bar-clear")) return;
+      if (e.target.closest(".prompt-bar-edit")) return;
       if (promptPicker) {
         closePromptPicker();
       } else {
         buildPromptPicker();
+        promptBar?.classList.add("open");
       }
     });
   }

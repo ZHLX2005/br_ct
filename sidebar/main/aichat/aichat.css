@@ -196,6 +196,8 @@
 .prompt-bar-label { color: var(--text-muted); white-space: nowrap; font-size: 10px; }
 .prompt-bar-name { font-weight: 600; color: var(--text); }
 .prompt-bar-alias { color: var(--text-secondary); font-weight: 500; font-size: 10px; margin-left: 2px; }
+.prompt-bar-chevron { margin-left: 4px; color: var(--text-muted); flex-shrink: 0; transition: transform 0.12s ease; }
+.prompt-bar.open .prompt-bar-chevron { transform: rotate(180deg); }
 .prompt-bar-clear { margin-left: auto; width: 16px; height: 16px; border: none; border-radius: 3px; background: transparent; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.12s ease; }
 .prompt-bar-clear:hover { background: rgba(0,0,0,0.06); color: #dc2626; }
 .prompt-bar-edit { width: 16px; height: 16px; border: none; border-radius: 3px; background: transparent; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.12s ease; }
