@@ -31,6 +31,8 @@ import { sendNativeMessage } from '../../shared/core/nativeBridge.js';
 let currentFile = null;
 let currentGroup = null;
 let unsubscribePrompts = null;
+// 当前展开的 prompt item 索引; -1 表示全部折叠。跨 group 切换时重置。
+let expandedIndex = -1;
 
 document.addEventListener('DOMContentLoaded', init);
 
@@ -145,6 +147,7 @@ function renderFileList(files) {
 async function selectFile(fileName) {
   currentFile = fileName;
   currentGroup = fileName.replace(/\.js$/, '');
+  expandedIndex = -1;  // 切文件时全部折叠, 避免 index 错位
   document.getElementById('currentFileName').textContent = fileName;
   document.querySelectorAll('.file-item').forEach((el) => {
     el.classList.toggle('active', el.dataset.name === fileName);
@@ -179,8 +182,10 @@ function renderPrompts(list) {
 
   el.innerHTML = `
     <div class="prompts-list">
-      ${list.map((p, i) => `
-        <div class="prompt-item" data-index="${i}">
+      ${list.map((p, i) => {
+        const isExpanded = expandedIndex === i;
+        return `
+        <div class="prompt-item ${isExpanded ? 'expanded' : ''}" data-index="${i}">
           <div class="prompt-item-header">
             <span class="prompt-item-title">${escapeHtml(p.label)}${p.alias ? ` <small style="color:var(--text-muted);font-weight:400;font-size:11px;">/${escapeHtml(p.alias)}</small>` : ''}</span>
             <div class="item-buttons">
@@ -188,15 +193,25 @@ function renderPrompts(list) {
               <button class="btn-primary" data-action="save" data-index="${i}">保存</button>
             </div>
           </div>
-          <div class="prompt-item-body expanded">
+          <div class="prompt-item-body ${isExpanded ? 'expanded' : ''}">
             <input type="text" id="label-${i}" value="${escapeHtml(p.label)}" placeholder="输入标题">
             <input type="text" id="alias-${i}" value="${escapeHtml(p.alias || '')}" placeholder="输入别名（如 fix）用于 /fix 快捷触发">
             <textarea id="tpl-${i}" placeholder="输入提示词内容">${escapeHtml(p.template)}</textarea>
           </div>
         </div>
-      `).join('')}
+      `;}).join('')}
     </div>
   `;
+
+  el.querySelectorAll('.prompt-item-header').forEach((header) => {
+    header.addEventListener('click', (e) => {
+      // 点保存/删除按钮时不 toggle (按钮自己处理)
+      if (e.target.closest('button')) return;
+      const idx = parseInt(header.closest('.prompt-item').dataset.index, 10);
+      expandedIndex = expandedIndex === idx ? -1 : idx;
+      renderPrompts(getCurrentPrompts()[currentGroup] || []);
+    });
+  });
 
   el.querySelectorAll('[data-action="save"]').forEach((btn) => {
     btn.addEventListener('click', () => savePrompt(parseInt(btn.dataset.index, 10)));

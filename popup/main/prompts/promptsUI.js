@@ -4,9 +4,15 @@ import { updatePrompt } from "../../../shared/prompts/promptsEditorApi.js";
 
 /**
  * 把 shared cache (`{group: [{group,label,alias,template}, ...]}`)
- * 扁平化为 label-keyed map (`{label: {group,label,alias,template}}`)，
- * 供现有渲染逻辑继续按 label 取值。
- * @returns {{[label: string]: {group: string, label: string, alias: string, template: string}}}
+ * 扁平化为 composite-keyed map（key = "${group}::${label}"），
+ * 供现有渲染逻辑继续按 key 取值。
+ *
+ * 为什么用 group::label 复合 key: 不同 group 的 prompt 可能共用同一 label
+ * （例如 read/trans 与 xxxx_trans/fy 都叫"翻译"），
+ * 用裸 label 做 key 会让后写入者覆盖前写入者,导致
+ * popup 下拉里看不到部分 alias。复合 key 保证唯一。
+ *
+ * @returns {{[key: string]: {group: string, label: string, alias: string, template: string}}}
  */
 function buildPromptMap() {
   const all = getCurrentPrompts();
@@ -17,7 +23,8 @@ function buildPromptMap() {
     if (!Array.isArray(items)) continue;
     for (const item of items) {
       if (!item || !item.label) continue;
-      map[item.label] = {
+      const key = `${item.group || group}::${item.label}`;
+      map[key] = {
         group: item.group || group,
         label: item.label,
         alias: item.alias || "",
@@ -209,8 +216,22 @@ function populateOptimizer(promptOptimizerSelect, templates) {
         let groupToShow = firstGroup; // 默认显示第一个分组
 
         if (result.lastPromptTemplate) {
-          // 如果有上次选中的模板，优先使用其分组
-          const template = PROMPT_TEMPLATES[result.lastPromptTemplate];
+          const savedKey = result.lastPromptTemplate;
+          let template = PROMPT_TEMPLATES[savedKey];
+          if (!template) {
+            // 回退: 旧 storage 格式 (裸 alias 或 裸 label) — 跨组搜
+            const all = getCurrentPrompts() || {};
+            outer: for (const g of Object.keys(all)) {
+              const items = all[g];
+              if (!Array.isArray(items)) continue;
+              for (const t of items) {
+                if ((t.alias && t.alias === savedKey) || t.label === savedKey) {
+                  template = { group: t.group || g, label: t.label, alias: t.alias || "", template: t.template || "" };
+                  break outer;
+                }
+              }
+            }
+          }
           if (template) {
             groupToShow = template.group;
           }
