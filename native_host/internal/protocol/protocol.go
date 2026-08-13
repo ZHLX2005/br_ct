@@ -32,6 +32,9 @@ type Request struct {
 	Message   string   `json:"message,omitempty"`
 	Groups    []SkillGroup `json:"groups,omitempty"`
 	IsCentral bool     `json:"isCentral,omitempty"`
+	// Skill 推送模式："symlink" 创建软链接（自动降级到 junction）；
+	// "copy" 复制整个目录；空 = 兼容旧调用，按 copy 处理
+	Mode string `json:"mode,omitempty"`
 	// Git Import 专用字段
 	Url       string   `json:"url,omitempty"`       // git 仓库地址
 	Ref       string   `json:"ref,omitempty"`        // 分支/tag

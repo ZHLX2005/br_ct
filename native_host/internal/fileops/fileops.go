@@ -4,10 +4,13 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 
@@ -27,6 +30,9 @@ type SkillInfo struct {
 	SkillMd5     string `json:"skillMd5"`
 	LastModified string `json:"lastModified"`
 	GroupId      string `json:"groupId"`
+	// LinkType: "" 实体目录 / "symlink" NTFS 软链接 / "junction" Windows 目录联接
+	// 仅扫描项目侧 (.claude/skills/{name}) 时有意义；中心仓库始终为 ""
+	LinkType string `json:"linkType,omitempty"`
 }
 
 // SkillGroupConfig 对应 .browser_chat/setting.json 整体配置
@@ -137,11 +143,18 @@ type SyncResult struct {
 	Copied    []string           `json:"copied"`
 	Skipped   []string           `json:"skipped"`
 	Conflicts []ConflictInfo     `json:"conflicts"`
+	Linked    []LinkedInfo       `json:"linked,omitempty"`
 }
 
 type ConflictInfo struct {
 	RenamedTo string `json:"renamedTo"`
 	Original  string `json:"original"`
+}
+
+// LinkedInfo 描述一次软链接推送的结果
+type LinkedInfo struct {
+	Name     string `json:"name"`
+	LinkType string `json:"linkType"` // "symlink" | "junction"
 }
 
 func ReadFile(req protocol.Request) protocol.Response {
@@ -226,9 +239,6 @@ func ScanSkills(req protocol.Request) protocol.Response {
 		}
 
 		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
 			skillName := entry.Name()
 			if skillName == "" || skillName[0] == '.' {
 				continue
@@ -241,6 +251,30 @@ func ScanSkills(req protocol.Request) protocol.Response {
 			seen[skillName] = true
 
 			skillDir := filepath.Join(skillsRoot, skillName)
+
+			// 用 Stat 跟随判断是否目录：覆盖 entry.IsDir() 对 symlink-to-dir
+			// 返回 false 的场景，以及部分 Go 版本对 junction 不报 symlink 的场景。
+			sInfo, err := os.Stat(skillDir)
+			if err != nil || !sInfo.IsDir() {
+				continue
+			}
+
+			// 链接类型仅对项目侧有意义；中心仓库自身存的就是真实目录。
+			linkType := ""
+			if !req.IsCentral {
+				if lInfo, lErr := os.Lstat(skillDir); lErr == nil {
+					if lInfo.Mode()&os.ModeSymlink != 0 {
+						linkType = "symlink"
+					} else if runtime.GOOS == "windows" && lInfo.Mode().IsDir() {
+						// 启发式：Windows 上 IsDir + Lstat 信息，且 Stat 跟随后
+						// 与 Lstat 不同 → 极可能是 junction（需要管理员创建）
+						if !os.SameFile(lInfo, sInfo) {
+							linkType = "junction"
+						}
+					}
+				}
+			}
+
 			skillMd5, name, desc, modTime := parseSkillInfo(skillDir)
 
 			if name == "" {
@@ -265,6 +299,7 @@ func ScanSkills(req protocol.Request) protocol.Response {
 				SkillMd5:     skillMd5,
 				LastModified: modTime,
 				GroupId:      groupId,
+				LinkType:     linkType,
 			})
 		}
 	}
@@ -397,11 +432,54 @@ func SyncSkillDir(req protocol.Request) protocol.Response {
 		return protocol.Response{Status: "error", Message: "源目录不存在: " + err.Error()}
 	}
 
+	// 确保目标父目录存在（symlink 模式时也要建父目录）
+	if err := os.MkdirAll(dstParent, 0755); err != nil {
+		return protocol.Response{Status: "error", Message: "创建目标父目录失败: " + err.Error()}
+	}
+
+	dst := filepath.Join(dstParent, skillName)
+	result := SyncResult{
+		Copied:    []string{},
+		Skipped:   []string{},
+		Conflicts: []ConflictInfo{},
+	}
+
+	// ========== 软链接模式 ==========
+	// 行为：项目下放一个目录链接（symlink → junction 自动降级）
+	// 任何指向 src 的已存在链接视为「已就绪」直接 skip；否则清掉旧目标后建链接
+	if req.Mode == "symlink" {
+		// 检查目标是否已是链接到 src
+		if linkType, isLink, target := inspectLink(dst); isLink {
+			absTarget, _ := filepath.Abs(target)
+			absSrc, _ := filepath.Abs(src)
+			if samePath(absTarget, absSrc) {
+				result.Skipped = append(result.Skipped, skillName)
+				return protocol.Response{Status: "ok", Data: result}
+			}
+			// 链接指向别处，先断掉再重建（os.Remove 只删链接本体，不遍历 junction 目标）
+			if err := os.Remove(dst); err != nil {
+				return protocol.Response{Status: "error", Message: "清理旧链接失败: " + err.Error()}
+			}
+			_ = linkType // 已用
+		} else if _, err := os.Stat(dst); err == nil {
+			// 目标是真实目录/文件，先清理（包含 ReadOnly 属性的处理）
+			if err := os.RemoveAll(dst); err != nil {
+				return protocol.Response{Status: "error", Message: "清理旧目录失败: " + err.Error()}
+			}
+		}
+
+		linkType, err := createSkillLink(src, dst)
+		if err != nil {
+			return protocol.Response{Status: "error", Message: "创建链接失败: " + err.Error()}
+		}
+		result.Linked = append(result.Linked, LinkedInfo{Name: skillName, LinkType: linkType})
+		return protocol.Response{Status: "ok", Data: result}
+	}
+
+	// ========== 复制模式（默认 / 旧行为） ==========
 	// 获取 src 的 SKILL.md MD5
 	srcMd5, _, _, _ := parseSkillInfo(src)
 
-	// 目标路径
-	dst := filepath.Join(dstParent, skillName)
 	dstExists := false
 	dstMd5 := ""
 
@@ -409,12 +487,6 @@ func SyncSkillDir(req protocol.Request) protocol.Response {
 	if info, err := os.Stat(dst); err == nil && info.IsDir() {
 		dstExists = true
 		dstMd5, _, _, _ = parseSkillInfo(dst)
-	}
-
-	result := SyncResult{
-		Copied:    []string{},
-		Skipped:   []string{},
-		Conflicts: []ConflictInfo{},
 	}
 
 	// 计算目标目录的最终名称（冲突时直接覆盖）
@@ -439,6 +511,83 @@ func SyncSkillDir(req protocol.Request) protocol.Response {
 
 	result.Copied = append(result.Copied, skillName)
 	return protocol.Response{Status: "ok", Data: result}
+}
+
+// inspectLink 检测 path 是否为符号链接 / junction，返回 (linkType, isLink, target)
+// linkType: "" 非链接 / "symlink" / "junction"
+// target: 链接目标（解析后的绝对路径），非链接返回 ""
+// inspectLink 检测 path 是否为符号链接 / junction，返回 (linkType, isLink, target)
+// linkType: "" 非链接 / "symlink" / "junction"
+// target: 链接目标（解析后的绝对路径），非链接返回 ""
+func inspectLink(path string) (string, bool, string) {
+	// Lstat 不跟随链接
+	info, err := os.Lstat(path)
+	if err != nil {
+		return "", false, ""
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		return "", false, ""
+	}
+	target, err := os.Readlink(path)
+	if err != nil {
+		return "", true, ""
+	}
+	// 在 Windows 上 Go 的 Lstat 对 junction 不会设置 ModeSymlink
+	// 用 fsutil 重判：先按 symlink 试 → 失败 → 试 junction
+	// 简化处理：如果 ModeSymlink 未设置但路径存在且 Lstat 不报错 + Stat 不同，多半是 junction
+	if info.Mode()&os.ModeSymlink != 0 {
+		return "symlink", true, target
+	}
+	// junction: 用 Stat 比对判断（junction 仍解析到底层目录）
+	if info.Mode().IsDir() {
+		// 用解析绝对路径方式判定
+		absT, _ := filepath.Abs(target)
+		_ = absT
+		return "junction", true, target
+	}
+	return "", true, target
+}
+
+// samePath 简易路径等价判断（Windows 不区分大小写，路径分隔符归一）
+func samePath(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	a = filepath.Clean(a)
+	b = filepath.Clean(b)
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
+}
+
+// createSkillLink 创建软链接，自动降级到 junction（仅 Windows 上有意义）
+// 优先 os.Symlink（可能是真正的 symlink 语义，但需要开发者模式或管理员）；
+// 失败时用 `mklink /J` junction（不需要权限）
+func createSkillLink(src, dst string) (string, error) {
+	// 先确认 src 是绝对路径（junction 要求绝对目标）
+	absSrc, err := filepath.Abs(src)
+	if err != nil {
+		return "", err
+	}
+
+	// 试 os.Symlink（NTFS symlink / 文件链接）
+	if err := os.Symlink(absSrc, dst); err == nil {
+		return "symlink", nil
+	}
+
+	// 降级到 junction（mklink /J 仅在 Windows 上可用）
+	if runtime.GOOS == "windows" {
+		cmd := exec.Command("cmd", "/c", "mklink", "/J", dst, absSrc)
+		out, err := cmd.CombinedOutput()
+		if err == nil {
+			return "junction", nil
+		}
+		return "", fmt.Errorf("os.Symlink 失败且 junction 失败: %s", strings.TrimSpace(string(out)))
+	}
+
+	// 非 Windows 但 os.Symlink 失败，应该不会到这里（POSIX 几乎总能创建 symlink）
+	return "", fmt.Errorf("os.Symlink 失败")
 }
 
 // CopyDirRecursive 递归复制目录

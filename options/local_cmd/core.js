@@ -8,6 +8,8 @@ const STORAGE_KEYS = {
   skillCentralPath: 'skillCentralPath',
   skillMonitoredProjects: 'skillMonitoredProjects',
   skillSelectedProject: 'skillSelectedProject',
+  // Skill 中心至项目推送模式：'symlink' (默认) | 'copy'
+  skillSyncMode: 'skillSyncMode',
   lastActiveTab: 'lastActiveTab',
 };
 

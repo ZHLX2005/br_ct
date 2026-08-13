@@ -118,6 +118,31 @@ async function deleteSkillFromProject(skillName, projectId) {
   }
 }
 
+// 软链接/junction → 实体文件（物化）
+async function materializeSkill(skillName, projectId) {
+  const projects = await loadStorage(STORAGE_KEYS.skillMonitoredProjects);
+  const project = projects.find(p => p.id === projectId);
+  if (!project) { toast('项目不存在', 'error'); return; }
+  if (!confirm(`将「${skillName}」从软链接转换为实体文件？\n转换后不再与中心仓库实时同步。`)) return;
+
+  try {
+    const resp = await sendNativeMessage({
+      command: 'materializeSkill',
+      path: project.path,
+      name: skillName,
+    });
+    const data = resp.data || {};
+    if (data.converted) {
+      toast(`已转换为实体文件: ${skillName}`);
+    } else {
+      toast(data.message || '已是实体文件');
+    }
+    loadSkills();
+  } catch (err) {
+    toast('转换失败: ' + err.message, 'error');
+  }
+}
+
 // 删除中心仓库的 skill（同时从分组配置中移除）
 async function deleteSkillFromCentral(skillName) {
   if (!confirm(`确定要删除中心仓库中的 Skill「${skillName}」吗？\n该操作将同时从所有分组配置中移除此 Skill。`)) return;
@@ -180,6 +205,40 @@ async function refreshProjectSelect() {
     updateRemoveBtnVisibility();
     loadSkills();
   };
+}
+
+// ===== 推送模式 toggle =====
+const skillSyncModeStylesInjected = { current: false };
+
+function highlightSkillSyncMode(activeMode) {
+  document.querySelectorAll('#skillSyncModeToggle .skill-sync-mode-btn').forEach(btn => {
+    const isActive = btn.dataset.mode === activeMode;
+    btn.style.background = isActive ? 'rgba(107,74,49,0.18)' : 'transparent';
+    btn.style.fontWeight = isActive ? '600' : 'normal';
+  });
+}
+
+async function loadSkillSyncModeUi() {
+  const mode = await getSkillSyncMode();
+  highlightSkillSyncMode(mode);
+}
+
+// 切换推送模式（页面加载后绑定一次）
+function setupSkillSyncModeToggle() {
+  if (skillSyncModeStylesInjected.current) return;
+  const toggle = document.getElementById('skillSyncModeToggle');
+  if (!toggle) return;
+  skillSyncModeStylesInjected.current = true;
+
+  toggle.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.skill-sync-mode-btn');
+    if (!btn) return;
+    const mode = btn.dataset.mode;
+    if (!mode) return;
+    await saveStorage(STORAGE_KEYS.skillSyncMode, mode);
+    highlightSkillSyncMode(mode);
+    toast(mode === 'symlink' ? '中心推送至项目：软链接' : '中心推送至项目：复制', 'info', 1800);
+  });
 }
 
 function updateRemoveBtnVisibility() {
@@ -620,10 +679,18 @@ function renderCentralSkillList(skills, projectSkills) {
 
   container.innerHTML = skills.map(s => {
     const projectSkill = projectSkills ? projectSkills.find(p => p.name === s.name) : null;
-    const synced = projectSkill && projectSkill.skillMd5 === s.skillMd5;
-    const status = projectSkill
-      ? (synced ? '<span class="source-tag synced">已同步 ✓</span>' : '<span class="source-tag conflict">冲突</span>')
-      : '<span class="source-tag central">仅中心</span>';
+    let status;
+    if (!projectSkill) {
+      status = '<span class="source-tag central">仅中心</span>';
+    } else if (projectSkill.linkType) {
+      // 软链接或 junction：天然一致
+      const linkLabel = projectSkill.linkType === 'symlink' ? '软链接' : '目录联接';
+      status = `<span class="source-tag synced">${linkLabel}</span>`;
+    } else if (projectSkill.skillMd5 === s.skillMd5) {
+      status = '<span class="source-tag synced">已同步 ✓</span>';
+    } else {
+      status = '<span class="source-tag conflict">冲突</span>';
+    }
 
     return `
       <div class="skill-card" data-skill-name="${escapeHtml(s.name)}">
@@ -635,7 +702,7 @@ function renderCentralSkillList(skills, projectSkills) {
         <div class="skill-card-path">${escapeHtml(s.skillDir)}</div>
         <div class="skill-card-actions">
           ${!projectSkill ? `<button class="btn btn-success btn-pull" data-action="skill-push-central-to-project" data-name="${escapeHtml(s.name)}">→ 推送到项目</button>` : ''}
-          ${projectSkill && !synced ? `<button class="btn btn-warning" data-action="skill-push-central-to-project" data-name="${escapeHtml(s.name)}">↻ 同步</button>` : ''}
+          ${projectSkill && !projectSkill.linkType && projectSkill.skillMd5 !== s.skillMd5 ? `<button class="btn btn-warning" data-action="skill-push-central-to-project" data-name="${escapeHtml(s.name)}">↻ 同步</button>` : ''}
           <div class="skill-more-wrap">
             <button class="btn btn-secondary skill-more-trigger" data-action="skill-more" data-name="${escapeHtml(s.name)}" title="更多操作" aria-label="更多操作">⋯</button>
             <div class="skill-more-dropdown" id="dropdown-${escapeHtml(s.name)}" role="menu">
@@ -669,10 +736,20 @@ function renderProjectSkillList(skills, project, centralSkills) {
 
   container.innerHTML = skills.map(s => {
     const central = centralSkills.find(c => c.name === s.name);
-    const synced = central && central.skillMd5 === s.skillMd5;
-    const status = central
-      ? (synced ? '<span class="source-tag synced">已同步 ✓</span>' : '<span class="source-tag conflict">冲突</span>')
-      : '<span class="source-tag local">本地</span>';
+    let status;
+    if (s.linkType) {
+      // 项目里是链接：指向中心仓库，实时同步
+      const linkLabel = s.linkType === 'symlink' ? '软链接' : '目录联接';
+      status = `<span class="source-tag synced" title="${linkLabel}：项目里是指向中心仓库的链接，内容实时同步">${linkLabel}</span>`;
+    } else if (central) {
+      // 项目里是独立复制的实体文件
+      status = central.skillMd5 === s.skillMd5
+        ? '<span class="source-tag synced" title="实体文件：项目里是独立复制的目录，与中心一致">实体文件</span>'
+        : '<span class="source-tag conflict" title="实体文件：项目里是独立复制的目录，与中心内容不一致">实体文件 · 冲突</span>';
+    } else {
+      // 仅项目本地有
+      status = '<span class="source-tag local" title="实体文件：仅项目本地存在，中心仓库没有">实体文件 · 本地</span>';
+    }
 
     return `
       <div class="skill-card">
@@ -683,8 +760,9 @@ function renderProjectSkillList(skills, project, centralSkills) {
         <div class="skill-card-desc">${escapeHtml(s.description || '(无描述)')}</div>
         <div class="skill-card-path">${escapeHtml(s.skillDir)}</div>
         <div class="skill-card-actions">
-          ${central && !synced ? `<button class="btn btn-warning" data-action="skill-push" data-name="${escapeHtml(s.name)}">↻ 同步到中心</button>` : ''}
-          ${!synced && !central ? `<button class="btn btn-success btn-pull" data-action="skill-push" data-name="${escapeHtml(s.name)}">← 推送到中心</button>` : ''}
+          ${central && !s.linkType && central.skillMd5 !== s.skillMd5 ? `<button class="btn btn-warning" data-action="skill-push" data-name="${escapeHtml(s.name)}">↻ 同步到中心</button>` : ''}
+          ${!s.linkType && !central ? `<button class="btn btn-success btn-pull" data-action="skill-push" data-name="${escapeHtml(s.name)}">← 推送到中心</button>` : ''}
+          ${s.linkType ? `<button class="btn btn-warning" data-action="skill-materialize" data-name="${escapeHtml(s.name)}" data-project-id="${project.id}">转换为实体文件</button>` : ''}
           <button class="btn btn-secondary" data-action="skill-delete-skill" data-name="${escapeHtml(s.name)}" data-project-id="${project.id}">移除 Skill</button>
         </div>
       </div>
@@ -692,7 +770,7 @@ function renderProjectSkillList(skills, project, centralSkills) {
   }).join('');
 }
 
-// 项目 → 中心仓库
+// 项目 至 中心仓库
 async function skillPushToCentral(skillName) {
   const centralPath = await loadStorage(STORAGE_KEYS.skillCentralPath);
   const selectedId = await loadStorage(STORAGE_KEYS.skillSelectedProject);
@@ -719,7 +797,7 @@ async function skillPushToCentral(skillName) {
     });
     const result = resp.data;
     if (result.conflicts && result.conflicts.length > 0) {
-      toast(`冲突：${result.conflicts[0].original} → ${result.conflicts[0].renamedTo}`);
+      toast(`冲突：${result.conflicts[0].original} 重命名为 ${result.conflicts[0].renamedTo}`);
     } else if (result.copied && result.copied.length > 0) {
       toast(`已推送: ${result.copied.join(', ')}`);
     } else {
@@ -731,7 +809,31 @@ async function skillPushToCentral(skillName) {
   }
 }
 
-// 中心仓库 → 项目
+// 读取当前中心至项目的推送模式（默认 symlink）
+async function getSkillSyncMode() {
+  const m = await loadStorage(STORAGE_KEYS.skillSyncMode);
+  return m === 'copy' ? 'copy' : 'symlink';
+}
+
+// 把 syncSkillDir 的响应按 mode 解析为人话
+function summarizeSyncResult(result, projectName) {
+  if (!result) return '无响应';
+  if (result.linked && result.linked.length > 0) {
+    return `已链接「${projectName}」: ${result.linked.map(l => `${l.name}(${l.linkType})`).join(', ')}`;
+  }
+  if (result.conflicts && result.conflicts.length > 0) {
+    return `冲突：${result.conflicts[0].original} 重命名为 ${result.conflicts[0].renamedTo}`;
+  }
+  if (result.copied && result.copied.length > 0) {
+    return `已复制到「${projectName}」: ${result.copied.join(', ')}`;
+  }
+  if (result.skipped && result.skipped.length > 0) {
+    return '已就绪（无需变更）';
+  }
+  return '操作完成';
+}
+
+// 中心仓库 至 项目
 async function skillPullFromCentral(skillName) {
   const centralPath = await loadStorage(STORAGE_KEYS.skillCentralPath);
   const selectedId = await loadStorage(STORAGE_KEYS.skillSelectedProject);
@@ -751,26 +853,21 @@ async function skillPullFromCentral(skillName) {
   if (!srcPath) { toast('中心仓库中未找到: ' + skillName, 'error'); return; }
 
   try {
+    const mode = await getSkillSyncMode();
     const resp = await sendNativeMessage({
       command: 'syncSkillDir',
       src: srcPath,
       dstParent: selected.path + '/.claude/skills',
+      mode,
     });
-    const result = resp.data;
-    if (result.conflicts && result.conflicts.length > 0) {
-      toast(`冲突：${result.conflicts[0].original} → ${result.conflicts[0].renamedTo}`);
-    } else if (result.copied && result.copied.length > 0) {
-      toast(`已拉取: ${result.copied.join(', ')} 到「${selected.name}」`);
-    } else {
-      toast('已同步（内容相同）');
-    }
+    toast(summarizeSyncResult(resp.data, selected.name));
     loadSkills();
   } catch (err) {
     toast('拉取失败: ' + err.message, 'error');
   }
 }
 
-// 中心仓库 → 项目（通过中心面板按钮）
+// 中心仓库 至 项目（通过中心面板按钮）
 async function skillPushToProject(skillName) {
   const centralPath = await loadStorage(STORAGE_KEYS.skillCentralPath);
   const selectedId = await loadStorage(STORAGE_KEYS.skillSelectedProject);
@@ -790,19 +887,14 @@ async function skillPushToProject(skillName) {
   if (!srcPath) { toast('中心仓库中未找到: ' + skillName, 'error'); return; }
 
   try {
+    const mode = await getSkillSyncMode();
     const resp = await sendNativeMessage({
       command: 'syncSkillDir',
       src: srcPath,
       dstParent: selected.path + '/.claude/skills',
+      mode,
     });
-    const result = resp.data;
-    if (result.conflicts && result.conflicts.length > 0) {
-      toast(`冲突：${result.conflicts[0].original} → ${result.conflicts[0].renamedTo}`);
-    } else if (result.copied && result.copied.length > 0) {
-      toast(`已推送到「${selected.name}」: ${result.copied.join(', ')}`);
-    } else {
-      toast('已同步（内容相同）');
-    }
+    toast(summarizeSyncResult(resp.data, selected.name));
     loadSkills();
   } catch (err) {
     toast('推送失败: ' + err.message, 'error');
@@ -877,7 +969,7 @@ window.addEventListener('resize', () => {
   });
 });
 
-// 中心仓库 → 所有已存在该项目中的 skill（进度同步，只覆盖已有）
+// 中心仓库 至 所有已存在该项目中的 skill（进度同步，只覆盖已有）
 async function syncSkillToAllProjects(skillName) {
   const centralPath = await loadStorage(STORAGE_KEYS.skillCentralPath);
   const projects = await loadStorage(STORAGE_KEYS.skillMonitoredProjects);
@@ -912,11 +1004,13 @@ async function syncSkillToAllProjects(skillName) {
         continue;
       }
 
-      // 只同步已存在的
+      // 只同步已存在的；用当前默认模式
+      const mode = await getSkillSyncMode();
       await sendNativeMessage({
         command: 'syncSkillDir',
         src: srcPath,
         dstParent: project.path + '/.claude/skills',
+        mode,
       });
       syncCount++;
     } catch (e) {
@@ -932,7 +1026,7 @@ async function syncSkillToAllProjects(skillName) {
   loadSkills();
 }
 
-// 中心仓库 → 从所有项目中删除此 skill（中心仓库保留）
+// 中心仓库 至 从所有项目中删除此 skill（中心仓库保留）
 async function deleteSkillFromAllProjects(skillName) {
   const centralPath = await loadStorage(STORAGE_KEYS.skillCentralPath);
   const projects = await loadStorage(STORAGE_KEYS.skillMonitoredProjects);

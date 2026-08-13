@@ -80,11 +80,20 @@
               </select>
               <button class="btn btn-danger project-remove-btn" id="skillProjectRemoveBtn" style="display:none;" data-action="skill-remove-project">×</button>
             </div>
+            <!-- 推送模式 toggle：symlink / copy -->
+            <div class="skill-sync-mode-toggle" id="skillSyncModeToggle" style="display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-left:6px;font-size:11px;">
+              <button class="skill-sync-mode-btn" data-mode="symlink" title="中心推送至项目默认软链接（自动降级目录联接）" style="padding:3px 8px;border:none;background:transparent;cursor:pointer;">软链接</button>
+              <button class="skill-sync-mode-btn" data-mode="copy" title="中心推送至项目复制整个目录" style="padding:3px 8px;border:none;background:transparent;cursor:pointer;border-left:1px solid var(--line);">📄 复制</button>
+            </div>
             <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" data-action="skill-add-project">+ 添加项目</button>
             <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px; opacity: 0.7;" data-action="skill-import-from-git">从 Git 监控添加</button>
           </div>
           <div class="skill-panel-body" id="projectSkillList">
             <div class="skill-empty"><p>从左侧选择一个 Skill 进行操作</p></div>
+          </div>
+          <div class="skill-legend">
+            <span class="source-tag synced">软链接</span> 指向中心仓库，实时同步
+            <span class="source-tag synced">实体文件</span> 独立复制，需手动同步
           </div>
         </div>
       </div>

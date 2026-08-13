@@ -11,6 +11,8 @@ async function init() {
   loadCommandList();
   loadGitDirList();
   startGitAutoRefresh();
+  setupSkillSyncModeToggle();   // 绑定推送模式 toggle 的 click 事件
+  loadSkillSyncModeUi();        // 初始化时回显当前模式
 
   const savedTab = await loadStorage(STORAGE_KEYS.lastActiveTab);
   if (savedTab) {
@@ -28,7 +30,7 @@ function activateTab(tabName) {
     panel.classList.add('active');
     if (tabName === 'processes') loadProcesses();
     if (tabName === 'git') loadGitStatus();
-    if (tabName === 'skills') { refreshProjectSelect(); loadSkills(); }
+    if (tabName === 'skills') { refreshProjectSelect(); loadSkillSyncModeUi(); loadSkills(); }
     if (tabName === 'envvars') { initEnvvarPanel(); ensureFirstEnvSnapshot(); }
   }
 }
@@ -60,7 +62,7 @@ function setupDelegation() {
       saveStorage(STORAGE_KEYS.lastActiveTab, tabBtn.dataset.tab);
       if (tabBtn.dataset.tab === 'processes') loadProcesses();
       if (tabBtn.dataset.tab === 'git') loadGitStatus();
-      if (tabBtn.dataset.tab === 'skills') { refreshProjectSelect(); loadSkills(); }
+      if (tabBtn.dataset.tab === 'skills') { refreshProjectSelect(); loadSkillSyncModeUi(); loadSkills(); }
       if (tabBtn.dataset.tab === 'envvars') { initEnvvarPanel(); ensureFirstEnvSnapshot(); }
       return;
     }
@@ -115,6 +117,7 @@ function setupDelegation() {
       case 'skill-pull': skillPullFromCentral(btn.dataset.name); break;
       case 'skill-delete-project': deleteSkillProject(btn.dataset.id); break;
       case 'skill-delete-skill': deleteSkillFromProject(btn.dataset.name, btn.dataset.projectId); break;
+      case 'skill-materialize': materializeSkill(btn.dataset.name, btn.dataset.projectId); break;
       case 'skill-delete-central': deleteSkillFromCentral(btn.dataset.name); break;
       case 'skill-delete-from-all': deleteSkillFromAllProjects(btn.dataset.name); break;
       case 'skill-filter-change': loadSkills(); break;
