@@ -513,9 +513,51 @@ func SyncSkillDir(req protocol.Request) protocol.Response {
 	return protocol.Response{Status: "ok", Data: result}
 }
 
-// inspectLink 检测 path 是否为符号链接 / junction，返回 (linkType, isLink, target)
-// linkType: "" 非链接 / "symlink" / "junction"
-// target: 链接目标（解析后的绝对路径），非链接返回 ""
+// MaterializeSkill 把项目里的软链接/junction skill 物化为实体目录（独立复制）
+// 接收 req.Path（项目路径）+ req.Name（skill 名称）
+func MaterializeSkill(req protocol.Request) protocol.Response {
+	if req.Path == "" || req.Name == "" {
+		return protocol.Response{Status: "error", Message: "path 和 name 不能为空"}
+	}
+
+	skillDir := filepath.Join(req.Path, ".claude", "skills", req.Name)
+	if _, err := os.Stat(skillDir); err != nil {
+		skillDir = filepath.Join(req.Path, "skills", req.Name)
+		if _, err := os.Stat(skillDir); err != nil {
+			return protocol.Response{Status: "error", Message: "Skill 目录不存在: " + req.Name}
+		}
+	}
+
+	// 尝试解析链接目标：成功 = 是链接（symlink 或 junction），失败 = 实体文件
+	target, err := os.Readlink(skillDir)
+	if err != nil {
+		return protocol.Response{Status: "ok", Data: map[string]interface{}{
+			"converted": false,
+			"message":   "已是实体文件",
+		}}
+	}
+
+	// 目标可能是相对路径，解析为绝对
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(filepath.Dir(skillDir), target)
+	}
+
+	// 移除链接本体（os.Remove 只删 reparse point，不遍历 junction 目标）
+	if err := os.Remove(skillDir); err != nil {
+		return protocol.Response{Status: "error", Message: "移除链接失败: " + err.Error()}
+	}
+
+	// 把目标复制成实体目录
+	if err := CopyDirRecursive(target, skillDir); err != nil {
+		return protocol.Response{Status: "error", Message: "复制实体文件失败: " + err.Error()}
+	}
+
+	return protocol.Response{Status: "ok", Data: map[string]interface{}{
+		"converted": true,
+		"source":    target,
+	}}
+}
+
 // inspectLink 检测 path 是否为符号链接 / junction，返回 (linkType, isLink, target)
 // linkType: "" 非链接 / "symlink" / "junction"
 // target: 链接目标（解析后的绝对路径），非链接返回 ""

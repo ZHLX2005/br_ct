@@ -36,6 +36,7 @@ func main() {
 	registry.Register("batchDeleteSkills", fileops.BatchDeleteSkills)
 	registry.Register("saveSkillGroups", fileops.SaveSkillGroups)
 	registry.Register("readSetting", fileops.ReadSetting)
+	registry.Register("materializeSkill", fileops.MaterializeSkill)
 
 	// Git Skill 导入
 	registry.Register("gitCloneAndDiscover", gitimporter.CloneAndDiscoverSkills)
