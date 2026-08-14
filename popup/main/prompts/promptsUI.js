@@ -56,9 +56,14 @@ function populateOptimizer(promptOptimizerSelect, templates) {
   const groupList = document.createElement('div');
   groupList.className = 'group-list';
   
+  // 创建右侧统一滚动容器：包在 .options-list 外，承担全部滚动职责
+  const optionsWrapper = document.createElement('div');
+  optionsWrapper.className = 'options-wrapper';
+
   // 创建右侧选项列表
   const optionsList = document.createElement('div');
   optionsList.className = 'options-list';
+  optionsWrapper.appendChild(optionsList);
 
   // 修改恢复逻辑,改由 mainUtils.loadStoredData 统一从 chrome.storage.sync
   // 读 lastPromptTemplate 并在 populateOptimizer 之后写回 selected-value,
@@ -89,6 +94,11 @@ function populateOptimizer(promptOptimizerSelect, templates) {
         container.classList.remove('active');
       }
     });
+
+    // 统一重置右侧滚动容器到顶部：旧组滚动位置不该带到新组
+    // 注意：真正滚动的是 .options-list（wrapper 只是固定高度的 hidden 隔离层）
+    const optionsList = document.querySelector('.options-list');
+    if (optionsList) optionsList.scrollTop = 0;
     
     // 更新分组项的active状态
     document.querySelectorAll('.group-item').forEach(item => {
@@ -101,31 +111,33 @@ function populateOptimizer(promptOptimizerSelect, templates) {
 
   // 按分组添加选项
   let firstGroup = null;
+  // 单一定时器：mouseenter 防抖 200ms，只处理最后一次停留的分组
+  // 修复滚动期间光标不动但 group-item 依次滚到光标下时多次触发重排导致视觉抖动
+  let hoverTimer = null;
   for (const groupName in groups) {
     const groupItem = document.createElement('div');
     groupItem.className = 'group-item';
     groupItem.textContent = groupName;
     if (!firstGroup) firstGroup = groupName;
-    
-    // 使用事件委托来处理hover
-    let hoverTimer = null;
-    
+
+    // 视觉态即时切换 active（让用户感觉响应跟手）
     groupItem.addEventListener('mouseenter', () => {
-      // 清除之前的定时器
-      if (hoverTimer) clearTimeout(hoverTimer);
-      
-      // 立即移除其他active状态
       document.querySelectorAll('.group-item').forEach(item => {
         item.classList.remove('active');
       });
-      
-      // 立即添加当前active状态
       groupItem.classList.add('active');
-      
-      // 立即显示对应选项
-      showGroupOptions(groupName);
+
+      // 重操作（showGroupOptions 内含 display 切换 + chrome.storage.sync.set）：防抖
+      // 滚动期间只触发最后一次停留的组，避免右侧列高度反复跳变造成抖动
+      if (hoverTimer) clearTimeout(hoverTimer);
+      hoverTimer = setTimeout(() => {
+        showGroupOptions(groupName);
+      }, 200);
     });
-    
+
+    // 鼠标离开立刻清除 pending timer，避免后续 hover 还要等满 200ms
+    groupItem.addEventListener('mouseleave', () => clearTimeout(hoverTimer));
+
     groupList.appendChild(groupItem);
     
     // 为每个分组创建选项容器
@@ -195,7 +207,7 @@ function populateOptimizer(promptOptimizerSelect, templates) {
 
   // 装载两栏布局
   twoColumnContainer.appendChild(groupList);
-  twoColumnContainer.appendChild(optionsList);
+  twoColumnContainer.appendChild(optionsWrapper);
   optionsContainer.appendChild(twoColumnContainer);
 
   // 初始化显示第一个分组的选项

@@ -25,10 +25,21 @@
 .group-list {
   width: 120px;
   border-right: 1px solid var(--border-color);
+  overflow-y: auto; /* 组数多于可视区时左侧自己滚，不撑爆 popover */
+}
+
+/* 右侧隔离层：固定高度 + overflow:hidden，不参与 flex stretch 撑高。
+   切组时右侧内容再变也不会撑高 wrapper 高度，左侧 group-list 因此不会被 flex 带去抖动。
+   真正承担滚动的是内部的 .options-list。 */
+.options-wrapper {
+  flex: 1;
+  max-height: 360px;
+  overflow: hidden;
 }
 
 .options-list {
-  flex: 1;
+  height: 100%;       /* 占满 wrapper */
+  overflow-y: auto;   /* 真正负责滚动 */
   padding: 8px 0;
 }
 
