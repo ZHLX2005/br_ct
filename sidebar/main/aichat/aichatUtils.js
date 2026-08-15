@@ -462,6 +462,13 @@ export async function loadStoredData() {
       const savedKey = miscResult[STORAGE_KEYS.LAST_PROMPT_TEMPLATE];
       const all = getCurrentPrompts() || {};
       let match = null;
+      // 复合 key (popup 写入新格式: `${group}::${label}`)
+      if (savedKey.includes('::')) {
+        const [g, ...rest] = savedKey.split('::');
+        const lbl = rest.join('::');
+        const items = all[g] || [];
+        match = items.find((t) => t.label === lbl) || null;
+      }
       outer: for (const group of Object.keys(all)) {
         const items = all[group];
         if (!Array.isArray(items)) continue;
@@ -1209,6 +1216,14 @@ function syncPromptIndicator() {
     let alias = '';
     // value 在 popup 写出时是 alias(无 "/" 前缀);若旧契约是 label,用同算法匹配
     const cache = getCurrentPrompts() || {};
+    // 复合 key (popup 写入新格式: `${group}::${label}`)
+    if (value.includes('::')) {
+      const [g, ...rest] = value.split('::');
+      const lbl = rest.join('::');
+      const items = cache[g] || [];
+      const found = items.find((t) => t.label === lbl);
+      if (found && found.alias) alias = '/' + found.alias;
+    }
     outer: for (const group in cache) {
       const items = cache[group];
       if (!Array.isArray(items)) continue;

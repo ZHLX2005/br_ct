@@ -333,6 +333,13 @@ export async function loadStoredData() {
       const savedKey = miscResult[STORAGE_KEYS.LAST_PROMPT_TEMPLATE];
       const all = getCurrentPrompts() || {};
       let match = null;
+      // 复合 key (popup 写入新格式: `${group}::${label}`)
+      if (savedKey.includes('::')) {
+        const [g, ...rest] = savedKey.split('::');
+        const lbl = rest.join('::');
+        const items = all[g] || [];
+        match = items.find((t) => t.label === lbl) || null;
+      }
       outer: for (const group of Object.keys(all)) {
         const items = all[group];
         if (!Array.isArray(items)) continue;
