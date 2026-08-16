@@ -22,6 +22,10 @@ export const ACTIVE_STABILITY_DELTA = 0.1;
 /** 每个 nav label 的最大字符数 */
 export const LABEL_TRUNCATE = 60;
 
+// ---- 复制过滤 ----
+/** 「复制全部」时，超过此字符数的条目被排除（太长复制出来没有意义） */
+export const COPY_MAX_LEN = 400;
+
 // ---- 重建防抖 ----
 export const REBUILD_DEBOUNCE_MS = 60;
 

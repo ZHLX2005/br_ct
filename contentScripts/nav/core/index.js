@@ -10,7 +10,7 @@ import { createDisposer } from '../util/disposer.js';
 import { collectRecords } from './collector.js';
 import { createActiveTracker } from './activeTracker.js';
 import { observeViewport, watchScroll, observeList, observeShell } from './observers.js';
-import { RETRY_INTERVAL_MS, RETRY_MAX, CLICK_LOCK_MS, SUMMARY_TEMPLATE, isSummaryMessage } from '../constants.js';
+import { RETRY_INTERVAL_MS, RETRY_MAX, CLICK_LOCK_MS, SUMMARY_TEMPLATE, isSummaryMessage, COPY_MAX_LEN } from '../constants.js';
 
 export function createNav(cfg) {
   const { itemSel, listSel, textSel, extractText, platformId, platformName } = cfg;
@@ -116,16 +116,21 @@ export function createNav(cfg) {
 
   // 复制原文到剪贴板（用 ========== 分隔多条消息，与 sidebar 的"导入阻塞消息"功能配对）
   // 用法：粘贴到 sidebar 底部的"导入"按钮 → 自动拆成阻塞消息
-  // 已过滤：排除所有"总结按钮"发出的消息，避免复制出含自己总结的嵌套原文。
+  // 已过滤：① 排除所有"总结按钮"发出的消息，避免复制出含自己总结的嵌套原文；
+  //         ② 排除字数超过 COPY_MAX_LEN 的条目（太长复制出来没有意义）。
   async function onCopy() {
     const userQuestions = getUserQuestionRecords();
     if (userQuestions.length === 0) return;
+    const copyable = userQuestions.filter(r => r.fullText.length <= COPY_MAX_LEN);
+    const excludedLong = userQuestions.length - copyable.length;
+    if (copyable.length === 0) return;
     const SEP = '==========';
-    const text = userQuestions.map(r => r.fullText).join(`\n\n${SEP}\n\n`);
+    const text = copyable.map(r => r.fullText).join(`\n\n${SEP}\n\n`);
     try {
       await navigator.clipboard.writeText(text);
-      console.log('[nav] copied', userQuestions.length, 'user questions to clipboard',
-        records.length - userQuestions.length, 'summary message(s) excluded');
+      console.log('[nav] copied', copyable.length, 'user questions to clipboard',
+        records.length - userQuestions.length, 'summary message(s) excluded,',
+        excludedLong, 'long message(s) excluded (>' + COPY_MAX_LEN + ' chars)');
     } catch (err) {
       console.warn('[nav] clipboard write failed', err);
     }
