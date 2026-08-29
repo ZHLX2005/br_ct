@@ -87,6 +87,95 @@ function triggerInputEvents(element) {
   }
 }
 
+/**
+ * 向 ProseMirror / TipTap / Slate 等现代 contenteditable 编辑器注入文本。
+ * 旧 textarea 走原生 value setter 路径。
+ */
+function injectMessageIntoInput(element, text) {
+  if (!element || !text) {
+    console.warn("元素或文本为空");
+    return false;
+  }
+
+  const isContentEditable =
+    element.isContentEditable ||
+    element.getAttribute("contenteditable") === "true";
+
+  if (!isContentEditable) {
+    // 旧版 textarea / input 兼容
+    const nativeSetter =
+      Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype,
+        "value"
+      )?.set ||
+      Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value"
+      )?.set;
+
+    if (nativeSetter) {
+      nativeSetter.call(element, text);
+    } else {
+      element.value = text;
+    }
+
+    element.dispatchEvent(
+      new Event("input", { bubbles: true, cancelable: true })
+    );
+    element.dispatchEvent(
+      new Event("change", { bubbles: true, cancelable: true })
+    );
+    return true;
+  }
+
+  // contenteditable：ProseMirror / TipTap 路径
+  element.focus();
+  // 清空现有内容（保留占位 p 节点的 placeholder 行为由编辑器自己恢复）
+  element.textContent = "";
+
+  // beforeinput 是现代编辑器的标准钩子
+  element.dispatchEvent(
+    new InputEvent("beforeinput", {
+      bubbles: true,
+      cancelable: true,
+      inputType: "insertText",
+      data: text,
+    })
+  );
+
+  // execCommand 已被 deprecated 但 ProseMirror 仍兼容
+  let inserted = false;
+  try {
+    inserted = document.execCommand("insertText", false, text);
+  } catch (e) {
+    console.warn("execCommand insertText 抛错", e);
+  }
+
+  if (!inserted) {
+    // 回退：直接写 textContent（部分 ProseMirror 配置会监听 mutation 兜底）
+    console.warn("execCommand 失败，回退到 textContent 注入");
+    element.textContent = text;
+  }
+
+  element.dispatchEvent(
+    new InputEvent("input", {
+      bubbles: true,
+      cancelable: true,
+      inputType: "insertText",
+      data: text,
+    })
+  );
+  element.dispatchEvent(
+    new Event("change", { bubbles: true, cancelable: true })
+  );
+  document.dispatchEvent(
+    new Event("selectionchange", { bubbles: true })
+  );
+
+  console.log("✅ contenteditable 输入完成");
+  return true;
+}
+
 function triggerClick(element) {
   if (!element) {
     console.warn("点击元素不存在");
@@ -130,7 +219,43 @@ function triggerClick(element) {
 //                     Doubao 输入框 & 按钮选择器
 // ==========================================================
 const inputSelectors = [
-  // Doubao textarea
+  // ==========================================================
+  // 👇 【2026-08 新版】豆包改用 TipTap / ProseMirror contenteditable 编辑器
+  // ==========================================================
+  // 1. 最稳定：通过 guidance-input-content 容器 + contenteditable
+  {
+    type: "css",
+    value: 'div.guidance-input-content div[contenteditable="true"]',
+  },
+  // 2. 通过 ProseMirror / TipTap class 定位
+  {
+    type: "css",
+    value: 'div.guidance-input-content div.tiptap.ProseMirror',
+  },
+  // 3. role="textbox" 语义属性（与 Tongyi 一致的现代编辑器约定）
+  {
+    type: "css",
+    value: 'div.guidance-input-content div[role="textbox"][contenteditable="true"]',
+  },
+  // 4. 不限定容器，直接找全局 contenteditable textbox（兜底）
+  {
+    type: "css",
+    value: 'div[role="textbox"][contenteditable="true"].ProseMirror',
+  },
+  // 5. 用户提供的 jsPath（备选）
+  {
+    type: "css",
+    value: 'div#input-engine-container div[contenteditable="true"]',
+  },
+  // 6. 通过 placeholder 文本定位
+  {
+    type: "xpath",
+    value: '//div[@data-placeholder="发消息..."]',
+  },
+
+  // ==========================================================
+  // 👇 旧版 textarea（保留，优先级最低，DOM 未升级场景兜底）
+  // ==========================================================
   {
     type: "xpath",
     value:
@@ -140,7 +265,7 @@ const inputSelectors = [
 ];
 
 const buttonSelectors = [
-  // Doubao 发送按钮
+  // Doubao 发送按钮（id 仍然稳定）
   { type: "xpath", value: '//*[@id="flow-end-msg-send"]' },
   { type: "css", value: "#flow-end-msg-send" },
 ];
@@ -185,18 +310,46 @@ async function sendChatMessage(message) {
     await new Promise((resolve) => setTimeout(resolve, 200));
 
     console.log("开始输入文本内容...");
-    inputElement.value = message.trim();
-    if (!triggerInputEvents(inputElement)) {
-      console.error("触发输入事件失败");
+    const finalMessage = message.trim();
+    if (!injectMessageIntoInput(inputElement, finalMessage)) {
+      console.error("注入文本失败");
       return false;
     }
     console.log("文本输入完成");
+
+    console.log("等待编辑器处理输入事件...");
+    await new Promise((resolve) => setTimeout(resolve, 400));
 
     console.log("正在查找发送按钮...");
     const buttonElement = await waitForElement(buttonSelectors, 5000, 100);
     if (!buttonElement) {
       console.error("未找到发送按钮");
       return false;
+    }
+
+    // 检查按钮是否被禁用（contenteditable 输入后按钮可能延迟启用）
+    let retryCount = 0;
+    const maxRetries = 5;
+    while (
+      retryCount < maxRetries &&
+      (buttonElement.disabled ||
+        buttonElement.getAttribute("aria-disabled") === "true" ||
+        buttonElement.classList.contains("is-disabled"))
+    ) {
+      console.warn(
+        `发送按钮仍处于禁用状态，等待启用... (${retryCount + 1}/${maxRetries})`
+      );
+      // 再补一次 input 事件，触发按钮启用
+      inputElement.dispatchEvent(
+        new InputEvent("input", {
+          bubbles: true,
+          cancelable: true,
+          inputType: "insertText",
+          data: finalMessage,
+        })
+      );
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      retryCount++;
     }
 
     // 增加200ms等待，确保输入已被处理
@@ -243,8 +396,15 @@ if (!window.location.hostname.includes("doubao")) {
       if (isSending) return;
       if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
       const target = event.target;
-      if (!(target instanceof HTMLTextAreaElement)) return;
-      if (target.closest("#chat-route-layout")) {
+      if (!(target instanceof Element)) return;
+      // 新版编辑器是 contenteditable div，旧版是 textarea，二者都要兼容
+      const isInputTarget =
+        target instanceof HTMLTextAreaElement || target.isContentEditable;
+      if (!isInputTarget) return;
+      if (
+        target.closest("#chat-route-layout") ||
+        target.closest("div.guidance-input-content")
+      ) {
         recycleResponseListener("enter-key");
       }
     }, true);
@@ -286,8 +446,17 @@ if (!window.location.hostname.includes("doubao")) {
 
 /**
  * @fileoverview
- * Doubao 聊天机器人内容脚本 - 完整版
+ * Doubao 聊天机器人内容脚本
  * 适配 Doubao 输入框和发送按钮
+ *
+ * 2026-08 修复：豆包把编辑器从 <textarea> 改为 TipTap / ProseMirror contenteditable
+ *   - 新选择器链：div.guidance-input-content div[contenteditable="true"]
+ *   - 输入方式：beforeinput 事件 + execCommand('insertText') 一次性注入
+ *              （与 Tongyi Slate 编辑器同源方案）
+ *   - 按钮启用重试：input 事件触发后按钮 aria-disabled 可能短暂为 true，
+ *     增加 5×200ms 重试机制，必要时补 dispatch input 推动按钮启用
+ *   - keydown 监听：兼容 textarea 与 contenteditable 两种目标
+ *
  * 保留完整错误处理、事件触发、点击备用方案、状态锁及异步消息监听
- * 新增：输入前和点击前各增加200ms等待时间，提高操作稳定性
+ * 输入前和点击前各增加 200ms 等待时间，提高操作稳定性
  */
