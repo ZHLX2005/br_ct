@@ -10,11 +10,8 @@ import {
   closeAllAITabs as closeAllAITabsShared,
   saveMessageHistory,
 } from "../../shared/sendMessage.js";
-import {
-  loadAllPrompts,
-  subscribeToPrompts,
-  getCurrentPrompts,
-} from "../../shared/prompts/promptsStore.js";
+import { loadAllPrompts, subscribeToPrompts } from "../../shared/prompts/promptsStore.js";
+import { restoreLastPromptTemplate } from "./prompts/lastPromptRestore.js";
 import { STORAGE_KEYS } from "../../shared/core/storageKeys.js";
 import {
   addToHistory,
@@ -297,11 +294,14 @@ export async function loadStoredData() {
   try {
     // 历史走 shared/history；平台可见性已在 initializePopup 中走 shared/platforms 应用过
     // 这里只处理 lastMessage / platformStates / optimizer / lastPromptTemplate 几个一次性 key。
+  // lastPromptTemplate 写入端在 promptsUI.js,归属 chrome.storage.sync
+  // (见 .claude/skills/sidebar-main-architecture/SKILL.md);读出与恢复由
+  // restoreLastPromptTemplate 内部用 sync.get 承担,这里不再读这个 key。
     const [history, miscResult] = await Promise.all([
       loadHistory(),
       new Promise((resolve) => {
         chrome.storage.local.get(
-          [STORAGE_KEYS.LAST_MESSAGE, STORAGE_KEYS.PLATFORM_STATES, STORAGE_KEYS.OPTIMIZER, STORAGE_KEYS.LAST_PROMPT_TEMPLATE],
+          [STORAGE_KEYS.LAST_MESSAGE, STORAGE_KEYS.PLATFORM_STATES, STORAGE_KEYS.OPTIMIZER],
           (result) => resolve(result || {})
         );
       }),
@@ -328,36 +328,9 @@ export async function loadStoredData() {
       elements.promptOptimizerSelect.value = miscResult[STORAGE_KEYS.OPTIMIZER];
     }
 
-    // 恢复提示词选择(从 shared 内存快照查找,与 write 端契约一致:alias 优先,缺时 label)
-    if (miscResult[STORAGE_KEYS.LAST_PROMPT_TEMPLATE]) {
-      const savedKey = miscResult[STORAGE_KEYS.LAST_PROMPT_TEMPLATE];
-      const all = getCurrentPrompts() || {};
-      let match = null;
-      // 复合 key (popup 写入新格式: `${group}::${label}`)
-      if (savedKey.includes('::')) {
-        const [g, ...rest] = savedKey.split('::');
-        const lbl = rest.join('::');
-        const items = all[g] || [];
-        match = items.find((t) => t.label === lbl) || null;
-      }
-      outer: for (const group of Object.keys(all)) {
-        const items = all[group];
-        if (!Array.isArray(items)) continue;
-        for (const t of items) {
-          if ((t.alias && t.alias === savedKey) || t.label === savedKey) {
-            match = t;
-            break outer;
-          }
-        }
-      }
-      if (match) {
-        const selectedValue =
-          elements.promptOptimizerSelect.querySelector(".selected-value");
-        selectedValue.textContent = match.label;
-        selectedValue.dataset.value = savedKey;
-        selectedValue.dataset.template = match.template || "";
-      }
-    }
+    // 恢复提示词选择 —— 见 popup/main/prompts/lastPromptRestore.js
+    // (从 chrome.storage.sync 读,与 promptsUI.js 写入端同一存储区)
+    await restoreLastPromptTemplate(elements.promptOptimizerSelect);
   } catch (error) {
     console.error("加载存储数据失败:", error);
   }
