@@ -118,8 +118,6 @@
         "funcs/*.js",
         "runjs/*.js",
         "runjs/*.css",
-        "modules/translation/*.js",
-        "modules/translation/*.html",
         "popup/*.html",
         "popup/**/*.html",
         "popup/**/*.css"

@@ -1,6 +1,6 @@
 ---
 name: keyboard-shortcut-architecture
-description: bro_chat 扩展快捷键系统的完整架构参考。当需要理解、新增、修改或调试快捷键功能时触发，涵盖：内置快捷键（Chrome Commands）、content script 用户自定义快捷键、及时响应机制、超过/拦截原生浏览器快捷键的方法、设置页→内容脚本同步链路、整体分层架构设计。触发词：快捷键、shortcut，内置快捷键、Chrome Commands、拦截浏览器快捷键、超过原生快捷键、preventDefault、keydown、OCR 快捷键、收藏快捷键、划词快捷键、translation 快捷键、快捷键不生效、快捷键录制、sidebar 切换快捷键。
+description: bro_chat 扩展快捷键系统的完整架构参考。当需要理解、新增、修改或调试快捷键功能时触发，涵盖：内置快捷键（Chrome Commands）、content script 用户自定义快捷键、及时响应机制、超过/拦截原生浏览器快捷键的方法、设置页→内容脚本同步链路、整体分层架构设计。触发词：快捷键、shortcut，内置快捷键、Chrome Commands、拦截浏览器快捷键、超过原生快捷键、preventDefault、keydown、OCR 快捷键、划词快捷键、translation 快捷键、快捷键不生效、快捷键录制、sidebar 切换快捷键。
 ---
 
 # bro_chat 快捷键系统架构（参考/规范）
@@ -29,14 +29,14 @@ bro_chat 有**两层完全独立**的快捷键体系，职责不重叠，**绝�
 │   数据源：chrome.storage.local                                │
 │   特点：只在注入了 content script 的页面生效、用户可在设置页   │
 │         自定义任意「修饰键+主键」组合、可以拦截/超过原生快捷键 │
-│   本项目样例：OCR 截图、收藏快捷键、Sidebar Tab 切换         │
+│   本项目样例：OCR 截图、Sidebar Tab 切换                      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 **选型决策**：
 - 需要全局/系统级触发（无页面焦点也要响应）→ 第 1 层 Chrome Commands
 - 需要用户自定义、需要操作当前页面 DOM/选区 → 第 2 层 content script
-- bro_chat 的「划词翻译」「OCR」「收藏」「Sidebar Tab 切换」都属于第 2 层
+- bro_chat 的「划词翻译」「OCR」「Sidebar Tab 切换」都属于第 2 层
 
 ---
 
@@ -58,7 +58,7 @@ bro_chat 有**两层完全独立**的快捷键体系，职责不重叠，**绝�
 }
 ```
 
-> ⚠️ **坑：现有代码存储键命名不统一**。OCR 用 `translation.ocr.shortcut`（带点），收藏用 `translation.favoritesShortcut`（驼峰无点）。**新增功能请统一用 `translation.<功能>.shortcut` 带点风格**。
+> ⚠️ **命名规范**：存储键统一用 `translation.<功能>.shortcut` 带点风格（如 `translation.ocr.shortcut`）。
 
 ### 要素 2：匹配逻辑（content script 端）
 监听 `document` 级 `keydown`，逐字段精确比对四个修饰键 + 主键：
@@ -221,7 +221,6 @@ async function saveTabCycleState() {
 | -------------- | ---- | ----------------------------------- | -------------------------------- | ------------------------- | -------- |
 | Alt+C/D/F/B    | 第1层 | manifest commands                  | chrome://extensions/shortcuts     | background.js             | 系统级   |
 | OCR 截图       | 第2层 | `translation.ocr.shortcut`         | translation.html                 | content-ocr.js           | ✅ 是    |
-| 收藏划词       | 第2层 | `translation.favoritesShortcut`     | translation.html                 | content.js               | ❌ 否    |
 | **Sidebar Tab** | 第2层 | `translation.sidebarTabSwitch.*`   | sidebar/aichat 设置弹窗          | sidebar-tab-switch.js   | ✅ 是    |
 
 ---
@@ -232,7 +231,7 @@ async function saveTabCycleState() {
 
 1. **manifest.json**：新 content script 加入 `content_scripts.js`
 2. **content script**：四要素完整实现
-3. **设置页**：复制 `startFavoritesShortcutRecording` 套路
+3. **设置页**：复制 `startOcrShortcutRecording` 套路
 
 ### 类型 B（触发后通知 sidebar）
 

@@ -160,10 +160,6 @@ function handlePanelItemClick(template) {
   processSelectedText(selectionPanelSelection, prompt);
 }
 
-// 收藏快捷键
-let favoritesShortcut = null;
-let favoritesShortcutPressed = false;
-
 // ========== SelectionStreamFlowController 流速控制类 ==========
 
 /**
@@ -388,7 +384,6 @@ function createResultPanel() {
     <div class="footer-section">
       <button id="selection-copy-original">复制原文</button>
       <button id="selection-copy-result">复制结果</button>
-      <button id="selection-add-favorites">收藏</button>
       <button id="selection-auto-translate" class="auto-translate-btn" title="点击切换模式">自动</button>
       <button id="selection-close-panel">关闭</button>
     </div>
@@ -401,7 +396,6 @@ function createResultPanel() {
   panel.querySelector('#selection-close-panel').addEventListener('click', hideResultPanel);
   panel.querySelector('#selection-copy-original').addEventListener('click', copyOriginalText);
   panel.querySelector('#selection-copy-result').addEventListener('click', copyResult);
-  panel.querySelector('#selection-add-favorites').addEventListener('click', addCurrentToFavorites);
   panel.querySelector('#selection-auto-translate').addEventListener('click', toggleAutoTranslate);
 
   // 绑定原文编辑功能
@@ -1058,30 +1052,6 @@ function copyResult() {
 }
 
 /**
- * 添加当前文本到收藏
- */
-function addCurrentToFavorites() {
-  const originalTextElement = document.getElementById('selection-original-text');
-  if (originalTextElement) {
-    const text = originalTextElement.textContent;
-    addToFavorites(text, window.location.href);
-    showFavoriteNotification(text);
-  }
-}
-
-/**
- * 收藏文本到本地存储
- */
-function addToFavorites(text, url) {
-  chrome.runtime.sendMessage({
-    action: 'translation.addToFavorites',
-    text: text,
-    url: url,
-    timestamp: new Date().toISOString()
-  });
-}
-
-/**
  * 循环切换模式：auto → panel → off → auto
  */
 function toggleAutoTranslate() {
@@ -1124,38 +1094,6 @@ function updateModeButton() {
  */
 function updateAutoTranslateButton() {
   updateModeButton();
-}
-
-/**
- * 显示收藏成功提示
- */
-function showFavoriteNotification(text) {
-  const notification = document.createElement('div');
-  notification.style.cssText = `
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background: #6c757d;
-    color: white;
-    padding: 12px 20px;
-    border-radius: 4px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-    z-index: 2147483647;
-    font-size: 14px;
-    animation: bro-slide-in 0.3s ease-out;
-  `;
-  notification.textContent = `已收藏: "${text.length > 30 ? text.substring(0, 30) + '...' : text}"`;
-
-  document.body.appendChild(notification);
-
-  setTimeout(() => {
-    notification.style.animation = 'bro-slide-out 0.3s ease-in';
-    setTimeout(() => {
-      if (notification.parentNode) {
-        notification.parentNode.removeChild(notification);
-      }
-    }, 300);
-  }, 3000);
 }
 
 // ========== 原文编辑功能 ==========
@@ -1253,76 +1191,6 @@ async function saveAndProcessOriginal() {
   });
 }
 
-// ========== 收藏快捷键 ==========
-
-/**
- * 检查快捷键是否匹配
- */
-function checkFavoritesShortcut(e) {
-  if (!favoritesShortcut) {
-    return e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey && e.key === 'Control';
-  }
-
-  // e.key / favoritesShortcut.key 在某些场景（IME 输入法激活、特殊键）下可能 undefined
-  const userKey = typeof e.key === 'string' ? e.key.toLowerCase() : '';
-  const cfgKey = typeof favoritesShortcut.key === 'string' ? favoritesShortcut.key.toLowerCase() : '';
-  return (
-    e.ctrlKey === favoritesShortcut.ctrlKey &&
-    e.altKey === favoritesShortcut.altKey &&
-    e.shiftKey === favoritesShortcut.shiftKey &&
-    e.metaKey === favoritesShortcut.metaKey &&
-    userKey === cfgKey
-  );
-}
-
-/**
- * 获取快捷键的主键
- */
-function getShortcutMainKey() {
-  if (!favoritesShortcut) {
-    return 'Control';
-  }
-  return favoritesShortcut.key;
-}
-
-// 监听键盘事件（用于收藏快捷键）
-document.addEventListener('keydown', (e) => {
-  if (checkFavoritesShortcut(e)) {
-    if (favoritesShortcutPressed) return;
-    favoritesShortcutPressed = true;
-
-    const selection = window.getSelection();
-    const selectedText = selection.toString().trim();
-
-    // 检查是否在面板内部选中，如果是则不处理
-    if (selectedText && (!resultPanel || !isSelectionInsidePanel(resultPanel))) {
-      addToFavorites(selectedText, window.location.href);
-      showFavoriteNotification(selectedText);
-    }
-  }
-});
-
-document.addEventListener('keyup', (e) => {
-  // e.key 在某些场景（IME 输入法激活、特殊键）下可能是 undefined
-  if (typeof e.key !== 'string' || typeof getShortcutMainKey() !== 'string') return;
-  if (e.key.toLowerCase() === getShortcutMainKey().toLowerCase()) {
-    favoritesShortcutPressed = false;
-  }
-});
-
-document.addEventListener('selectionchange', () => {
-  const selection = window.getSelection();
-  const selectedText = selection.toString().trim();
-
-  if (selectedText && favoritesShortcutPressed) {
-    // 检查是否在面板内部选中，如果是则不处理
-    if (!resultPanel || !isSelectionInsidePanel(resultPanel)) {
-      addToFavorites(selectedText, window.location.href);
-      showFavoriteNotification(selectedText);
-    }
-  }
-});
-
 // ========== 文本选择监听 ==========
 
 document.addEventListener('mouseup', (e) => {
@@ -1405,12 +1273,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (selectedText) {
       processSelectedText(selectedText);
     }
-  } else if (request.action === 'translation.updateFavoritesShortcut') {
-    favoritesShortcut = request.shortcut;
-    sendResponse({ success: true });
-  } else if (request.action === 'translation.clearFavoritesShortcut') {
-    favoritesShortcut = null;
-    sendResponse({ success: true });
   } else if (request.action === 'processSelection') {
     // 新增：处理选中文本的消息
     if (request.text) {
@@ -1472,19 +1334,6 @@ function loadSettings() {
   });
 }
 
-/**
- * 加载收藏快捷键
- */
-function loadFavoritesShortcut() {
-  chrome.storage.local.get(['translation.favoritesShortcut'], (result) => {
-    if (result['translation.favoritesShortcut']) {
-      favoritesShortcut = result['translation.favoritesShortcut'];
-    } else {
-      favoritesShortcut = null;
-    }
-  });
-}
-
 // 监听 storage 变化
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName === 'local') {
@@ -1500,10 +1349,6 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
           hideSelectionPanel();
         }
       }
-    }
-
-    if (changes['translation.favoritesShortcut']) {
-      favoritesShortcut = changes['translation.favoritesShortcut'].newValue;
     }
 
     if (changes['translation.settings']) {
@@ -1525,6 +1370,4 @@ initTransPrompts();
 
 // 立即加载设置和 API 配置
 loadSettings();
-
-loadFavoritesShortcut();
 loadAPIConfig();

@@ -6,17 +6,10 @@
 import { updateContextMenuVisibility } from './contextMenu.js';
 
 /**
- * 初始化收藏列表存储
+ * 清理已删除的划词收藏功能遗留的存储数据
  */
-function initFavoritesStorage() {
-  chrome.storage.local.get(['translation.favorites'], (result) => {
-    if (!result['translation.favorites']) {
-      chrome.storage.local.set({
-        'translation.favorites': []
-      });
-      console.log('[Translation] 收藏列表已初始化');
-    }
-  });
+function cleanupLegacyFavoritesStorage() {
+  chrome.storage.local.remove(['translation.favorites', 'translation.favoritesShortcut']);
 }
 
 /**
@@ -76,7 +69,7 @@ function setupStorageListener() {
  * 初始化存储模块
  */
 export function setupStorage() {
-  initFavoritesStorage();
+  cleanupLegacyFavoritesStorage();
   initSettingsStorage();
   initStatsStorage();
   setupStorageListener();

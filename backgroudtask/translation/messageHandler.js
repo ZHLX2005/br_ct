@@ -21,51 +21,6 @@ function handleTranslate(request, sendResponse) {
 }
 
 /**
- * 处理添加到收藏列表
- */
-function handleAddToFavorites(request) {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(['translation.favorites'], (result) => {
-      const favorites = result['translation.favorites'] || [];
-
-      // 检查是否已存在相同的收藏
-      const exists = favorites.some(fav => fav.text === request.text && fav.url === request.url);
-
-      if (!exists) {
-        favorites.unshift({
-          text: request.text,
-          url: request.url,
-          timestamp: request.timestamp || new Date().toISOString()
-        });
-
-        // 保持收藏列表在200条以内
-        if (favorites.length > 200) {
-          favorites.pop();
-        }
-
-        chrome.storage.local.set({ 'translation.favorites': favorites }, () => {
-          console.log('[Translation] 收藏已添加，当前收藏数量:', favorites.length);
-          resolve({ success: true });
-        });
-      } else {
-        console.log('[Translation] 收藏已存在，未重复添加');
-        resolve({ success: true, message: '已存在' });
-      }
-    });
-  });
-}
-
-/**
- * 处理打开收藏列表
- */
-function handleOpenFavorites() {
-  chrome.tabs.create({
-    url: chrome.runtime.getURL('modules/translation/favorites/favorites.html')
-  });
-  return { success: true };
-}
-
-/**
  * 处理更新设置
  */
 function handleUpdateSettings() {
@@ -109,15 +64,6 @@ export function setupMessageHandler() {
         }).catch((err) => {
           sendResponse({ success: false, error: err.message });
         });
-        break;
-
-      case 'translation.addToFavorites':
-        isAsync = true;
-        handleAddToFavorites(request).then(sendResponse);
-        break;
-
-      case 'translation.openFavorites':
-        response = handleOpenFavorites();
         break;
 
       case 'translation.getTransPrompts':

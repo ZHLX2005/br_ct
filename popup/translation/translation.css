@@ -269,39 +269,6 @@
   margin-left: 4px;
 }
 
-/* 底部按钮 */
-.footer {
-  padding: 10px 12px;
-  background: var(--bg-card);
-  border-top: 1px solid var(--border-color);
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.footer-btn {
-  flex: 1;
-  padding: 9px 16px;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-color);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.footer-btn:hover {
-  background: var(--primary-color);
-  color: white;
-  border-color: var(--primary-color);
-}
-
-.footer-btn:active {
-  transform: scale(0.98);
-}
-
 /* 录制状态 */
 .shortcut-input.recording {
   background: #fff3cd;

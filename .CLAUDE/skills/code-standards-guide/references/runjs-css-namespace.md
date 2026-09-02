@@ -184,7 +184,7 @@ EOF
 
 ## 应用范围
 
-- `runjs/translation/content.css` — **已落地**（2026-08 重构，作用域根 + 嵌套 + `bro-slide-in/out`）
+- `runjs/translation/content.css` — **已落地**（2026-08 重构，作用域根 + 嵌套；原有 `bro-slide-in/out` 动画随划词收藏功能于 2026-09 移除，新增动画仍须带 `bro-` 前缀）
 - `runjs/translation/selection-ask.css` — 待审计（`.selection-trans-panel` 根已具备，子选择器需确认）
 - `runjs/translation/content-ocr.css` — 待审计（`ocr-*` 前缀较好，可统一风格）
 - `contentScripts/nav/view.js` 的 `NAV_CSS` — 已用 `${NAV_ID}` / `${TOOLBAR_CLASS}` 前缀隔离 ✅

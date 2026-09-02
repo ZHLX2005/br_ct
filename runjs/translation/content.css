@@ -513,7 +513,6 @@
 
   #selection-copy-original,
   #selection-copy-result,
-  #selection-add-favorites,
   #selection-auto-translate,
   #selection-close-panel {
     flex: 1;
@@ -529,7 +528,6 @@
 
   #selection-copy-original,
   #selection-copy-result,
-  #selection-add-favorites,
   #selection-auto-translate {
     background: rgba(0,0,0,0.06);
     color: #555;
@@ -668,7 +666,6 @@
 
     #selection-copy-original,
     #selection-copy-result,
-    #selection-add-favorites,
     #selection-auto-translate {
       background: rgba(255,255,255,0.08);
       color: #aaa;
@@ -715,33 +712,9 @@
 
     #selection-copy-original,
     #selection-copy-result,
-    #selection-add-favorites,
     #selection-auto-translate,
     #selection-close-panel {
       min-width: calc(50% - 5px);
     }
-  }
-}
-
-/* ========== 收藏通知动画（全局；动画名带 bro- 前缀防撞车） ========== */
-@keyframes bro-slide-in {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-@keyframes bro-slide-out {
-  from {
-    transform: translateX(0);
-    opacity: 1;
-  }
-  to {
-    transform: translateX(100%);
-    opacity: 0;
   }
 }

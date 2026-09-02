@@ -14,13 +14,10 @@ let selectionStreamToggle, selectionThinkingToggle;
 let ocrPromptInput, ocrStreamToggle, ocrThinkingToggle, ocrSilentModeToggle;
 let flowRateControl, flowRateSlider, flowRateValue, flowRateWarning;
 let ocrShortcutInput, clearOcrShortcutBtn;
-let favoritesShortcutInput, clearFavoritesShortcutBtn;
 let todayCountEl, totalCountEl;
-let openFavoritesBtn;
 
 // 快捷键录制状态
 let isRecordingOcrShortcut = false;
-let isRecordingFavoritesShortcut = false;
 
 // 提示词数据（从 background 动态加载）
 let promptData = [];
@@ -86,11 +83,8 @@ export function init(rootEl) {
   flowRateWarning = rootEl.querySelector('#flowRateWarning');
   ocrShortcutInput = rootEl.querySelector('#ocrShortcutInput');
   clearOcrShortcutBtn = rootEl.querySelector('#clearOcrShortcutBtn');
-  favoritesShortcutInput = rootEl.querySelector('#favoritesShortcutInput');
-  clearFavoritesShortcutBtn = rootEl.querySelector('#clearFavoritesShortcutBtn');
   todayCountEl = rootEl.querySelector('#todayCount');
   totalCountEl = rootEl.querySelector('#totalCount');
-  openFavoritesBtn = rootEl.querySelector('#openFavoritesBtn');
 
   // 加载设置
   loadSettings();
@@ -102,11 +96,10 @@ export function init(rootEl) {
 }
 
 // teardown：清理快捷键录制 document 级监听（视图切走时调用）
-// finishOcrShortcutRecording / finishFavoritesShortcutRecording 内部的
-// removeEventListener 是无条件执行的（不依赖 e.key），故合成 keyup Event 可触发清理分支。
+// finishOcrShortcutRecording 内部的 removeEventListener 是无条件执行的
+// （不依赖 e.key），故合成 keyup Event 可触发清理分支。
 export function teardown(rootEl) {
   if (isRecordingOcrShortcut) finishOcrShortcutRecording(new Event('keyup'));
-  if (isRecordingFavoritesShortcut) finishFavoritesShortcutRecording(new Event('keyup'));
 }
 
 // 绑定事件
@@ -148,17 +141,6 @@ function bindEvents() {
   // 快捷键设置
   if (ocrShortcutInput) ocrShortcutInput.addEventListener('click', startOcrShortcutRecording);
   if (clearOcrShortcutBtn) clearOcrShortcutBtn.addEventListener('click', clearOcrShortcut);
-  if (favoritesShortcutInput) favoritesShortcutInput.addEventListener('click', startFavoritesShortcutRecording);
-  if (clearFavoritesShortcutBtn) clearFavoritesShortcutBtn.addEventListener('click', clearFavoritesShortcut);
-
-  // 打开收藏管理
-  if (openFavoritesBtn) {
-    openFavoritesBtn.addEventListener('click', () => {
-      chrome.tabs.create({
-        url: chrome.runtime.getURL('modules/translation/favorites/favorites.html')
-      });
-    });
-  }
 }
 
 // 更新提示词选择器可见性
@@ -205,7 +187,6 @@ function loadSettings() {
 
     // 加载快捷键
     loadOcrShortcut();
-    loadFavoritesShortcut();
   });
 }
 
@@ -401,112 +382,6 @@ function clearOcrShortcut() {
   });
 
   console.log('[Translation] OCR 快捷键已清除');
-}
-
-// ==================== 收藏快捷键 ====================
-
-function startFavoritesShortcutRecording() {
-  if (isRecordingFavoritesShortcut) return;
-
-  isRecordingFavoritesShortcut = true;
-  favoritesShortcutInput.classList.add('recording');
-  favoritesShortcutInput.value = '请按下快捷键组合...';
-  favoritesShortcutInput.disabled = true;
-
-  document.addEventListener('keydown', recordFavoritesShortcut);
-  document.addEventListener('keyup', finishFavoritesShortcutRecording);
-}
-
-function recordFavoritesShortcut(e) {
-  e.preventDefault();
-  e.stopPropagation();
-
-  const modifiers = [];
-  if (e.ctrlKey) modifiers.push('Ctrl');
-  if (e.altKey) modifiers.push('Alt');
-  if (e.shiftKey) modifiers.push('Shift');
-  if (e.metaKey) modifiers.push('Meta');
-
-  const mainKey = e.key;
-
-  if (modifiers.length === 0) {
-    favoritesShortcutInput.value = '请至少按下一个修饰键 (Ctrl/Alt/Shift/Meta)';
-    return;
-  }
-
-  const shortcutString = [...modifiers, mainKey].join('+');
-  favoritesShortcutInput.value = shortcutString;
-}
-
-function finishFavoritesShortcutRecording(e) {
-  e.preventDefault();
-  e.stopPropagation();
-
-  isRecordingFavoritesShortcut = false;
-  favoritesShortcutInput.classList.remove('recording');
-  favoritesShortcutInput.disabled = false;
-
-  document.removeEventListener('keydown', recordFavoritesShortcut);
-  document.removeEventListener('keyup', finishFavoritesShortcutRecording);
-
-  const shortcutString = favoritesShortcutInput.value;
-
-  if (!shortcutString || shortcutString.includes('请按下')) {
-    favoritesShortcutInput.value = '';
-    return;
-  }
-
-  const shortcut = parseShortcutString(shortcutString);
-  saveFavoritesShortcut(shortcut);
-  favoritesShortcutInput.value = formatShortcutDisplay(shortcutString);
-}
-
-function saveFavoritesShortcut(shortcut) {
-  chrome.storage.local.set({ 'translation.favoritesShortcut': shortcut });
-
-  chrome.tabs.query({}, (tabs) => {
-    tabs.forEach(tab => {
-      chrome.tabs.sendMessage(tab.id, {
-        action: 'translation.updateFavoritesShortcut',
-        shortcut: shortcut
-      }).catch(() => {});
-    });
-  });
-
-  console.log('[Translation] 收藏快捷键已保存:', shortcut);
-}
-
-function loadFavoritesShortcut() {
-  chrome.storage.local.get(['translation.favoritesShortcut'], (result) => {
-    if (result['translation.favoritesShortcut']) {
-      const shortcut = result['translation.favoritesShortcut'];
-      const parts = [];
-      if (shortcut.ctrlKey) parts.push('Ctrl');
-      if (shortcut.altKey) parts.push('Alt');
-      if (shortcut.shiftKey) parts.push('Shift');
-      if (shortcut.metaKey) parts.push('Meta');
-      parts.push(shortcut.key);
-
-      favoritesShortcutInput.value = formatShortcutDisplay(parts.join('+'));
-    } else {
-      favoritesShortcutInput.value = '';
-    }
-  });
-}
-
-function clearFavoritesShortcut() {
-  chrome.storage.local.remove('translation.favoritesShortcut');
-  favoritesShortcutInput.value = '';
-
-  chrome.tabs.query({}, (tabs) => {
-    tabs.forEach(tab => {
-      chrome.tabs.sendMessage(tab.id, {
-        action: 'translation.clearFavoritesShortcut'
-      }).catch(() => {});
-    });
-  });
-
-  console.log('[Translation] 收藏快捷键已清除');
 }
 
 // 加载统计信息

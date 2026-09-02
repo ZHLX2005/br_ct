@@ -209,10 +209,10 @@ export function setupMessageHandler() {
 ### 5.3 storage.js — chrome.storage 初始化/监听职责
 
 ```javascript
-function initFavoritesStorage() {
-    chrome.storage.local.get(['translation.favorites'], (result) => {
-        if (!result['translation.favorites']) {
-            chrome.storage.local.set({ 'translation.favorites': [] });
+function initStatsStorage() {
+    chrome.storage.local.get(['translation.todayCount'], (result) => {
+        if (result['translation.todayCount'] === undefined) {
+            chrome.storage.local.set({ 'translation.todayCount': 0 });
         }
     });
 }
@@ -226,7 +226,6 @@ function setupStorageListener() {
 }
 
 export function setupStorage() {
-    initFavoritesStorage();
     initSettingsStorage();
     initStatsStorage();
     setupStorageListener();
@@ -234,7 +233,7 @@ export function setupStorage() {
 ```
 
 **关键约定**
-- **storage key 用命名空间**：`translation.favorites`、`translation.settings`、`binddom.bindings` 等
+- **storage key 用命名空间**：`translation.settings`、`translation.todayCount`、`binddom.bindings` 等
 - **初始化幂等**：先 `get`，没有再 `set`，避免覆盖用户数据
 
 ### 5.4 长连接/单例模块（native_relay 风格）
@@ -277,7 +276,7 @@ export function setupNativeRelay() {
 | 类型 | 格式 | 示例 |
 |------|------|------|
 | message action | `<module>.<verb>` | `translation.translate`, `binddom.elementPicked`, `translation.ocr.perform` |
-| storage key | `<module>.<noun>` | `translation.favorites`, `binddom.bindings` |
+| storage key | `<module>.<noun>` | `translation.settings`, `binddom.bindings` |
 | context menu id | `<module><Noun>` | `translationSelection`, `translationOCR` |
 | console log 前缀 | `[Module Name]` | `[Translation]`, `[BindDom]`, `[NativeRelay]` |
 
