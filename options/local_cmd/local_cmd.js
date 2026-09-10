@@ -127,6 +127,7 @@ function setupDelegation() {
       case 'skill-manage-confirm': batchMoveSkillsFromModal(); break;
       case 'skill-create-group-in-manage': closeSkillGroupManageModal(); openSkillGroupModal(); break;
       case 'skill-select-group': selectManageTargetGroup(btn.dataset.groupId); break;
+      case 'copy-path': copyPathToClipboard(btn.dataset.path); break;
 
       // Git 导入 (git_import.js)
       case 'git-import-open': openGitImportModal(); break;

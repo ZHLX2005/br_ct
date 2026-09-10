@@ -25,7 +25,7 @@ async function loadGitDirList() {
         <div>
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
             <span class="git-card-dir">${escapeHtml(d.name)}</span>
-            <span class="git-card-dir git-path">${escapeHtml(d.path)}</span>
+            <span class="git-card-dir git-path path-clickable" data-action="copy-path" data-path="${escapeHtml(d.path)}" title="点击复制路径">${escapeHtml(d.path)}</span>
           </div>
           <div class="git-status-area" id="git-status-${d.id}">
             <span style="color:var(--muted);font-size:14px;">加载中...</span>

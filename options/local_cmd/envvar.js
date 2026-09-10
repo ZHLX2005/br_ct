@@ -255,7 +255,7 @@ function renderPathList(key, paths, editable) {
     return `
       <div class="envvar-row" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);">
         ${editable ? `<input type="checkbox" class="envvar-checkbox" data-path="${escapeHtml(p.path)}" ${checked} style="accent-color:#6a8758;">` : ''}
-        <span style="flex:1;font-size:14px;word-break:break-all;font-family:monospace;">${escapeHtml(p.path)}</span>
+        <span class="path-clickable" style="flex:1;font-size:14px;word-break:break-all;font-family:monospace;" data-action="copy-path" data-path="${escapeHtml(p.path)}" title="点击复制路径">${escapeHtml(p.path)}</span>
         ${editable ? `<button class="btn btn-danger" style="padding:2px 10px;font-size:12px;min-height:auto;" data-action="envvar-remove-${isUser?'user':'system'}-path" data-path="${escapeHtml(p.path)}">删除</button>` : ''}
       </div>
     `;
@@ -289,7 +289,7 @@ function renderEnvVarList(key, vars, editable) {
         ${editable ? `<input type="checkbox" class="envvar-var-checkbox" data-name="${escapeHtml(v.name)}" ${checked} style="accent-color:#6a8758;margin-top:2px;">` : ''}
         <div style="flex:1;min-width:0;">
           <div style="font-weight:600;font-size:14px;color:var(--ink);">${escapeHtml(v.name)}</div>
-          <div style="font-size:13px;color:var(--muted);word-break:break-all;font-family:monospace;margin-top:2px;">${escapeHtml(v.value)}</div>
+          ${v.value ? `<div class="path-clickable" style="font-size:13px;color:var(--muted);word-break:break-all;font-family:monospace;margin-top:2px;" data-action="copy-path" data-path="${escapeHtml(v.value)}" title="点击复制值">${escapeHtml(v.value)}</div>` : ''}
         </div>
         ${editable ? `<button class="btn btn-danger" style="padding:2px 10px;font-size:12px;min-height:auto;flex-shrink:0;" data-action="envvar-remove-${isUser?'user':'system'}-var" data-name="${escapeHtml(v.name)}">删除</button>` : ''}
       </div>
@@ -336,7 +336,7 @@ async function loadEnvSnapshots() {
       const name = f.replace(/\\/g, '/').split('/').pop();
       return `
         <div class="envvar-snapshot-item" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);">
-          <span style="flex:1;font-size:13px;font-family:monospace;">${escapeHtml(name)}</span>
+          <span class="path-clickable" style="flex:1;font-size:13px;font-family:monospace;" data-action="copy-path" data-path="${escapeHtml(f)}" title="点击复制完整路径">${escapeHtml(name)}</span>
           <button class="btn btn-secondary" style="padding:2px 10px;font-size:12px;min-height:auto;" data-action="envvar-restore-snapshot" data-file="${escapeHtml(f)}">恢复</button>
           <a href="file://${f.replace(/\\/g, '/')}" target="_blank" class="btn btn-secondary" style="padding:2px 10px;font-size:12px;min-height:auto;text-decoration:none;">查看</a>
         </div>
@@ -503,7 +503,7 @@ function renderWhereResult(container, data) {
     let body;
     if (src.ok && src.paths && src.paths.length > 0) {
       body = `<ul style="margin:6px 0 0 0;padding-left:20px;font-family:monospace;font-size:13px;word-break:break-all;">` +
-        src.paths.map(p => `<li>${escapeHtml(p)}</li>`).join('') +
+        src.paths.map(p => `<li class="path-clickable" data-action="copy-path" data-path="${escapeHtml(p)}" title="点击复制路径">${escapeHtml(p)}</li>`).join('') +
         `</ul>`;
     } else if (src.ok) {
       body = '<p style="font-size:12px;color:var(--muted);margin:4px 0 0 0;">(无命中)</p>';
@@ -523,7 +523,7 @@ function renderWhereResult(container, data) {
   const uniqueHtml = unique.length === 0
     ? '<p style="font-size:13px;color:var(--muted);">三套解析器都未命中</p>'
     : `<ol style="margin:0;padding-left:20px;font-family:monospace;font-size:13px;word-break:break-all;">` +
-        unique.map(p => `<li>${escapeHtml(p)}</li>`).join('') +
+        unique.map(p => `<li class="path-clickable" data-action="copy-path" data-path="${escapeHtml(p)}" title="点击复制路径">${escapeHtml(p)}</li>`).join('') +
       `</ol>`;
 
   container.innerHTML = `

@@ -699,7 +699,7 @@ function renderCentralSkillList(skills, projectSkills) {
           <div class="skill-card-tags">${status}</div>
         </div>
         <div class="skill-card-desc">${escapeHtml(s.description || '(无描述)')}</div>
-        <div class="skill-card-path">${escapeHtml(s.skillDir)}</div>
+        <div class="skill-card-path path-clickable" data-action="copy-path" data-path="${escapeHtml(s.skillDir)}" title="点击复制路径">${escapeHtml(s.skillDir)}</div>
         <div class="skill-card-actions">
           ${!projectSkill ? `<button class="btn btn-success btn-pull" data-action="skill-push-central-to-project" data-name="${escapeHtml(s.name)}">→ 推送到项目</button>` : ''}
           ${projectSkill && !projectSkill.linkType && projectSkill.skillMd5 !== s.skillMd5 ? `<button class="btn btn-warning" data-action="skill-push-central-to-project" data-name="${escapeHtml(s.name)}">↻ 同步</button>` : ''}
@@ -758,7 +758,7 @@ function renderProjectSkillList(skills, project, centralSkills) {
           <div class="skill-card-tags">${status}</div>
         </div>
         <div class="skill-card-desc">${escapeHtml(s.description || '(无描述)')}</div>
-        <div class="skill-card-path">${escapeHtml(s.skillDir)}</div>
+        <div class="skill-card-path path-clickable" data-action="copy-path" data-path="${escapeHtml(s.skillDir)}" title="点击复制路径">${escapeHtml(s.skillDir)}</div>
         <div class="skill-card-actions">
           ${central && !s.linkType && central.skillMd5 !== s.skillMd5 ? `<button class="btn btn-warning" data-action="skill-push" data-name="${escapeHtml(s.name)}">↻ 同步到中心</button>` : ''}
           ${!s.linkType && !central ? `<button class="btn btn-success btn-pull" data-action="skill-push" data-name="${escapeHtml(s.name)}">← 推送到中心</button>` : ''}

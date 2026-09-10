@@ -83,6 +83,32 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
+// 复制路径到剪切板（全模块通用：skill / git / 命令 / 进程 / 环境变量）
+async function copyPathToClipboard(path) {
+  if (!path) { toast('路径为空', 'warning'); return; }
+  try {
+    await navigator.clipboard.writeText(path);
+    toast('路径已复制到剪切板', 'success', 1600);
+  } catch (e) {
+    // 降级方案：临时 textarea + execCommand
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = path;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.top = '-9999px';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      toast('路径已复制到剪切板', 'success', 1600);
+    } catch (err) {
+      toast('复制失败: ' + err.message, 'error');
+    }
+  }
+}
+
 // ========== Toast 提示 ==========
 
 function toast(message, type = 'info', duration = 3000) {

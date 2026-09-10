@@ -22,7 +22,7 @@ async function loadCommandList() {
       <div class="cmd-card-header">
         <span class="cmd-card-name" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</span>
         <dl class="cmd-card-detail">
-          <dt>目录</dt><dd title="${escapeHtml(t.workDir)}">${escapeHtml(t.workDir)}</dd>
+          <dt>目录</dt><dd><span class="path-clickable" data-action="copy-path" data-path="${escapeHtml(t.workDir)}" title="点击复制路径">${escapeHtml(t.workDir)}</span></dd>
           <dt>命令</dt><dd title="${escapeHtml(t.cmd)} ${escapeHtml(t.args || '')}">${escapeHtml(t.cmd)} ${escapeHtml(t.args || '')}</dd>
         </dl>
         <div class="cmd-card-actions">
@@ -133,8 +133,8 @@ async function loadProcesses() {
         <div class="process-info">
           <div class="process-name">${escapeHtml(p.name || p.cmd)}</div>
           <div class="process-meta">
-            PID: ${p.pid} | 目录: ${escapeHtml(p.workDir || '-')} | 命令: ${escapeHtml(p.cmd)} ${(p.args || []).join(' ')} | 启动时间: ${formatTime(p.startTime)}
-            ${p.logFile ? `<br>日志: <a href="file://${p.logFile.replace(/\\/g, '/')}" target="_blank" style="color:var(--accent-deep);">${escapeHtml(p.logFile)}</a>` : ''}
+            PID: ${p.pid} | 目录: ${p.workDir ? `<span class="path-clickable" data-action="copy-path" data-path="${escapeHtml(p.workDir)}" title="点击复制路径">${escapeHtml(p.workDir)}</span>` : '-'} | 命令: ${escapeHtml(p.cmd)} ${(p.args || []).join(' ')} | 启动时间: ${formatTime(p.startTime)}
+            ${p.logFile ? `<br>日志: <a href="file://${p.logFile.replace(/\\/g, '/')}" target="_blank" data-action="copy-path" data-path="${escapeHtml(p.logFile)}" title="点击打开日志文件并复制路径" style="color:var(--accent-deep);">${escapeHtml(p.logFile)}</a>` : ''}
           </div>
         </div>
         <span class="status-badge ${p.running ? 'running' : 'stopped'}">

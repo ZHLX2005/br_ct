@@ -711,11 +711,42 @@
   line-height: 1.5;
 }
 
+/* 通用：可点击复制路径（skill / git / 命令 / 进程 / 环境变量） */
+.path-clickable {
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 160ms ease, background 160ms ease;
+}
+.path-clickable::before {
+  content: '⧉';
+  font-size: 10px;
+  line-height: 1.6;
+  flex-shrink: 0;
+  opacity: 0.55;
+  margin-right: 5px;
+}
+.path-clickable:hover {
+  color: var(--ink);
+  background: rgba(107, 74, 49, 0.08);
+}
+.path-clickable:hover::before {
+  opacity: 1;
+}
+.path-clickable:active {
+  background: rgba(107, 74, 49, 0.16);
+}
+
 .skill-card-path {
   font-size: 11px;
   color: var(--muted);
   margin-bottom: 10px;
   word-break: break-all;
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  padding: 2px 6px;
+  margin-left: -6px;
+  border-radius: 4px;
 }
 
 .skill-card-actions {
