@@ -18,6 +18,7 @@ const HANDLE_BAR_CLASS = 'bro-chat-nav__handle-bar';
 const EXPORT_CLASS = 'bro-chat-nav__export';
 const COPY_CLASS = 'bro-chat-nav__copy';
 const SUMMARY_CLASS = 'bro-chat-nav__summary';
+const INSIGHT_CLASS = 'bro-chat-nav__insight';
 const TOOLBAR_CLASS = 'bro-chat-nav__toolbar';
 
 const NAV_CSS = `
@@ -172,29 +173,38 @@ const NAV_CSS = `
   color: var(--bro-chat-nav-text);
   background: rgba(15,17,21,0.04);
 }
-/* 总结按钮：发送中（与 row 复制成功反馈同款绿色提示） */
-.${SUMMARY_CLASS}.is-busy {
+.${INSIGHT_CLASS} {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  font-size: 12px;
+  color: var(--bro-chat-nav-text-idle);
+  cursor: pointer;
+  white-space: nowrap;
+  border-radius: 4px;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+.${INSIGHT_CLASS}:hover {
+  color: var(--bro-chat-nav-text);
+  background: rgba(15,17,21,0.04);
+}
+/* 发送类按钮：发送中（与 row 复制成功反馈同款绿色提示） */
+.${SUMMARY_CLASS}.is-busy,
+.${INSIGHT_CLASS}.is-busy {
   color: var(--bro-chat-nav-text-idle);
   background: rgba(15,17,21,0.04);
   cursor: wait;
 }
-.${SUMMARY_CLASS}.is-success {
+.${SUMMARY_CLASS}.is-success,
+.${INSIGHT_CLASS}.is-success {
   color: #16a34a;
   background: rgba(22, 163, 74, 0.1);
 }
-.${SUMMARY_CLASS}.is-error {
+.${SUMMARY_CLASS}.is-error,
+.${INSIGHT_CLASS}.is-error {
   color: #dc2626;
   background: rgba(220, 38, 38, 0.08);
-}
-/* 总结按钮：禁用态（防止无限递归：nav 中已有总结发出的消息时锁住） */
-.${SUMMARY_CLASS}.is-disabled {
-  color: rgba(15,17,21,0.32);
-  background: transparent;
-  cursor: not-allowed;
-}
-.${SUMMARY_CLASS}.is-disabled:hover {
-  color: rgba(15,17,21,0.32);
-  background: transparent;
 }
 
 /* 把总结/复制/导出三个按钮收进一行 */
@@ -286,7 +296,7 @@ function createRow({ label, onSelect, onCopyRow }) {
   return { row, item, line };
 }
 
-export function createNavView({ onSelect, onExport, onCopy, onCopyRow, onSummary }) {
+export function createNavView({ onSelect, onExport, onCopy, onCopyRow, onSummary, onInsight }) {
   if (document.getElementById(NAV_ID)) return null;
   injectStyle();
   const { nav, handle } = createContainer();
@@ -320,56 +330,71 @@ export function createNavView({ onSelect, onExport, onCopy, onCopyRow, onSummary
     });
   }
 
-  // Create summary button ("总结") — 点击把 nav 中的所有问题 + 总结模板作为一个新消息发到当前 AI 平台
-  let summaryBtn = null;
-  let summaryResetTimer = null;
-  // 状态文案提到外层作用域，便于 setSummaryEnabled / click handler / 定时器共用
-  const SUMMARY_LABEL_IDLE = '总结';
-  const SUMMARY_LABEL_BUSY = '发送中…';
-  const SUMMARY_LABEL_SUCCESS = '已发送 ✓';
-  const SUMMARY_LABEL_ERROR = '发送失败';
-  const SUMMARY_DEFAULT_TITLE = '把本对话的所有问题连同总结要求一起发送到当前页面';
-  const SUMMARY_DISABLED_TITLE = '已总结过，避免无限递归';
-  const hasSummary = typeof onSummary === 'function';
-  if (hasSummary) {
-    summaryBtn = document.createElement('span');
-    summaryBtn.className = SUMMARY_CLASS;
-    summaryBtn.textContent = SUMMARY_LABEL_IDLE;
-    summaryBtn.title = SUMMARY_DEFAULT_TITLE;
+  /**
+   * 发送类按钮工厂（总结/问法共用）：异步动作状态机 ——
+   * busy 锁防重入 → success/error 短暂反馈 → 还原 idle 文案。
+   * 支持重复点击：不做禁用态，内部消息过滤由 core 的 getUserQuestionRecords 保证。
+   *
+   * @param {string} cls
+   * @param {string} idleLabel
+   * @param {string} title
+   * @param {() => Promise<boolean>} onClick
+   */
+  function createSendButton(cls, idleLabel, title, onClick) {
+    const LABEL_BUSY = '发送中…';
+    const LABEL_SUCCESS = '已发送 ✓';
+    const LABEL_ERROR = '发送失败';
+    let resetTimer = null;
 
-    summaryBtn.addEventListener('click', async (e) => {
+    const btn = document.createElement('span');
+    btn.className = cls;
+    btn.textContent = idleLabel;
+    btn.title = title;
+
+    btn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      // 防重入锁 + 禁用态：禁用时即使 click 穿透也别发
-      if (summaryBtn.classList.contains('is-busy')) return;
-      if (summaryBtn.classList.contains('is-disabled')) return;
+      if (btn.classList.contains('is-busy')) return; // 锁：避免重入
 
-      summaryBtn.classList.remove('is-success', 'is-error');
-      summaryBtn.classList.add('is-busy');
-      summaryBtn.textContent = SUMMARY_LABEL_BUSY;
+      btn.classList.remove('is-success', 'is-error');
+      btn.classList.add('is-busy');
+      btn.textContent = LABEL_BUSY;
 
       let ok = false;
       try {
-        ok = await onSummary();
+        ok = await onClick();
       } catch (err) {
-        console.warn('[nav] summary callback threw', err);
+        console.warn('[nav] send callback threw', err);
         ok = false;
       }
 
-      if (summaryResetTimer) clearTimeout(summaryResetTimer);
-      summaryBtn.classList.remove('is-busy');
-      summaryBtn.classList.add(ok ? 'is-success' : 'is-error');
-      summaryBtn.textContent = ok ? SUMMARY_LABEL_SUCCESS : SUMMARY_LABEL_ERROR;
+      if (resetTimer) clearTimeout(resetTimer);
+      btn.classList.remove('is-busy');
+      btn.classList.add(ok ? 'is-success' : 'is-error');
+      btn.textContent = ok ? LABEL_SUCCESS : LABEL_ERROR;
 
-      summaryResetTimer = setTimeout(() => {
-        summaryBtn.classList.remove('is-success', 'is-error');
-        // 还原到正确状态：成功时下一轮很可能又变 disabled（消息回流了），保留当前 is-disabled
-        if (!summaryBtn.classList.contains('is-disabled')) {
-          summaryBtn.textContent = SUMMARY_LABEL_IDLE;
-        }
-        summaryResetTimer = null;
+      resetTimer = setTimeout(() => {
+        btn.classList.remove('is-success', 'is-error');
+        btn.textContent = idleLabel;
+        resetTimer = null;
       }, 1600);
     });
+    return btn;
   }
+
+  const summaryBtn = typeof onSummary === 'function'
+    ? createSendButton(
+      SUMMARY_CLASS, '总结',
+      '把本对话的所有问题连同总结要求一起发送到当前页面（可重复总结，内部消息自动过滤）',
+      onSummary,
+    )
+    : null;
+  const insightBtn = typeof onInsight === 'function'
+    ? createSendButton(
+      INSIGHT_CLASS, '问法',
+      '复盘本对话的提问序列：提炼提问技巧、同一知识点的不同解释角度，沉淀更优雅的问法',
+      onInsight,
+    )
+    : null;
 
   // Vertical drag handler
   let dragState = null;
@@ -379,6 +404,7 @@ export function createNavView({ onSelect, onExport, onCopy, onCopyRow, onSummary
     if (event.target.closest(`.${EXPORT_CLASS}`)) return;
     if (event.target.closest(`.${COPY_CLASS}`)) return;
     if (event.target.closest(`.${SUMMARY_CLASS}`)) return;
+    if (event.target.closest(`.${INSIGHT_CLASS}`)) return;
     nav.classList.add('is-dragging');
     nav.setPointerCapture(event.pointerId);
     const rect = nav.getBoundingClientRect();
@@ -435,12 +461,13 @@ export function createNavView({ onSelect, onExport, onCopy, onCopyRow, onSummary
 
   // ---- 增量 reconcile ----
 
-  // toolbar: 总结 / 复制 / 导出 三个按钮放在一行
+  // toolbar: 问法 / 总结 / 复制 / 导出 四个按钮放在一行
   const toolbar = document.createElement('div');
   toolbar.className = TOOLBAR_CLASS;
-  if (hasSummary) toolbar.appendChild(summaryBtn);
-  if (hasCopy) toolbar.appendChild(copyBtn);
-  if (hasExport) toolbar.appendChild(exportBtn);
+  if (insightBtn) toolbar.appendChild(insightBtn);
+  if (summaryBtn) toolbar.appendChild(summaryBtn);
+  if (copyBtn) toolbar.appendChild(copyBtn);
+  if (exportBtn) toolbar.appendChild(exportBtn);
 
   function clear() {
     // Remove all rows, keep only handle
@@ -489,33 +516,6 @@ export function createNavView({ onSelect, onExport, onCopy, onCopyRow, onSummary
     }
   }
 
-  /**
-   * 切换"总结"按钮的禁用态。disabled=true 时按钮灰显、cursor=not-allowed、
-   * title 写明原因、click 也不响应（见 summaryBtn click handler 的 is-disabled 短路）。
-   *
-   * @param {boolean} enabled
-   * @param {string} [reason] - 禁用时给用户的提示，写入 title
-   */
-  function setSummaryEnabled(enabled, reason) {
-    if (!summaryBtn) return;
-    if (enabled) {
-      summaryBtn.classList.remove('is-disabled');
-      // 恢复默认 title：只在未进入其他状态时还原
-      if (!summaryBtn.classList.contains('is-busy')
-        && !summaryBtn.classList.contains('is-success')
-        && !summaryBtn.classList.contains('is-error')) {
-        summaryBtn.textContent = SUMMARY_LABEL_IDLE;
-        summaryBtn.title = SUMMARY_DEFAULT_TITLE;
-      }
-    } else {
-      // 强制清除瞬时态，让禁用态在视觉上占主导
-      summaryBtn.classList.remove('is-success', 'is-error', 'is-busy');
-      summaryBtn.classList.add('is-disabled');
-      summaryBtn.textContent = SUMMARY_LABEL_IDLE;
-      summaryBtn.title = reason || SUMMARY_DISABLED_TITLE;
-    }
-  }
-
   function destroy() {
     const style = document.getElementById(STYLE_ID);
     if (style) style.remove();
@@ -524,5 +524,5 @@ export function createNavView({ onSelect, onExport, onCopy, onCopyRow, onSummary
     destroyCleanup();
   }
 
-  return { render, setActive, clear, destroy, setSummaryEnabled };
+  return { render, setActive, clear, destroy };
 }
