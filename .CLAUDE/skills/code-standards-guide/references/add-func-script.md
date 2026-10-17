@@ -16,7 +16,7 @@ reference: code-standards-guide — funcs/ 脚本接入规范（归档版，与�
 
 ## 默认路径：绝大多数脚本只走 popup 一条路
 
-**本仓库里 45 个 funcs 脚本中，只有 3 个绑定了快捷键**（`div_copy_wrapper`、`div_Img_wrapper`、`copy2file`，对应 `Alt+C`/`Alt+D`/`Alt+F`）。其余 42 个全部走 popup 点击执行。
+**本仓库 funcs 脚本中，只有 3 个绑定了快捷键**（`div_copy_wrapper`、`div_Img_wrapper`、`copy2file`，对应 `Alt+C`/`Alt+D`/`Alt+F`）。其余在用脚本走 popup 点击执行；**未注册的历史脚本统一扁平存放在 `funcs/_candidates/`**（见该目录 README.md）。
 
 所以**新脚本默认只需要做三件事**：
 
@@ -41,20 +41,19 @@ reference: code-standards-guide — funcs/ 脚本接入规范（归档版，与�
 ├── 底层模块（被其他 funcs 引用，不可独立运行）
 │   └── → funcs/mods/<模块名>/<文件名>.js
 └── 临时测试 / 实验性脚本 / 自测脚本
-    └── → funcs/x/<功能名>/
+    └── → funcs/_candidates/（扁平存放，文件名带平台前缀见名知意）
 ```
 
 **现有分层参考：**
 
 | 层级     | 路径                         | 已有示例                                                  |
 | -------- | ---------------------------- | --------------------------------------------------------- |
-| 平台专属 | `funcs/平台专属/boss直聘/` | `boss_job.js`, `boss_job_pull.js`                     |
-| 平台专属 | `funcs/平台专属/bili/`     | `extract_bilibili_favlist.js`, `专栏kan/专栏2md.js`   |
-| 平台专属 | `funcs/平台专属/腾讯文档/` | `use.js`, `t.js`                                      |
+| 平台专属 | `funcs/平台专属/boss直聘/` | `boss_job_all.js`                                     |
+| 平台专属 | `funcs/平台专属/bili/`     | `extract_bilibili_favlist.js`, `extract_bilibili_pod.js` |
 | 通用元素 | `funcs/元素dom/`           | `div_copy_wrapper.js`, `dom_visibility_controller.js` |
-| 视频     | `funcs/元素dom/video/`     | `frame.js`, `videoop.js`                              |
-| 测试脚本 | `funcs/x/`                 | `typingMonitor/`, `watching_dom/`                     |
-| 底层模块 | `funcs/mods/`              | `binddom/`, `html_text_reader/`                       |
+| 视频     | `funcs/元素dom/videoControllerPlane/` | `videoPlane.js`                              |
+| 候选区   | `funcs/_candidates/`       | `boss_job_test.js`, `typingMonitor.js`（历史未注册脚本） |
+| 底层模块 | `funcs/mods/`              | `html_text_reader/`                                   |
 
 > ⚠️ **目录命名约束**：平台名目录是中文（`boss直聘/` `bili/` `腾讯文档/`），但 `scriptFiles` 注册时也必须**原样使用中文**（见 Step 3）。
 

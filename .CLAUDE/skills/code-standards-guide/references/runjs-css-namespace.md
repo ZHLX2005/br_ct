@@ -188,7 +188,7 @@ EOF
 - `runjs/translation/selection-ask.css` — 待审计（`.selection-trans-panel` 根已具备，子选择器需确认）
 - `runjs/translation/content-ocr.css` — 待审计（`ocr-*` 前缀较好，可统一风格）
 - `contentScripts/nav/view.js` 的 `NAV_CSS` — 已用 `${NAV_ID}` / `${TOOLBAR_CLASS}` 前缀隔离 ✅
-- `funcs/x/typingMonitor/typingMonitor.js` — ⚠️ `<style>` 无 id 守护，需修
+- `funcs/_candidates/typingMonitor.js` — ⚠️ `<style>` 无 id 守护，需修
 - `shared/imageOcr.js` 的 `<link>` 注入 — ⚠️ 依赖 `web_accessible_resources` 声明，需确认 `shared/*.css` 在清单内
 
 ## 相关 Skill

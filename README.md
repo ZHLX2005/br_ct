@@ -152,35 +152,27 @@
 |------|------|
 | `div_copy_wrapper.js` | 复制页面 div 元素 |
 | `div_Img_wrapper.js` | 图片选择器（38KB） |
-| `div_counter.js` | 页面元素计数器 |
-| `div_input_wrapper.js` | div输入框操作 |
-| `div_changer_wrapper.js` | div内容修改器 |
+| `div_copy_input_dom.js` | 通过传入 dom 间接复制内容 |
 | `dom_visibility_controller.js` | DOM显隐控制 |
 | `color_show.js` | 颜色显示工具 |
-| `xpath_batch_copy.js` | 批量XPath复制 |
+| `input.js` | 输入框内容保存为文件 |
+| `oneRaw.js` | 转换一行数据 |
 
 #### 视频控制
 | 脚本 | 功能 |
 |------|------|
 | `videoControllerPlane/videoPlane.js` | 视频控制面板（75KB） |
-| `video/frame.js` | 逐帧控制 |
-| `video/videoop.js` | 视频操作工具 |
 
 #### 平台专属
 | 脚本 | 平台 |
 |------|------|
-| `bili/` | B站视频、专栏、用户 |
-| `leecode/` | LeetCode |
-| `腾讯文档/` | 腾讯文档 |
-| `boss直聘/` | Boss直聘 |
+| `bili/extract_bilibili_pod.js` | B站分P链接提取 |
+| `bili/收藏夹导出所有视频链接/` | B站收藏夹导出 |
+| `boss直聘/boss_job_all.js` | Boss直聘加载+打招呼 |
 
-#### 实验性功能 (`x/`)
-| 脚本 | 功能 |
-|------|------|
-| `typingMonitor/` | 输入监控 |
-| `watching_dom/` | DOM变化监控 |
-| `复制操作的hook/` | 复制操作拦截 |
-| `展示效果/` | 页面特效（海浪等） |
+#### 候选区 (`_candidates/`)
+未注册的历史脚本统一扁平存放在 `funcs/_candidates/`（含 B站专栏、LeetCode、腾讯文档、视频抽帧、打字监听、海浪特效等），见该目录下 README.md。
+
 
 ### 倒计时面板 ⏱️
 
@@ -380,24 +372,15 @@ bro_chat/
 │   ├── 元素dom/                    # DOM 操作工具
 │   │   ├── div_copy_wrapper.js
 │   │   ├── div_Img_wrapper.js     # 38KB 图片选择器
-│   │   ├── div_counter.js
-│   │   ├── div_input_wrapper.js
-│   │   ├── div_changer_wrapper.js
 │   │   ├── dom_visibility_controller.js
 │   │   ├── color_show.js
-│   │   ├── xpath_batch_copy.js
 │   │   └── videoControllerPlane/
 │   │       └── videoPlane.js      # 75KB 视频控制面板
 │   ├── 平台专属/                   # 平台特定功能
-│   │   ├── bili/
-│   │   ├── leecode/
-│   │   ├── 腾讯文档/
-│   │   └── boss直聘/
-│   └── x/                          # 实验性功能
-│       ├── typingMonitor/          # 输入监控
-│       ├── watching_dom/           # DOM监控
-│       ├── 复制操作的hook/         # 复制拦截
-│       └── 展示效果/               # 页面特效
+│   │   ├── bili/                  # B站分P/收藏夹提取
+│   │   └── boss直聘/              # boss_job_all.js
+│   ├── mods/                       # 底层模块（页面文本提取）
+│   └── _candidates/                # 未注册候选脚本（扁平存放）
 │
 └── icons/                          # 扩展图标
 ```

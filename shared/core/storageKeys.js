@@ -20,4 +20,5 @@ export const STORAGE_KEYS = {
   PLATFORM_STATES: "platformStates",
   LAST_PROMPT_TEMPLATE: "lastPromptTemplate",
   PROMPTS_VERSION: "promptsVersion",
+  DOM_COMMENTS: "domCommentHistory",
 };

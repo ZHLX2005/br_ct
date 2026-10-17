@@ -6,6 +6,7 @@ const scriptFiles = [
     file: "元素dom/div_copy_input_dom.js",
   },
   { name: "拾取资源路径", file: "元素dom/div_Img_wrapper.js" },
+  { name: "DOM评论定位器", file: "元素dom/dom_comment_picker.js" },
   { name: "DOM可见性控制器", file: "元素dom/dom_visibility_controller.js" },
   { name: "boss直聘加载+打招呼（合并脚本）", file: "平台专属/boss直聘/boss_job_all.js" },
   { name: "获得当前输入框的内容保存为文件", file: "元素dom/input.js" },

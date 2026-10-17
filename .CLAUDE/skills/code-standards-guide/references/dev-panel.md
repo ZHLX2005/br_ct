@@ -24,11 +24,11 @@ reference: code-standards-guide — 调试面板开发特化指南
 | 脚本 | 主要能力 |
 |------|---------|
 | `funcs/元素dom/div_Img_wrapper.js` | 资源嗅探（图片/链接/媒体）+ 多种选择器复制 |
-| `funcs/元素dom/div_input_wrapper.js` | 输入框双向绑定 |
-| `funcs/元素dom/dom_find_co_parent.js` | 框选 A/B → LCA / class 共享 / XPath 分离点分析 |
+| `funcs/_candidates/div_input_wrapper.js` | 输入框双向绑定 |
+| `funcs/_candidates/dom_find_co_parent.js` | 框选 A/B → LCA / class 共享 / XPath 分离点分析 |
 | `funcs/元素dom/dom_visibility_controller.js` | 元素可见性切换 |
-| `funcs/元素dom/div_counter.js` | 计数器悬浮面板 |
-| `funcs/元素dom/div_changer_wrapper.js` | 元素内容/属性修改 |
+| `funcs/_candidates/div_counter.js` | 计数器悬浮面板 |
+| `funcs/_candidates/div_changer_wrapper.js` | 元素内容/属性修改 |
 | `funcs/元素dom/videoControllerPlane/videoPlane.js` | 视频播放面板 |
 
 ## UI 三件套规范（强制）

@@ -12,6 +12,7 @@ import { setupCloudBackupModule } from './backgroudtask/cloud_backup/index.js';
 import { setupTranslationModule } from './backgroudtask/translation/index.js';
 import { setupHtmlTextReaderListener } from './backgroudtask/html_text_reader/index.js';
 import { setupSidebarCommandListener } from './backgroudtask/sidebar_toggle.js';
+import { setupDomCommentsModule } from './backgroudtask/dom_comments/index.js';
 
 // 初始化标签页更新监听器
 setupTabUpdateListener();
@@ -49,6 +50,10 @@ console.log('[Background] HtmlTextReader 模块初始化完成');
 // 初始化边栏快捷键监听
 setupSidebarCommandListener();
 console.log('[Background] SidebarToggle 模块初始化完成');
+
+// 初始化 DOM 评论定位器数据模块
+setupDomCommentsModule();
+console.log('[Background] DomComments 模块初始化完成');
 
 // 初始化划词快捷提问配置 (已移至 translation/index.js)
 // import { initSelectionAskConfig } from './backgroudtask/translation/selectionAskConfig.js';
