@@ -165,6 +165,115 @@
   box-shadow: none;
 }
 
+/* 卡片操作区：快捷键 + 开关 + 执行 */
+.script-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.script-actions .execute-button {
+  flex: 1;
+  width: auto;
+  padding: 8px 10px;
+}
+
+/* 平台标记 */
+.script-platform {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 500;
+  padding: 1px 5px;
+  border-radius: 4px;
+  vertical-align: middle;
+  margin-left: 4px;
+  background: var(--bg-page);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+}
+
+/* 快捷键按钮 */
+.shortcut-button {
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shortcut-button.unset {
+  color: var(--text-muted);
+  border-style: dashed;
+}
+
+.shortcut-button:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.shortcut-button.recording {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  background: var(--bg-page);
+  animation: shortcutPulse 1s ease-in-out infinite;
+}
+
+@keyframes shortcutPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.shortcut-clear {
+  padding: 8px 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.shortcut-clear:hover {
+  color: var(--danger-color, #dc3545);
+}
+
+/* 开关按钮（长运行脚本） */
+.toggle-button {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--text-color);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.toggle-button.running {
+  border-color: var(--primary-color);
+  background: var(--bg-page);
+  color: var(--primary-color);
+}
+
+.toggle-button:hover {
+  border-color: var(--primary-color);
+}
+
+.toggle-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 /* 返回主页按钮 */
 .back-button {
   display: flex;

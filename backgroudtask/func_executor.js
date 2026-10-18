@@ -1,6 +1,18 @@
 // func_executor.js
 
 /**
+ * 获取当前活跃标签页 id，无活跃标签页时返回 null。
+ * @returns {Promise<number|null>}
+ */
+function getActiveTabId() {
+  return new Promise((resolve) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      resolve(tabs.length > 0 ? tabs[0].id : null);
+    });
+  });
+}
+
+/**
  * 导出函数：执行指定目录下的脚本 funcs/${scriptFile}，并尝试调用其中的 main() 函数。
  * @param {string} scriptFile 要注入的脚本文件名 (例如: 'selector.js')
  * @param {function} sendResponse 异步响应函数
@@ -74,6 +86,78 @@ export function executeFunctionScript(scriptFile, sendResponse) {
 }
 
 /**
+ * 查询当前活跃标签页中正在运行的函数脚本（已注册到 window.__funcScriptRegistry 的实例）。
+ * @param {function} sendResponse 异步响应函数
+ */
+export function getRunningFuncScripts(sendResponse) {
+  getActiveTabId().then((tabId) => {
+    if (tabId == null) {
+      sendResponse({ status: "success", files: [] });
+      return;
+    }
+    chrome.scripting.executeScript(
+      {
+        target: { tabId },
+        func: () => Object.keys(window.__funcScriptRegistry || {}),
+      },
+      (results) => {
+        if (chrome.runtime.lastError) {
+          // chrome:// 等不可注入页面按无运行脚本处理
+          sendResponse({ status: "success", files: [] });
+          return;
+        }
+        sendResponse({ status: "success", files: results?.[0]?.result || [] });
+      }
+    );
+  });
+}
+
+/**
+ * 停止当前活跃标签页中指定脚本的运行实例（调用其注册的 cleanup）。
+ * @param {string} scriptFile 脚本文件名
+ * @param {function} sendResponse 异步响应函数
+ */
+export function stopFuncScript(scriptFile, sendResponse) {
+  getActiveTabId().then((tabId) => {
+    if (tabId == null) {
+      sendResponse({ status: "failed", message: "未找到活跃的标签页。" });
+      return;
+    }
+    chrome.scripting.executeScript(
+      {
+        target: { tabId },
+        args: [scriptFile],
+        func: (file) => {
+          const registry = window.__funcScriptRegistry;
+          if (registry && typeof registry[file] === "function") {
+            try {
+              registry[file]();
+            } catch (err) {
+              console.error("停止脚本失败:", err);
+            }
+            delete registry[file];
+            return true;
+          }
+          return false;
+        },
+      },
+      (results) => {
+        if (chrome.runtime.lastError) {
+          sendResponse({
+            status: "failed",
+            message: chrome.runtime.lastError.message,
+          });
+          return;
+        }
+        sendResponse({
+          status: results?.[0]?.result ? "success" : "failed",
+        });
+      }
+    );
+  });
+}
+
+/**
  * 导出函数：设置消息监听器（处理函数执行相关的消息）
  */
 export function setupMessageListener() {
@@ -84,6 +168,16 @@ export function setupMessageListener() {
     if (request.action === "executeFunctionScript") {
       // 处理通用脚本执行请求
       executeFunctionScript(request.file, sendResponse);
+      return true;
+    }
+
+    if (request.action === "getRunningFuncScripts") {
+      getRunningFuncScripts(sendResponse);
+      return true;
+    }
+
+    if (request.action === "stopFuncScript") {
+      stopFuncScript(request.file, sendResponse);
       return true;
     }
 

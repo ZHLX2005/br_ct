@@ -6,9 +6,10 @@
  * shared/domComments/domCommentsStore，任何上下文不直接操作 chrome.storage。
  *
  * Actions:
- *   domComment.add   — 新增一条评论记录
- *   domComment.list  — 读取全部评论记录
- *   domComment.clear — 清空评论记录
+ *   domComment.add        — 新增一条评论记录
+ *   domComment.list       — 读取全部评论记录
+ *   domComment.clear      — 清空评论记录
+ *   domComment.openPanel  — 打开评论区页面（dom_comments/index.html）
  */
 
 import {
@@ -59,6 +60,10 @@ export function setupDomCommentsModule() {
           sendResponse({ status: 'error', message: err.message });
         });
         return true;
+      case 'domComment.openPanel':
+        chrome.tabs.create({ url: chrome.runtime.getURL('dom_comments/index.html') });
+        sendResponse({ status: 'success' });
+        return false; // 同步已响应
       default:
         return false; // 不识别的 action 交给其他模块
     }

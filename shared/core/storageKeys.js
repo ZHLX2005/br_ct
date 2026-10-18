@@ -21,4 +21,5 @@ export const STORAGE_KEYS = {
   LAST_PROMPT_TEMPLATE: "lastPromptTemplate",
   PROMPTS_VERSION: "promptsVersion",
   DOM_COMMENTS: "domCommentHistory",
+  FUNC_SHORTCUTS: "funcShortcuts",
 };

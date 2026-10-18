@@ -2,7 +2,7 @@
 console.log('[boot] shell.js module loaded');
 import { setMountPoint, setViewDom, register, mount, getCurrent } from "./viewSystem/viewController.js";
 import { init as initMain, onActivate as onActivateMain, teardown as teardownMain } from "./main/main.js";
-import { init as initFunc, teardown as teardownFunc } from "./func_execute/functioncall.js";
+import { init as initFunc, onActivate as onActivateFunc, teardown as teardownFunc } from "./func_execute/functioncall.js";
 import { init as initTranslation, teardown as teardownTranslation } from "./translation/translation.js";
 
 const popupBase = chrome.runtime.getURL('popup'); // 形如 chrome-extension://<id>/popup
@@ -22,7 +22,7 @@ register([
     // 主页 inline 在 shell.html 里，getBody 永不调用；启动时通过 setViewDom 注入 dom 后 mount('main') 走快速路径（无 fetch）。
     getBody: () => new Promise(() => {}), init: initMain, onActivate: onActivateMain, teardown: teardownMain },
   { id: 'func',        cssHrefs: [chrome.runtime.getURL('popup/func_execute/functioncall.css')],
-    getBody: () => fetchBody('func_execute/functioncall.html'), init: initFunc,    teardown: teardownFunc },
+    getBody: () => fetchBody('func_execute/functioncall.html'), init: initFunc, onActivate: onActivateFunc, teardown: teardownFunc },
   { id: 'translation', cssHrefs: [chrome.runtime.getURL('popup/translation/translation.css')],
     getBody: () => fetchBody('translation/translation.html'), init: initTranslation, teardown: teardownTranslation },
 ]);

@@ -2,8 +2,8 @@
  * @fileoverview DOM评论拾取器，一键生成AI编程提示词
  *
  * @scenario    开发调试时选中页面元素并评论（点赞/点踩/批注），把元素定位+评论构建成提示词交给 AI 编程
- * @feature     悬浮高亮元素（无面板），点击立即弹出评论框，内置点赞/点踩与快捷模板，提交后构建提示词结构并复制剪贴板
- * @effect       注入高亮层+评论浮层，评论记录（URL+DOM定位）经后台统一存储，提示词复制到剪贴板，浮层内可查看历史评论区
+ * @feature     悬浮高亮元素（无面板），点击立即弹出黑白灰评论框，内置点赞/点踩与快捷模板，提交后构建提示词结构并复制剪贴板
+ * @effect      注入高亮层+评论浮层，评论记录（URL+DOM定位）经后台统一存储，评论历史在独立页面 dom_comments/index.html 查看
  * @category    DOM创建
  * @platform    通用
  * @entry       main()
@@ -15,7 +15,7 @@ if (window.__domCommentPickerInstance) {
     window.__domCommentPickerInstance = null;
 }
 
-// 内置评价文案
+// 内置评价文案（与 shared/domComments/domCommentsPrompt.js 保持一致）
 const VERDICT_LABELS = {
     like: '点赞',
     dislike: '点踩',
@@ -24,6 +24,18 @@ const VERDICT_LABELS = {
 
 // 内置快捷评论模板（点击填入输入框）
 const QUICK_TEMPLATES = ['删除该元素', '样式需要调整', '点击无响应', '文案需要修改'];
+
+// 黑白灰主题色
+const THEME = {
+    ink: '#212529',        // 主文字 / 主按钮底
+    body: '#495057',       // 次文字
+    muted: '#6c757d',      // 辅助文字
+    faint: '#adb5bd',      // 弱文字
+    line: '#dee2e6',       // 边框
+    lineSoft: '#e9ecef',   // 弱分隔
+    bgSoft: '#f8f9fa',     // 浅底
+    bgSofter: '#e9ecef'    // 更浅底
+};
 
 /**
  * DOM 评论拾取器。
@@ -36,8 +48,6 @@ window.DomCommentPicker = class DomCommentPicker {
         this.currentElement = null;      // 实时悬停元素
         this.picked = null;              // 点击锁定后的元素信息快照
         this.verdict = '';               // '' | like | dislike
-        this.history = [];               // 评论记录（来自统一存储）
-        this.clearArmed = false;         // 清空按钮二次确认状态
 
         // 1. UI 初始化（仅高亮层 + 提示框，无面板）
         this.overlay = this._createOverlay();
@@ -49,6 +59,9 @@ window.DomCommentPicker = class DomCommentPicker {
 
         console.log('[DomCommentPicker] 评论拾取已启动：移动鼠标选择元素，点击评论，ESC 退出');
         this._showToast('DOM 评论拾取已启动：点击元素添加评论，ESC 退出');
+        // 注册到统一停止协议（popup 函数执行页可远程开关）
+        window.__funcScriptRegistry = window.__funcScriptRegistry || {};
+        window.__funcScriptRegistry['元素dom/dom_comment_picker.js'] = () => this.cleanup();
         window.__domCommentPickerInstance = this;
     }
 
@@ -287,7 +300,7 @@ window.DomCommentPicker = class DomCommentPicker {
         };
     }
 
-    // --- 提示词构建 ---
+    // --- 提示词构建（与 shared/domComments/domCommentsPrompt.js 保持一致）---
 
     /**
      * 把元素定位信息 + 用户评价构建成面向 AI 编程的提示词结构
@@ -322,7 +335,7 @@ window.DomCommentPicker = class DomCommentPicker {
         return lines.join('\n');
     }
 
-    // --- 评论浮层（无常驻面板，点击时按需创建）---
+    // --- 评论浮层（无常驻面板，点击时按需创建，黑白灰无色块）---
 
     _openDialog(el, x, y) {
         this.picked = this._snapshotElement(el);
@@ -345,15 +358,15 @@ window.DomCommentPicker = class DomCommentPicker {
             width: '380px',
             maxHeight: '85vh',
             overflowY: 'auto',
-            background: '#f8f9fa',
-            border: '1px solid #dee2e6',
+            background: THEME.bgSoft,
+            border: `1px solid ${THEME.line}`,
             borderRadius: '8px',
             padding: '14px',
             zIndex: '2147483647',
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.18)',
             fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif",
             fontSize: '13px',
-            color: '#212529',
+            color: THEME.ink,
             lineHeight: '1.5',
             userSelect: 'text'
         });
@@ -363,29 +376,21 @@ window.DomCommentPicker = class DomCommentPicker {
 
         dialog.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-                <div style="font-weight: 600; font-size: 14px;">评论元素 <span style="color: #007bff; font-family: Consolas, monospace; font-size: 12px;">&lt;${tagShort}&gt;</span></div>
-                <button data-act="close" style="border: none; background: transparent; cursor: pointer; font-size: 16px; color: #6c757d; padding: 2px 6px;" title="关闭 (ESC)">×</button>
+                <div style="font-weight: 600; font-size: 14px;">评论元素 <span style="color: ${THEME.body}; font-family: Consolas, monospace; font-size: 12px;">&lt;${tagShort}&gt;</span></div>
+                <button data-act="close" style="border: none; background: transparent; cursor: pointer; font-size: 16px; color: ${THEME.muted}; padding: 2px 6px;" title="关闭 (ESC)">×</button>
             </div>
-            <div style="font-size: 11px; color: #6c757d; font-family: Consolas, monospace; background: #e9ecef; border-radius: 4px; padding: 6px 8px; margin-bottom: 10px; word-break: break-all;">${cssShort}</div>
+            <div style="font-size: 11px; color: ${THEME.body}; font-family: Consolas, monospace; background: ${THEME.bgSofter}; border-radius: 4px; padding: 6px 8px; margin-bottom: 10px; word-break: break-all;">${cssShort}</div>
             <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-                <button data-act="verdict" data-value="like" style="flex: 1; padding: 8px 0; border: 1px solid #ced4da; border-radius: 6px; cursor: pointer; background: #f8f9fa; font-size: 13px;">点赞</button>
-                <button data-act="verdict" data-value="dislike" style="flex: 1; padding: 8px 0; border: 1px solid #ced4da; border-radius: 6px; cursor: pointer; background: #f8f9fa; font-size: 13px;">点踩</button>
+                <button data-act="verdict" data-value="like" style="flex: 1; padding: 8px 0; border: 1px solid ${THEME.line}; border-radius: 6px; cursor: pointer; background: ${THEME.bgSoft}; color: ${THEME.ink}; font-size: 13px;">点赞</button>
+                <button data-act="verdict" data-value="dislike" style="flex: 1; padding: 8px 0; border: 1px solid ${THEME.line}; border-radius: 6px; cursor: pointer; background: ${THEME.bgSoft}; color: ${THEME.ink}; font-size: 13px;">点踩</button>
             </div>
             <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px;">
-                ${QUICK_TEMPLATES.map(t => `<button data-act="template" data-value="${t}" style="padding: 4px 10px; border: 1px solid #ced4da; border-radius: 12px; cursor: pointer; background: #ffffff; font-size: 12px; color: #495057;">${t}</button>`).join('')}
+                ${QUICK_TEMPLATES.map(t => `<button data-act="template" data-value="${t}" style="padding: 4px 10px; border: 1px solid ${THEME.line}; border-radius: 12px; cursor: pointer; background: #ffffff; font-size: 12px; color: ${THEME.body};">${t}</button>`).join('')}
             </div>
-            <textarea id="dcp-comment-input" placeholder="补充评论（可留空），如：这个按钮点击无响应…" style="width: 100%; box-sizing: border-box; height: 64px; padding: 8px 10px; border: 1px solid #ced4da; border-radius: 6px; font-size: 13px; font-family: inherit; resize: vertical; outline: none; margin-bottom: 4px;"></textarea>
-            <div id="dcp-hint" style="font-size: 11px; color: #dc3545; margin-bottom: 6px; display: none;">请先选择评价或填写评论</div>
-            <button data-act="submit" style="width: 100%; padding: 10px 0; margin-bottom: 12px; border: 1px solid #28a745; border-radius: 6px; cursor: pointer; background: #28a745; color: #f8f9fa; font-size: 14px; font-weight: 500;">构建提示词并复制</button>
-            <div style="border-top: 1px solid #e9ecef; padding-top: 10px;">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                    <div style="font-size: 13px; font-weight: 600; color: #495057;">评论区 <span id="dcp-history-count" style="color: #6c757d; font-weight: 400;"></span></div>
-                    <button data-act="clear" id="dcp-clear-btn" style="border: 1px solid #ced4da; border-radius: 4px; cursor: pointer; background: #f8f9fa; color: #6c757d; font-size: 11px; padding: 2px 8px;">清空</button>
-                </div>
-                <div id="dcp-history-list" style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;">
-                    <div style="color: #6c757d; font-size: 12px; font-style: italic;">加载中…</div>
-                </div>
-            </div>
+            <textarea id="dcp-comment-input" placeholder="补充评论（可留空），如：这个按钮点击无响应…" style="width: 100%; box-sizing: border-box; height: 64px; padding: 8px 10px; border: 1px solid ${THEME.line}; border-radius: 6px; font-size: 13px; font-family: inherit; resize: vertical; outline: none; margin-bottom: 4px; background: #ffffff; color: ${THEME.ink};"></textarea>
+            <div id="dcp-hint" style="font-size: 11px; color: ${THEME.muted}; font-style: italic; margin-bottom: 6px; display: none;">请先选择评价或填写评论</div>
+            <button data-act="submit" style="width: 100%; padding: 10px 0; margin-bottom: 8px; border: 1px solid ${THEME.ink}; border-radius: 6px; cursor: pointer; background: ${THEME.ink}; color: #f8f9fa; font-size: 14px; font-weight: 500;">构建提示词并复制</button>
+            <button data-act="open-panel" style="width: 100%; padding: 8px 0; border: 1px solid ${THEME.line}; border-radius: 6px; cursor: pointer; background: #ffffff; color: ${THEME.body}; font-size: 12px;">打开评论区</button>
         `;
 
         document.body.appendChild(dialog);
@@ -401,7 +406,6 @@ window.DomCommentPicker = class DomCommentPicker {
         dialog.addEventListener('keydown', (ev) => ev.stopPropagation());
         dialog.addEventListener('click', (ev) => this._onDialogClick(ev));
 
-        this._loadHistory();
         setTimeout(() => dialog.querySelector('#dcp-comment-input')?.focus(), 50);
     }
 
@@ -410,7 +414,6 @@ window.DomCommentPicker = class DomCommentPicker {
             this.dialog.remove();
             this.dialog = null;
         }
-        this.clearArmed = false;
 
         // 恢复拾取态高亮
         this.overlay.style.border = '2px solid #6c757d';
@@ -432,9 +435,10 @@ window.DomCommentPicker = class DomCommentPicker {
                 this.verdict = this.verdict === btn.dataset.value ? '' : btn.dataset.value;
                 this.dialog.querySelectorAll('[data-act="verdict"]').forEach(b => {
                     const active = b.dataset.value === this.verdict;
-                    b.style.background = active ? '#007bff' : '#f8f9fa';
-                    b.style.borderColor = active ? '#007bff' : '#ced4da';
-                    b.style.color = active ? '#f8f9fa' : '#212529';
+                    // 黑白灰：选中态用黑底白字，不用色块
+                    b.style.background = active ? THEME.ink : THEME.bgSoft;
+                    b.style.borderColor = active ? THEME.ink : THEME.line;
+                    b.style.color = active ? '#f8f9fa' : THEME.ink;
                 });
                 break;
             case 'template': {
@@ -447,14 +451,9 @@ window.DomCommentPicker = class DomCommentPicker {
             case 'submit':
                 this._submit(btn);
                 break;
-            case 'copy-record': {
-                const idx = Number(btn.dataset.index);
-                const record = this.history[idx];
-                if (record) this._copyText(this._buildPrompt(record), btn);
-                break;
-            }
-            case 'clear':
-                this._clearHistory(btn);
+            case 'open-panel':
+                this._sendMessage('domComment.openPanel');
+                this._closeDialog();
                 break;
         }
     }
@@ -510,87 +509,6 @@ window.DomCommentPicker = class DomCommentPicker {
         }
     }
 
-    async _loadHistory() {
-        const listEl = this.dialog?.querySelector('#dcp-history-list');
-        if (!listEl) return;
-
-        const resp = await this._sendMessage('domComment.list');
-        if (!this.dialog) return; // 浮层可能已被关闭
-
-        this.history = (resp && resp.status === 'success' && Array.isArray(resp.list)) ? resp.list : [];
-        this._renderHistory();
-
-        if (!resp || resp.status !== 'success') {
-            console.warn('[DomCommentPicker] 评论记录读取失败');
-        }
-    }
-
-    async _clearHistory(btn) {
-        // 二次确认，避免误清
-        if (!this.clearArmed) {
-            this.clearArmed = true;
-            btn.textContent = '确认清空?';
-            btn.style.color = '#dc3545';
-            btn.style.borderColor = '#dc3545';
-            setTimeout(() => {
-                if (this.dialog && this.clearArmed) {
-                    this.clearArmed = false;
-                    btn.textContent = '清空';
-                    btn.style.color = '#6c757d';
-                    btn.style.borderColor = '#ced4da';
-                }
-            }, 2500);
-            return;
-        }
-        this.clearArmed = false;
-        const resp = await this._sendMessage('domComment.clear');
-        if (resp && resp.status === 'success') {
-            this.history = [];
-            this._renderHistory();
-        }
-    }
-
-    _renderHistory() {
-        const listEl = this.dialog?.querySelector('#dcp-history-list');
-        if (!listEl) return;
-        const countEl = this.dialog.querySelector('#dcp-history-count');
-        if (countEl) countEl.textContent = `(${this.history.length})`;
-
-        if (this.history.length === 0) {
-            listEl.innerHTML = '<div style="color: #6c757d; font-size: 12px; font-style: italic;">暂无评论记录</div>';
-            return;
-        }
-
-        listEl.innerHTML = this.history.map((r, i) => {
-            const verdictText = VERDICT_LABELS[r.verdict] || VERDICT_LABELS.none;
-            const timeText = r.time ? new Date(r.time).toLocaleString() : '';
-            const urlShort = this._escapeHtml(this._truncate(this._shortUrl(r.url), 46));
-            return `
-                <div style="background: #ffffff; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px;">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-                        <span style="font-size: 12px; font-weight: 600; color: #495057;">${verdictText} · <span style="font-family: Consolas, monospace; color: #007bff;">${this._escapeHtml(this._truncate(r.tag || '', 26))}</span></span>
-                        <span style="font-size: 10px; color: #adb5bd;">${timeText}</span>
-                    </div>
-                    ${r.comment ? `<div style="font-size: 12px; color: #212529; margin-bottom: 4px; word-break: break-all;">${this._escapeHtml(this._truncate(r.comment, 80))}</div>` : ''}
-                    <div style="font-size: 10px; color: #6c757d; font-family: Consolas, monospace; word-break: break-all; margin-bottom: 2px;">css: ${this._escapeHtml(this._truncate(r.selectors?.css || '', 70))}</div>
-                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-                        <span style="font-size: 10px; color: #adb5bd; word-break: break-all;" title="${this._escapeHtml(r.url || '')}">${urlShort}</span>
-                        <button data-act="copy-record" data-index="${i}" style="flex-shrink: 0; border: 1px solid #007bff; border-radius: 4px; cursor: pointer; background: #007bff; color: #f8f9fa; font-size: 10px; padding: 2px 8px;">复制</button>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    }
-
-    _shortUrl(url) {
-        try {
-            const u = new URL(url);
-            return u.host + (u.pathname === '/' ? '' : u.pathname);
-        } catch (e) {
-            return url || '';
-        }
-    }
-
     // --- 剪贴板（clipboard API 优先，textarea 兜底）---
 
     _copyText(text, btn, onDone) {
@@ -619,7 +537,7 @@ window.DomCommentPicker = class DomCommentPicker {
         }
     }
 
-    /** 复制反馈：按钮短暂变绿，可选回调在反馈后触发 */
+    /** 复制反馈：按钮短暂反色（黑底白字），可选回调在反馈后触发 */
     _flashButton(btn, onDone, failed) {
         if (!btn) {
             if (!failed && onDone) onDone();
@@ -627,17 +545,20 @@ window.DomCommentPicker = class DomCommentPicker {
         }
         const origText = btn.innerText;
         const origBg = btn.style.background;
+        const origColor = btn.style.color;
         const origBorder = btn.style.borderColor;
 
         btn.innerText = failed ? '复制失败' : '已复制';
-        btn.style.background = failed ? '#dc3545' : '#218838';
-        btn.style.borderColor = failed ? '#dc3545' : '#218838';
+        btn.style.background = THEME.bgSoft;
+        btn.style.color = THEME.ink;
+        btn.style.borderColor = THEME.ink;
 
         setTimeout(() => {
             // 按钮可能已随浮层一起被移除
             if (btn.isConnected) {
                 btn.innerText = origText;
                 btn.style.background = origBg;
+                btn.style.color = origColor;
                 btn.style.borderColor = origBorder;
             }
             if (!failed && onDone) onDone();
@@ -665,6 +586,9 @@ window.DomCommentPicker = class DomCommentPicker {
         if (this.overlay) this.overlay.remove();
         if (this.tooltip) this.tooltip.remove();
         document.removeEventListener('keydown', this._onKeydown, true);
+        if (window.__funcScriptRegistry) {
+            delete window.__funcScriptRegistry['元素dom/dom_comment_picker.js'];
+        }
         this.picked = null;
         window.__domCommentPickerInstance = null;
         console.log('[DomCommentPicker] 评论拾取已退出');

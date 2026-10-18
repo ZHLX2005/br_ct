@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DOM 评论区</title>
+  <link rel="stylesheet" href="./comments.css" />
+</head>
+<body>
+  <header class="page-header">
+    <div class="page-title">
+      <h1>DOM 评论区</h1>
+      <span id="record-count" class="record-count"></span>
+    </div>
+    <div class="header-actions">
+      <button id="refresh-btn" class="btn" type="button">刷新</button>
+      <button id="clear-btn" class="btn" type="button">清空</button>
+    </div>
+  </header>
+
+  <main id="record-list" class="record-list">
+    <div class="empty-state">加载中…</div>
+  </main>
+
+  <script type="module" src="./comments.js"></script>
+</body>
+</html>

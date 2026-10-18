@@ -37,7 +37,7 @@ const storeSource = readFileSync(join(__dirname, 'domCommentsStore.js'), 'utf8')
   .replace(`from '../core/subscribable.js'`, `from './sub.mjs'`);
 writeFileSync(join(tmp, 'domCommentsStore.mjs'), storeSource);
 
-const { addDomComment, loadDomComments, clearDomComments, getCurrentDomComments } =
+const { addDomComment, loadDomComments, clearDomComments, removeDomComment, getCurrentDomComments } =
   await import(pathToFileURL(join(tmp, 'domCommentsStore.mjs')).href);
 
 let passed = 0;
@@ -84,6 +84,18 @@ await test('loadDomComments loads from storage', async () => {
   const list = await loadDomComments();
   assert.strictEqual(list.length, 1);
   assert.strictEqual(list[0].id, 'x');
+});
+
+await test('removeDomComment deletes a record by id', async () => {
+  stored = {};
+  await loadDomComments(); // 重置 storage 后同步模块内 cache
+  await addDomComment({ tag: 'div.a' });
+  await addDomComment({ tag: 'div.b' });
+  const target = getCurrentDomComments()[0];
+  await removeDomComment(target.id);
+  const list = getCurrentDomComments();
+  assert.strictEqual(list.length, 1);
+  assert.strictEqual(list[0].tag, 'div.a');
 });
 
 await test('clearDomComments empties the list', async () => {

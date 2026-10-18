@@ -1,0 +1,182 @@
+/* DOM 评论区 — 黑白灰、边框强调、无色块 */
+
+:root {
+  --ink: #212529;        /* 主文字 / 主边框 */
+  --body: #495057;       /* 次文字 */
+  --muted: #6c757d;      /* 辅助文字 */
+  --faint: #adb5bd;      /* 弱文字 */
+  --line: #dee2e6;       /* 边框 */
+  --line-soft: #e9ecef;  /* 弱分隔 */
+  --bg-soft: #f8f9fa;    /* 浅底 */
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 24px 28px 48px;
+  background: #ffffff;
+  color: var(--ink);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.mono {
+  font-family: Consolas, Monaco, 'Courier New', monospace;
+}
+
+/* --- 头部 --- */
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--ink);
+  margin-bottom: 18px;
+}
+
+.page-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.page-title h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.record-count {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* --- 按钮：边框强调，无色块 --- */
+
+.btn {
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.btn:hover {
+  border-color: var(--ink);
+  background: var(--bg-soft);
+}
+
+.btn.armed {
+  border-color: var(--ink);
+  border-width: 2px;
+  font-weight: 600;
+}
+
+.btn-quiet {
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--body);
+}
+
+/* --- 记录列表 --- */
+
+.record-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 860px;
+}
+
+.empty-state {
+  color: var(--muted);
+  font-style: italic;
+  padding: 24px 0;
+}
+
+.record {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px 14px;
+}
+
+.record-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.verdict {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border: 1px solid var(--ink);
+  border-radius: 3px;
+}
+
+.record-tag {
+  font-size: 12px;
+  color: var(--body);
+  word-break: break-all;
+}
+
+.record-time {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+.record-comment {
+  font-size: 13px;
+  margin-bottom: 6px;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+.record-locator {
+  font-size: 11px;
+  color: var(--muted);
+  word-break: break-all;
+  margin-bottom: 8px;
+}
+
+.record-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.record-url {
+  font-size: 11px;
+  color: var(--faint);
+  text-decoration: none;
+  word-break: break-all;
+  min-width: 0;
+}
+
+.record-url:hover {
+  color: var(--body);
+  text-decoration: underline;
+}
+
+.record-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}

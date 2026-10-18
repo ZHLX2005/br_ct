@@ -39,6 +39,9 @@ window.ResourcePicker = class ResourcePicker {
         // 暴露实例和清理方法
         window.__pickerInstance = this;
         window.__pickerCleanup = this.cleanup.bind(this);
+        // 注册到统一停止协议（popup 函数执行页可远程开关）
+        window.__funcScriptRegistry = window.__funcScriptRegistry || {};
+        window.__funcScriptRegistry['元素dom/div_Img_wrapper.js'] = this.cleanup.bind(this);
     }
 
     // --- 辅助 UI 创建方法 ---
@@ -865,6 +868,9 @@ _bindHtmlCollapseEvent() {
         this._lockedElement = null;  // 清理锁定元素引用
         window.__pickerCleanup = undefined;
         window.__pickerInstance = null;  // 清理实例引用，允许重新创建
+        if (window.__funcScriptRegistry) {
+            delete window.__funcScriptRegistry['元素dom/div_Img_wrapper.js'];
+        }
         console.log("资源嗅探工具已完全关闭");
     }
 };

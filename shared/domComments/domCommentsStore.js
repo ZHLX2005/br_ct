@@ -60,6 +60,22 @@ export async function addDomComment(record) {
   return cache.slice();
 }
 
+export async function removeDomComment(id) {
+  const next = cache.filter((item) => item.id !== id);
+
+  await new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [STORAGE_KEYS.DOM_COMMENTS]: next }, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve();
+      }
+    });
+  });
+  cache = next;
+  subs.emit(cache);
+}
+
 export async function clearDomComments() {
   await new Promise((resolve, reject) => {
     chrome.storage.local.set({ [STORAGE_KEYS.DOM_COMMENTS]: [] }, () => {
