@@ -1074,3 +1074,4 @@ async function deleteSkillFromAllProjects(skillName) {
     toast('批量删除失败: ' + err.message, 'error');
   }
 }
+
